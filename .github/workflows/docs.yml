@@ -1,0 +1,40 @@
+
+name: Build ESIS Documentation
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  pages: write
+  id-token: write
+
+jobs:
+  # Build job
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Set up Python
+        uses: actions/setup-python@v2
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install setuptools wheel
+          pip install -e .[doc]
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v3
+      - name: Build with Sphinx
+        run: |
+          cd ./docs
+          make html
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html/
