@@ -27,9 +27,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install setuptools wheel
           pip install -e .[doc]
-      - name: Setup Pages
-        id: pages
-        uses: actions/configure-pages@v3
       - name: Build with Sphinx
         run: |
           cd ./docs
