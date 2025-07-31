@@ -4,12 +4,8 @@ name: Build ESIS Documentation
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
-
-permissions:
-  pages: write
-  id-token: write
 
 jobs:
   # Build job
