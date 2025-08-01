@@ -76,13 +76,15 @@ jobs:
 
   deploy-preview:
     if: github.event_name == 'pull_request'
+    environment:
+      name: github-pages
     runs-on: ubuntu-latest
     needs: build
     steps:
       - name: 'Download build artifact'
         uses: actions/download-artifact@v4
         with:
-          name: github-pages.zip
+          name: github-pages
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
 
