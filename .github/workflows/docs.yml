@@ -11,6 +11,7 @@ permissions:
   pages: write
   id-token: write
   contents: write
+  pull-requests: write
 
 jobs:
   # Build job
@@ -74,7 +75,9 @@ jobs:
           name: github-pages
           path: github-pages
 
-      - run: ls -l
+      - run: unzip github-pages/artifact.zip
+
+      - run: ls -l github-pages
 
       - name: Url slug variable
         run: |
