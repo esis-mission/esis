@@ -94,7 +94,7 @@ jobs:
         uses: thollander/actions-comment-pull-request@v2
         with:
           message: |
-            Preview available at https://esis-mission.github.io/esis-pr-previews/${{ env.URL_SLUG }}
+            Documentation preview available at https://esis-mission.github.io/esis-pr-previews/${{ env.URL_SLUG }}
             Note that it might take a couple seconds for the update to show up after the preview_build workflow has completed.
           pr_number: ${{ github.event.number }}
           comment_tag: 'esis-preview'
