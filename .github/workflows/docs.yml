@@ -89,6 +89,8 @@ jobs:
         with:
           name: github-pages
 
+      - run: ls -l
+
       - name: Parse meta.json
         run: |
           echo "PR_NUMBER=$(jq -r .pr_number meta.json)" >> $GITHUB_ENV
@@ -96,7 +98,7 @@ jobs:
 
       - name: Url slug variable
         run: |
-          echo "URL_SLUG=${{ env.PR_NUMBER }}-${{ env.PR_BRANCH }}" >> $GITHUB_ENV
+          echo "URL_SLUG=${{ github.event.number }}-${{ github.head_ref }}" >> $GITHUB_ENV
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
@@ -116,5 +118,5 @@ jobs:
           message: |
             Preview available at https://esis-mission.github.io/esis-pr-previews/${{ env.URL_SLUG }}
             Note that it might take a couple seconds for the update to show up after the preview_build workflow has completed.
-          pr_number: ${{ env.PR_NUMBER }}
+          pr_number: ${{ github.event.number }}
           comment_tag: 'esis-preview'
