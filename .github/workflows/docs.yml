@@ -82,7 +82,7 @@ jobs:
       - name: 'Download build artifact'
         uses: actions/download-artifact@v4
         with:
-          name: github-pages
+          name: github-pages.zip
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
 
