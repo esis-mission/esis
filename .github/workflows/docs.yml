@@ -75,7 +75,7 @@ jobs:
           name: github-pages
           path: github-pages
 
-      - run: tar -xvf github-pages/artifact.zip
+      - run: tar -xvf github-pages/artifact.tar
 
       - run: ls -l github-pages
 
