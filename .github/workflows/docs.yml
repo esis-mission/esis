@@ -75,7 +75,12 @@ jobs:
           name: github-pages
           path: github-pages
 
-      - run: tar -xvf github-pages/artifact.tar
+      - name: Decompress build artifact
+        run: |
+          cd github-pages
+          tar -xvf artifact.tar
+          rm artifact.tar
+          cd ..
 
       - run: ls -l github-pages
 
