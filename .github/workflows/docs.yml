@@ -84,6 +84,7 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: github-pages
+          token: ${{ secrets.ESIS_PR_PREVIEW_TOKEN }}
           repository-name: esis-mission/esis-pr-previews
           branch: 'main'
           clean: true
