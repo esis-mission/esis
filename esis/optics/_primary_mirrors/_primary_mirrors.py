@@ -52,7 +52,7 @@ class AbstractPrimaryMirror(
         """
         halfwidth_clear = self.width_clear / 2
         num_sides = self.num_folds
-        if (num_sides % 2) != 0:
+        if (num_sides % 2) != 0:  # pragma: nocover
             raise ValueError("odd numbers of sides not supported")
         result = halfwidth_clear / np.cos(360 * u.deg / num_sides / 2)
         return result
@@ -73,7 +73,7 @@ class AbstractPrimaryMirror(
         width_border = self.width_border
         halfwidth = halfwidth_clear + width_border
         num_sides = self.num_folds
-        if (num_sides % 2) != 0:
+        if (num_sides % 2) != 0:  # pragma: nocover
             raise ValueError("odd numbers of sides not supported")
         result = halfwidth / np.cos(360 * u.deg / num_sides / 2)
         return result
