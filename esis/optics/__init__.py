@@ -1,6 +1,4 @@
-"""
-A generalized model of the ESIS optical system.
-"""
+"""A generalized model of the ESIS optical system."""
 
 from . import abc
 from . import mixins

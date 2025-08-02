@@ -15,50 +15,36 @@ class AbstractFieldStop(
     optika.mixins.Printable,
     optika.mixins.Translatable,
 ):
-    """
-    An interface describing the field stop of the instrument.
-    """
+    """An interface describing the field stop of the instrument."""
 
     @property
     @abc.abstractmethod
     def num_folds(self) -> int:
-        """
-        The order of the rotational symmetry of the optical system.
-        """
+        """The order of the rotational symmetry of the optical system."""
 
     @property
     def num_sides(self) -> int:
-        """
-        The number of sides of the field stop's aperture.
-        """
+        """The number of sides of the field stop's aperture."""
         return self.num_folds
 
     @property
     @abc.abstractmethod
     def radius_clear(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The distance from the center to a vertex of the clear aperture.
-        """
+        """The distance from the center to a vertex of the clear aperture."""
 
     @property
     def width_clear(self) -> u.Quantity:
-        """
-        The width of the clear aperture from edge to edge.
-        """
+        """The width of the clear aperture from edge to edge."""
         return 2 * self.radius_clear * np.cos(360 * u.deg / self.num_sides / 2)
 
     @property
     @abc.abstractmethod
     def radius_mechanical(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The radius of the exterior edge of the field stop.
-        """
+        """The radius of the exterior edge of the field stop."""
 
     @property
     def surface(self) -> optika.surfaces.Surface:
-        """
-        Represent this object as an :mod:`optika` surface.
-        """
+        """Represent this object as an :mod:`optika` surface."""
         return optika.surfaces.Surface(
             name="field stop",
             aperture=optika.apertures.RegularPolygonalAperture(
@@ -85,21 +71,13 @@ class FieldStop(
     """
 
     num_folds: int = 0
-    """
-    The order of the rotational symmetry of the optical system.
-    """
+    """The order of the rotational symmetry of the optical system."""
 
     radius_clear: u.Quantity | na.AbstractScalar = 0 * u.mm
-    """
-    The distance from the center to a vertex of the clear aperture.
-    """
+    """The distance from the center to a vertex of the clear aperture."""
 
     radius_mechanical: u.Quantity | na.AbstractScalar = 0 * u.mm
-    """
-    The radius of the exterior edge of the field stop.
-    """
+    """The radius of the exterior edge of the field stop."""
 
     translation: u.Quantity | na.AbstractCartesian3dVectorArray = 0 * u.mm
-    """
-    A transformation which can arbitrarily translate this object.
-    """
+    """A transformation which can arbitrarily translate this object."""

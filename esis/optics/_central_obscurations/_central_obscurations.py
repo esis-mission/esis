@@ -15,44 +15,31 @@ class AbstractCentralObscuration(
     optika.mixins.Printable,
     optika.mixins.Translatable,
 ):
-    """
-    An interface defining the central obscuration of the instrument.
-    """
+    """An interface defining the central obscuration of the instrument."""
 
     @property
     @abc.abstractmethod
     def num_folds(self) -> int:
-        """
-        The order of the rotational symmetry of the optical system.
-        """
+        """The order of the rotational symmetry of the optical system."""
 
     @property
     @abc.abstractmethod
     def halfwidth(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The distance from the center to the edge of the obscuration.
-        """
+        """The distance from the center to the edge of the obscuration."""
 
     @property
     def radius(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The distance from the center to a vertex of the obscuration.
-        """
+        """The distance from the center to a vertex of the obscuration."""
         return self.halfwidth / np.cos(360 * u.deg / self.num_folds / 2)
 
     @property
     @abc.abstractmethod
     def remove_last_vertex(self) -> bool:
-        """
-        A flag controlling whether the last vertex should be removed.
-        """
+        """A flag controlling whether the last vertex should be removed."""
 
     @property
     def surface(self) -> optika.surfaces.Surface:
-        """
-        Represent this object as an :mod:`optika` surface.
-        """
-
+        """Represent this object as an :mod:`optika` surface."""
         num_folds = self.num_folds
         radius = self.radius
         offset_angle = 360 * u.deg / num_folds
@@ -85,26 +72,20 @@ class CentralObscuration(
     AbstractCentralObscuration,
 ):
     """
-    A model of the Tuffet, which holds the diffraction gratings and obscures
-    the central portion of the primary mirror.
+    A model of the central obscuration, also known as the `Tuffet`.
+
+    This obscures the central portion of the primary mirror to hold the
+    diffraction gratings.
     """
 
     num_folds: int = 0
-    """
-    The order of the rotational symmetry of the optical system.
-    """
+    """The order of the rotational symmetry of the optical system."""
 
     halfwidth: u.Quantity | na.AbstractScalar = 0 * u.mm
-    """
-    The distance from the center to the edge of the obscuration.
-    """
+    """The distance from the center to the edge of the obscuration."""
 
     remove_last_vertex: bool = False
-    """
-    A flag controlling whether the last vertex should be removed.
-    """
+    """A flag controlling whether the last vertex should be removed."""
 
     translation: u.Quantity | na.AbstractCartesian3dVectorArray = 0 * u.mm
-    """
-    A transformation which can arbitrarily translate this object.
-    """
+    """A transformation which can arbitrarily translate this object."""
