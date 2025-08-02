@@ -180,8 +180,6 @@ class Grating(
 ):
     """
     A model of the diffraction gratings of this instrument.
-
-    The gratings disperse incident light onto the detectors.
     """
 
     serial_number: str = ""
