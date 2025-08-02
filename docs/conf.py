@@ -20,8 +20,8 @@ os.environ['PYTHONPATH'] = ';'.join((package_path, os.environ.get('PYTHONPATH', 
 # -- Project information -----------------------------------------------------
 
 project = 'ESIS'
-copyright = '2023, Roy T. Smart, Charles C. Kankelborg, Jacob D. Parker, Nelson C. Goldsworth'
-author = 'Roy T. Smart, Charles C. Kankelborg, Jacob D. Parker, Nelson C. Goldsworth'
+copyright = '2025, Roy T. Smart, Charles C. Kankelborg, Jacob D. Parker'
+author = 'Roy T. Smart, Charles C. Kankelborg, Jacob D. Parker'
 
 # -- General configuration ---------------------------------------------------
 
@@ -31,13 +31,13 @@ author = 'Roy T. Smart, Charles C. Kankelborg, Jacob D. Parker, Nelson C. Goldsw
 extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.autodoc',
-    # "sphinx.ext.autodoc.typehints",
-    # 'sphinx_autodoc_typehints',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.inheritance_diagram',
+    'sphinx.ext.viewcode',
     'sphinxcontrib.bibtex',
     'jupyter_sphinx',
+    'nbsphinx',
     'sphinx_favicon'
 ]
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
@@ -45,12 +45,6 @@ autosummary_imported_members = True
 autosummary_ignore_module_all = False
 # autoclass_content = 'both'
 autodoc_typehints = "description"
-
-# autosummary_filename_map = {
-#     'kgpy.optics.Surface': 'kgpy.optics.Surface_cls',
-# }
-
-# typehints_fully_qualified = True
 
 graphviz_output_format = 'png'
 inheritance_graph_attrs = dict(rankdir='TB')
@@ -83,7 +77,7 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/Kankelborg-Group/ESIS",
+            "url": "https://github.com/esis-mission/esis",
             "icon": "fa-brands fa-github",
             "type": "fontawesome",
         },
