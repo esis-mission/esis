@@ -110,6 +110,12 @@ class AbstractPrimaryMirror(
 class PrimaryMirror(
     AbstractPrimaryMirror,
 ):
+    """
+    A model of the primary mirror of the instrument.
+
+    This mirror collects light from the Sun and focuses it onto the field stop.
+    """
+
     sag: None | optika.sags.AbstractSag = None
     """
     The sag function of this primary mirror.
