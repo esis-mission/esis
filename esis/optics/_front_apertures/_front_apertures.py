@@ -13,15 +13,11 @@ __all__ = [
 class AbstractFrontAperture(
     optika.mixins.Translatable,
 ):
-    """
-    An interface describing the entrance aperture of the instrument.
-    """
+    """An interface describing the entrance aperture of the instrument."""
 
     @property
     def surface(self) -> optika.surfaces.Surface:
-        """
-        Represent this object as an :mod:`optika` surface.
-        """
+        """Represent this object as an :mod:`optika` surface."""
         return optika.surfaces.Surface(
             name="front aperture",
             transformation=self.transformation,
@@ -32,11 +28,7 @@ class AbstractFrontAperture(
 class FrontAperture(
     AbstractFrontAperture,
 ):
-    """
-    A model of the entrance aperture of the instrument.
-    """
+    """A model of the entrance aperture of the instrument."""
 
     translation: u.Quantity | na.AbstractCartesian3dVectorArray = 0 * u.mm
-    """
-    A transformation which can arbitrarily translate this object.
-    """
+    """A transformation which can arbitrarily translate this object."""

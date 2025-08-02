@@ -13,23 +13,17 @@ __all__ = [
 class CylindricallyTransformable(
     optika.mixins.Transformable,
 ):
-    """
-    A mixin class which can apply a cylindrical transformation to subclasses.
-    """
+    """A mixin class which can apply a cylindrical transformation to subclasses."""
 
     @property
     @abc.abstractmethod
     def distance_radial(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The distance of this object from the axis of symmetry.
-        """
+        """The distance of this object from the axis of symmetry."""
 
     @property
     @abc.abstractmethod
     def azimuth(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The angle of rotation about the axis of symmetry.
-        """
+        """The angle of rotation about the axis of symmetry."""
 
     @property
     def transformation(self) -> na.transformations.AbstractTransformation:

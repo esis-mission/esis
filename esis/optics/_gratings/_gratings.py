@@ -21,64 +21,49 @@ class AbstractGrating(
     optika.mixins.Translatable,
     mixins.CylindricallyTransformable,
 ):
-    """
-    An interface describing the diffraction gratings of the instrument.
-    """
+    """An interface describing the diffraction gratings of the instrument."""
 
     @property
     @abc.abstractmethod
     def serial_number(self) -> str:
-        """
-        The serial number of this diffraction grating.
-        """
+        """The serial number of this diffraction grating."""
 
     @property
     @abc.abstractmethod
     def manufacturing_number(self) -> str:
-        """
-        An additional number describing this diffraction grating.
-        """
+        """An additional number describing this diffraction grating."""
 
     @property
     @abc.abstractmethod
     def angle_input(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The nominal angle of the incident light from the field stop.
-        """
+        """The nominal angle of the incident light from the field stop."""
 
     @property
     @abc.abstractmethod
     def angle_output(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The nominal angle of reflected light to the detectors.
-        """
+        """The nominal angle of reflected light to the detectors."""
 
     @property
     @abc.abstractmethod
     def sag(self) -> None | optika.sags.AbstractSag:
-        """
-        The sag function of this grating.
-        """
+        """The sag function of this grating."""
 
     @property
     @abc.abstractmethod
     def material(self) -> None | optika.materials.AbstractMaterial:
-        """
-        The optical material composing this grating.
-        """
+        """The optical material composing this grating."""
 
     @property
     @abc.abstractmethod
     def rulings(self) -> None | optika.rulings.AbstractRulings:
-        """
-        The ruling pattern of this grating.
-        """
+        """The ruling pattern of this grating."""
 
     @property
     @abc.abstractmethod
     def num_folds(self) -> int:
         """
         The order of the rotational symmetry of the optical system.
+
         This determines the aperture wedge angle of this grating.
         """
 
@@ -95,38 +80,27 @@ class AbstractGrating(
     @property
     @abc.abstractmethod
     def halfwidth_inner(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The distance from the apex to the inner edge of the clear aperture.
-        """
+        """The distance from the apex to the inner edge of the clear aperture."""
 
     @property
     @abc.abstractmethod
     def halfwidth_outer(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The distance from the apex to the outer edge of the clear aperture.
-        """
+        """The distance from the apex to the outer edge of the clear aperture."""
 
     @property
     @abc.abstractmethod
     def width_border(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The nominal width of the border around the clear aperture.
-        """
+        """The nominal width of the border around the clear aperture."""
 
     @property
     @abc.abstractmethod
     def width_border_inner(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The width of the border between the inner edge of the clear aperture
-        and the substrate inner edge of the substrate.
-        """
+        """The width of the border on the narrow edge of the grating."""
 
     @property
     @abc.abstractmethod
     def clearance(self) -> u.Quantity | na.AbstractScalar:
-        """
-        The minimum distance between adjacent physical gratings.
-        """
+        """The minimum distance between adjacent physical gratings."""
 
     @property
     def transformation(self) -> na.transformations.AbstractTransformation:
@@ -135,9 +109,7 @@ class AbstractGrating(
 
     @property
     def surface(self) -> optika.surfaces.Surface:
-        """
-        Represent this object as an :mod:`optika` surface.
-        """
+        """Represent this object as an :mod:`optika` surface."""
         angle_aperture = self.angle_aperture
         halfwidth_inner = self.halfwidth_inner
         halfwidth_outer = self.halfwidth_outer
@@ -178,102 +150,65 @@ class AbstractGrating(
 class Grating(
     AbstractGrating,
 ):
-    """
-    A model of the diffraction gratings of this instrument.
-    """
+    """A model of the diffraction gratings of this instrument."""
 
     serial_number: str = ""
-    """
-    The serial number of this diffraction grating.
-    """
+    """The serial number of this diffraction grating."""
 
     manufacturing_number: str = ""
-    """
-    An additional number describing this diffraction grating.
-    """
+    """An additional number describing this diffraction grating."""
 
     angle_input: u.Quantity = 0 * u.deg
-    """
-    The nominal angle of the incident light from the field stop.
-    """
+    """The nominal angle of the incident light from the field stop."""
 
     angle_output: u.Quantity = 0 * u.deg
-    """
-    The nominal angle of reflected light to the detectors.
-    """
+    """The nominal angle of reflected light to the detectors."""
 
     sag: None | optika.sags.AbstractSag = None
-    """
-    The sag function of this grating.
-    """
+    """The sag function of this grating."""
 
     material: None | optika.materials.AbstractMaterial = None
-    """
-    The optical material composing this grating.
-    """
+    """The optical material composing this grating."""
+
     rulings: None | optika.rulings.AbstractRulings = None
-    """
-    The ruling pattern of this grating.
-    """
+    """The ruling pattern of this grating."""
 
     num_folds: int = 0
     """
     The order of the rotational symmetry of the optical system.
+    
     This determines the aperture wedge angle of this grating.
     """
 
     halfwidth_inner: u.Quantity | na.AbstractScalar = 0 * u.mm
-    """
-    The distance from the apex to the inner edge of the clear aperture.
-    """
+    """The distance from the apex to the inner edge of the clear aperture."""
 
     halfwidth_outer: u.Quantity | na.AbstractScalar = 0 * u.mm
-    """
-    The distance from the apex to the outer edge of the clear aperture.
-    """
+    """The distance from the apex to the outer edge of the clear aperture."""
 
     width_border: u.Quantity | na.AbstractScalar = 0 * u.mm
-    """
-    The nominal width of the border around the clear aperture.
-    """
+    """The nominal width of the border around the clear aperture."""
 
     width_border_inner: u.Quantity | na.AbstractScalar = 0 * u.mm
-    """
-    The width of the border between the inner edge of the clear aperture
-    and the substrate inner edge of the substrate.
-    """
+    """The width of the border on the narrow edge of the grating."""
 
     clearance: u.Quantity | na.AbstractScalar = 0 * u.mm
-    """
-    The minimum distance between adjacent physical gratings.
-    """
+    """The minimum distance between adjacent physical gratings."""
 
     distance_radial: u.Quantity | na.AbstractScalar = 0 * u.mm
-    """
-    The distance of this object from the axis of symmetry.
-    """
+    """The distance of this object from the axis of symmetry."""
 
     azimuth: u.Quantity | na.AbstractScalar = 0 * u.deg
-    """
-    The angle of rotation about the axis of symmetry.
-    """
+    """The angle of rotation about the axis of symmetry."""
 
     translation: u.Quantity | na.AbstractCartesian3dVectorArray = 0 * u.mm
-    """
-    A transformation which can arbitrarily translate this object.
-    """
+    """A transformation which can arbitrarily translate this object."""
 
     pitch: u.Quantity | na.AbstractScalar = 0 * u.deg
-    """
-    The pitch angle of this object.
-    """
+    """The pitch angle of this object."""
 
     yaw: u.Quantity | na.AbstractScalar = 0 * u.deg
-    """
-    The yaw angle of this object.
-    """
+    """The yaw angle of this object."""
 
     roll: u.Quantity | na.AbstractScalar = 0 * u.deg
-    """
-    The roll angle of this object
-    """
+    """The roll angle of this object"""

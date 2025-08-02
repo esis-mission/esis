@@ -46,3 +46,14 @@ Documentation = "https://euv-snapshot-imaging-spectrograph.github.io"
 
 [tool.setuptools]
 packages = ["esis"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "D",
+    "DOC",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
