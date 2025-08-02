@@ -139,7 +139,7 @@ class PrimaryMirror(
 
     material: None | optika.materials.AbstractMaterial = None
     """
-    The optics material composing this object.
+    The optical material composing this object.
     """
 
     translation: u.Quantity | na.AbstractCartesian3dVectorArray = 0 * u.mm
