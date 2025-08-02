@@ -85,7 +85,7 @@ class CentralObscuration(
     AbstractCentralObscuration,
 ):
     """
-    A Model of the Tuffet, which holds the diffraction gratings and obscures
+    A model of the Tuffet, which holds the diffraction gratings and obscures
     the central portion of the primary mirror.
     """
 
