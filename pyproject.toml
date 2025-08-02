@@ -48,6 +48,7 @@ Documentation = "https://euv-snapshot-imaging-spectrograph.github.io"
 packages = ["esis"]
 
 [tool.ruff.lint]
+preview = true
 select = [
     "E",
     "F",
