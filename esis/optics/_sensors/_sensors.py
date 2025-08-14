@@ -20,9 +20,7 @@ class Sensor(
     mixins.CylindricallyTransformable,
     msfc_ccd.TeledyneCCD230,
 ):
-    """
-    A model of the CCD sensors used to detect light.
-    """
+    """A model of the CCD sensors used to detect light."""
 
     distance_radial: u.Quantity | na.AbstractScalar = 0 * u.mm
     """The distance between the axis of symmetry and the center of the detector."""
