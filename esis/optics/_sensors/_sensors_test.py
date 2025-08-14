@@ -6,8 +6,8 @@ import esis
 @pytest.mark.parametrize(
     argnames="sensor",
     argvalues=[
-        esis.optics.Sensor()
-    ]
+        esis.optics.Sensor(),
+    ],
 )
 class TestSensor(AbstractTestAbstractSensor):
     pass
