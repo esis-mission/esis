@@ -10,6 +10,7 @@ from ._gratings import Grating
 from ._filters import Filter
 from ._sensors import Sensor
 from ._cameras import Camera
+from ._requirements import Requirements
 
 __all__ = [
     "abc",
@@ -22,4 +23,5 @@ __all__ = [
     "Filter",
     "Sensor",
     "Camera",
+    "Requirements",
 ]
