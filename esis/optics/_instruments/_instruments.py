@@ -95,7 +95,12 @@ class AbstractInstrument(
 
     @property
     def angle_grating_input(self) -> na.AbstractScalar:
-        """The angle between the grating normal and the direction of the incident light."""
+        """
+        The angle between the grating normal and the direction of the incident light.
+
+        This is the incidence angle :math:`theta_i` in the
+        `diffraction grating equation <https://en.wikipedia.org/wiki/Diffraction_grating>`_.
+        """
         fs = self.field_stop.surface
         grating = self.grating.surface
         position = na.Cartesian3dVectorArray() * u.mm
