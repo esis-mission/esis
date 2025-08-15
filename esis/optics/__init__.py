@@ -9,6 +9,7 @@ from ._field_stops import FieldStop
 from ._gratings import Grating
 from ._filters import Filter
 from ._sensors import Sensor
+from ._cameras import Camera
 
 __all__ = [
     "abc",
@@ -20,4 +21,5 @@ __all__ = [
     "Grating",
     "Filter",
     "Sensor",
+    "Camera",
 ]
