@@ -5,7 +5,7 @@ import msfc_ccd
 from .. import Sensor
 
 __all__ = [
-    "Camera"
+    "Camera",
 ]
 
 
@@ -45,5 +45,5 @@ class Camera(
             aperture_mechanical=optika.apertures.RectangularAperture(
                 half_width=self.sensor.width_package / 2,
             ),
-            transformation=self.transformation,
+            transformation=self.sensor.transformation,
         )

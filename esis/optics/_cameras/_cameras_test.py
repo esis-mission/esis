@@ -14,7 +14,7 @@ class TestCameras(
     AbstractTestAbstractSensor,
 ):
     def test_surface(
-            self,
-            a: esis.optics.abc.AbstractPrimaryMirror,
+        self,
+        a: esis.optics.abc.AbstractPrimaryMirror,
     ):
         assert isinstance(a.surface, optika.surfaces.AbstractSurface)
