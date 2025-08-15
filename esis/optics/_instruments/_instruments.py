@@ -93,7 +93,7 @@ class AbstractInstrument(
 
     @property
     def angle_grating_input(self) -> na.AbstractScalar:
-        """The angle between the grating normal vector and nominal incidence vector."""
+        """The angle between the grating normal and the direction of the incident light."""
         fs = self.field_stop.surface
         grating = self.grating.surface
         position = na.Cartesian3dVectorArray() * u.mm
@@ -114,8 +114,7 @@ class AbstractInstrument(
     @property
     def angle_grating_output(self) -> na.AbstractScalar:
         """
-        The angle between the grating normal vector and the exit arm,
-        in the plane perpendicular to the rulings.
+        The angle between the grating normal and the direction of the diffracted light.
 
         This is an analogue to the diffracted angle in the
         `diffraction grating equation <https://en.wikipedia.org/wiki/Diffraction_grating>`_.
@@ -166,8 +165,7 @@ class AbstractInstrument(
     @functools.cached_property
     def system(self) -> optika.systems.SequentialSystem:
         """
-        Resolve this optics model into an instance of
-        :class:`optika.systems.SequentialSystem`.
+        Resolve this optics model into an instance of :class:`optika.systems.SequentialSystem`.
 
         This is a cached property that is only computed once.
         """
