@@ -12,6 +12,8 @@ __all__ = [
 class Camera(
     msfc_ccd.Camera,
 ):
+    """A model of the cameras developed by MSFC."""
+
     sensor: None | Sensor = None
     """
     A model of the sensor used by this camera to capture light.
