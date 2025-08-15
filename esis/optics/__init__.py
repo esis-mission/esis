@@ -8,6 +8,7 @@ from ._primary_mirrors import PrimaryMirror
 from ._field_stops import FieldStop
 from ._gratings import Grating
 from ._filters import Filter
+from ._sensors import Sensor
 
 __all__ = [
     "abc",
@@ -18,4 +19,5 @@ __all__ = [
     "FieldStop",
     "Grating",
     "Filter",
+    "Sensor",
 ]
