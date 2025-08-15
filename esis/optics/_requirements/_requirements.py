@@ -34,7 +34,5 @@ class Requirements(
 
     @property
     def resolution_angular(self) -> u.Quantity:
-        """
-        The angular resolution of the instrument.
-        """
+        """The angular resolution of the instrument."""
         return np.arctan2(self.resolution_spatial, 1 * u.AU).to(u.arcsec)
