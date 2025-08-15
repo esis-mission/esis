@@ -172,7 +172,7 @@ class AbstractInstrument(
     @functools.cached_property
     def system(self) -> optika.systems.SequentialSystem:
         """
-        Resolve this optics model into an instance of :class:`optika.systems.SequentialSystem`.
+        Convert this model into an instance of :class:`optika.systems.SequentialSystem`.
 
         This is a cached property that is only computed once.
         """
