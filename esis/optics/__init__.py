@@ -11,6 +11,7 @@ from ._filters import Filter
 from ._sensors import Sensor
 from ._cameras import Camera
 from ._requirements import Requirements
+from ._instruments import Instrument
 
 __all__ = [
     "abc",
@@ -24,4 +25,5 @@ __all__ = [
     "Sensor",
     "Camera",
     "Requirements",
+    "Instrument",
 ]
