@@ -186,7 +186,7 @@ class AbstractInstrument(
                 pupil=self.pupil,
             ),
             transformation=self.transformation,
-            kwargs_plot=self.kwargs_plot
+            kwargs_plot=self.kwargs_plot,
         )
 
         return result
