@@ -1,3 +1,4 @@
+import dataclasses
 import astropy.units as u
 import named_arrays as na
 import optika
@@ -9,6 +10,7 @@ __all__ = [
 ]
 
 
+@dataclasses.dataclass
 class Camera(
     msfc_ccd.Camera,
 ):
