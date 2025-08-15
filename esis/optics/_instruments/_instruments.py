@@ -21,6 +21,8 @@ class AbstractInstrument(
     optika.mixins.Yawable,
     optika.mixins.Pitchable,
 ):
+    """An interface describing the entire optical system."""
+
     @property
     @abc.abstractmethod
     def name(self) -> str:
@@ -197,7 +199,7 @@ class Instrument(
     AbstractInstrument,
 ):
     """
-    A generalized model of the ESIS instrument system.
+    An object which represents the entire optical system.
 
     A composition of the optical elements and a grid of input rays.
     Designed to resolve the optical elements into an instance of
