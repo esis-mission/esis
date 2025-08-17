@@ -1,4 +1,4 @@
-"""Ruling profiles for the ESIS diffraction gratings."""
+"""Models of the ruling profiles."""
 
 from ._rulings import (
     ruling_design,

@@ -1,4 +1,4 @@
-"""Efficiency measurements of the diffraction gratings."""
+"""Measurements of the grating efficiency by Eric Gullikson"""
 
 from ._efficiencies import (
     efficiency_vs_wavelength,
