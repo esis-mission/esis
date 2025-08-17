@@ -1,4 +1,4 @@
-"""Models and data for representing the ESIS primary mirror."""
+"""Models and data for representing the primary mirror."""
 
 from . import materials
 
