@@ -14,7 +14,7 @@ def ruling_design(
     num_distribution: int = 11,
 ) -> optika.rulings.AbstractRulings:
     """
-    The as-designed rulings for the ESIS diffraction gratings.
+    Load a model of the as-designed rulings for the diffraction gratings.
 
     Parameters
     ----------
@@ -23,7 +23,6 @@ def ruling_design(
 
     Examples
     --------
-
     Plot the efficiency of the rulings over the EUV wavelength range.
 
     .. jupyter-execute::
@@ -63,10 +62,11 @@ def ruling_design(
         )
 
         # Plot the efficiency vs wavelength
-        fig, ax = plt.subplots(constrained_layout=True)
-        na.plt.plot(wavelength, efficiency, ax=ax);
-        ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
-        ax.set_ylabel("efficiency");
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            na.plt.plot(wavelength, efficiency, ax=ax);
+            ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
+            ax.set_ylabel("efficiency");
     """
 
     density = na.UniformUncertainScalarArray(
@@ -110,14 +110,14 @@ def ruling_measurement(
     num_distribution: int = 11,
 ):
     """
-    A model of the rulings where the efficiency has been calculated using the
-    ratio of the total efficiency of the gratings to the efficiency of the
-    multilayer coatings.
+    A model of the rulings based on the total efficiency of the gratings.
 
     The total efficiency of the gratings is given by
     :func:`esis.flights.f1.optics.gratings.efficiencies.efficiency_vs_wavelength()`,
     and the efficiency of the multilayer coating is given by
     :func:`esis.flights.f1.optics.gratings.materials.multilayer_fit()`.
+    This function takes the ratio of those two functions to estimate the
+    efficiency of the rulings.
 
     Parameters
     ----------
@@ -175,26 +175,26 @@ def ruling_measurement(
         )
 
         # Plot the efficiency vs wavelength
-        fig, ax = plt.subplots(constrained_layout=True)
-        na.plt.plot(
-            wavelength,
-            efficiency_design,
-            ax=ax,
-            color="tab:blue",
-            label="design",
-        );
-        na.plt.plot(
-            wavelength,
-            efficiency_measurement,
-            ax=ax,
-            color="tab:orange",
-            label="measurement",
-        );
-        ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
-        ax.set_ylabel("efficiency");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            na.plt.plot(
+                wavelength,
+                efficiency_design,
+                ax=ax,
+                color="tab:blue",
+                label="design",
+            );
+            na.plt.plot(
+                wavelength,
+                efficiency_measurement,
+                ax=ax,
+                color="tab:orange",
+                label="measurement",
+            );
+            ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
+            ax.set_ylabel("efficiency");
+            ax.legend();
     """
-
     design = ruling_design(num_distribution=num_distribution)
 
     density = na.UniformUncertainScalarArray(
