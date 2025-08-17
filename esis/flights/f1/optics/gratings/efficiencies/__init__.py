@@ -1,6 +1,4 @@
-"""
-Efficiency measurements of the diffraction gratings.
-"""
+"""Efficiency measurements of the diffraction gratings."""
 
 from ._efficiencies import (
     efficiency_vs_wavelength,

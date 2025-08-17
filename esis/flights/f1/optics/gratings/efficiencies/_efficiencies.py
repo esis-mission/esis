@@ -22,8 +22,10 @@ def efficiency_vs_wavelength() -> (
     na.FunctionArray[na.TemporalSpectralDirectionalVectorArray, na.ScalarArray]
 ):
     """
-    The total (coating + groove) efficiency of the ESIS diffraction gratings
-    as a function of wavelength as measured by Eric Gullikson.
+    The measured efficiency of the gratings as a function of wavelength.
+
+    This includes contributions from both the coatings and grooves and was
+    measured by Eric Gullikson.
 
     Examples
     --------
@@ -50,7 +52,6 @@ def efficiency_vs_wavelength() -> (
         ax.set_ylabel(f"efficiency");
         ax.legend();
     """
-
     wavelength, efficiency = np.loadtxt(
         fname=_directory_data / "mul063315.abs",
         unpack=True,
@@ -76,8 +77,10 @@ def efficiency_vs_x() -> (
     na.FunctionArray[na.TemporalSpectralPositionalVectorArray, na.ScalarArray]
 ):
     """
-    The total (coating + groove) efficiency of the ESIS diffraction gratings
-    as a function of :math:`x` position as measured by Eric Gullikson.
+    The measured efficiency of the gratings as a function of position, :math:`x`.
+
+    This includes contributions from both the coatings and grooves and was
+    measured by Eric Gullikson.
 
     Examples
     --------
@@ -104,7 +107,6 @@ def efficiency_vs_x() -> (
         ax.set_ylabel(f"efficiency");
         ax.legend();
     """
-
     x, efficiency = np.loadtxt(
         fname=_directory_data / "mul063283.abs",
         unpack=True,
@@ -130,8 +132,10 @@ def efficiency_vs_y() -> (
     na.FunctionArray[na.TemporalSpectralPositionalVectorArray, na.ScalarArray]
 ):
     """
-    The total (coating + groove) efficiency of the ESIS diffraction gratings
-    as a function of :math:`y` position as measured by Eric Gullikson.
+    The measured efficiency of the gratings as a function of position, :math:`y`.
+
+    This includes contributions from both the coatings and grooves and was
+    measured by Eric Gullikson.
 
     Examples
     --------
@@ -158,7 +162,6 @@ def efficiency_vs_y() -> (
         ax.set_ylabel(f"efficiency");
         ax.legend();
     """
-
     y, efficiency = np.loadtxt(
         fname=_directory_data / "mul063282.txt",
         unpack=True,
@@ -184,9 +187,10 @@ def efficiency_vs_angle_0deg() -> (
     na.FunctionArray[na.TemporalSpectralDirectionalVectorArray, na.ScalarArray]
 ):
     """
-    The total (coating + groove) efficiency of the ESIS diffraction gratings
-    as a function of output angle as measured by Eric Gullikson at an input
-    angle of 0 degrees.
+    The measured efficiency of the gratings at normal incidence vs. output angle.
+
+    This includes contributions from both the coatings and grooves and was
+    measured by Eric Gullikson.
 
     Examples
     --------
@@ -213,7 +217,6 @@ def efficiency_vs_angle_0deg() -> (
         ax.set_ylabel(f"efficiency");
         ax.legend();
     """
-
     angle, efficiency = np.loadtxt(
         fname=_directory_data / "mul063284.txt",
         unpack=True,
@@ -242,9 +245,11 @@ def efficiency_vs_angle_3deg() -> (
     na.FunctionArray[na.TemporalSpectralDirectionalVectorArray, na.ScalarArray]
 ):
     """
-    The total (coating + groove) efficiency of the ESIS diffraction gratings
-    as a function of output angle as measured by Eric Gullikson at an input
-    angle of 3 degrees.
+    The measured efficiency of the gratings at oblique incidence vs. output angle.
+
+    Measured at an input angle of 3 degrees.
+    This includes contributions from both the coatings and grooves and was
+    measured by Eric Gullikson.
 
     Examples
     --------
@@ -271,7 +276,6 @@ def efficiency_vs_angle_3deg() -> (
         ax.set_ylabel(f"efficiency");
         ax.legend();
     """
-
     angle, efficiency = np.loadtxt(
         fname=_directory_data / "mul063281.txt",
         unpack=True,

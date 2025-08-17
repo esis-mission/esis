@@ -1,6 +1,4 @@
-"""
-Models of the ESIS diffraction gratings.
-"""
+"""Models of the ESIS diffraction gratings."""
 
 from . import efficiencies
 from . import materials
