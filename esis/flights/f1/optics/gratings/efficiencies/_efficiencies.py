@@ -22,7 +22,7 @@ def efficiency_vs_wavelength() -> (
     na.FunctionArray[na.TemporalSpectralDirectionalVectorArray, na.ScalarArray]
 ):
     """
-    Load the measured efficiency of the gratings as a function of wavelength.
+    Load the measured efficiency as a function of wavelength.
 
     This includes contributions from both the coatings and grooves and was
     measured by Eric Gullikson.
@@ -79,7 +79,7 @@ def efficiency_vs_x() -> (
     na.FunctionArray[na.TemporalSpectralPositionalVectorArray, na.ScalarArray]
 ):
     """
-    Load the measured efficiency of the gratings as a function of position, :math:`x`.
+    Load the measured efficiency as a function of position, :math:`x`.
 
     This includes contributions from both the coatings and grooves and was
     measured by Eric Gullikson.
@@ -136,7 +136,7 @@ def efficiency_vs_y() -> (
     na.FunctionArray[na.TemporalSpectralPositionalVectorArray, na.ScalarArray]
 ):
     """
-    Load the measured efficiency of the gratings as a function of position, :math:`y`.
+    Load the measured efficiency as a function of position, :math:`y`.
 
     This includes contributions from both the coatings and grooves and was
     measured by Eric Gullikson.
@@ -193,7 +193,7 @@ def efficiency_vs_angle_0deg() -> (
     na.FunctionArray[na.TemporalSpectralDirectionalVectorArray, na.ScalarArray]
 ):
     """
-    Load the measured efficiency of the gratings at normal incidence vs. output angle.
+    Load the measured efficiency at normal incidence as a function of output angle.
 
     This includes contributions from both the coatings and grooves and was
     measured by Eric Gullikson.
@@ -253,7 +253,7 @@ def efficiency_vs_angle_3deg() -> (
     na.FunctionArray[na.TemporalSpectralDirectionalVectorArray, na.ScalarArray]
 ):
     """
-    Load the measured efficiency of the gratings at oblique incidence vs. output angle.
+    Load the measured efficiency at oblique incidence as a function of output angle.
 
     Measured at an input angle of 3 degrees.
     This includes contributions from both the coatings and grooves and was
