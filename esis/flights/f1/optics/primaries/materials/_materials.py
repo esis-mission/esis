@@ -52,7 +52,7 @@ def multilayer_design() -> optika.materials.MultilayerMirror:
         with astropy.visualization.quantity_support():
             fig, ax = plt.subplots(constrained_layout=True)
             na.plt.plot(wavelength, reflectivity, ax=ax);
-            ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
+            ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
             ax.set_ylabel("reflectivity");
     """
     return optika.materials.MultilayerMirror(
@@ -125,7 +125,7 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
                 ax=ax,
                 label=meas.inputs.direction,
             )
-            ax.set_xlabel(f"wavelength ({meas.inputs.wavelength.unit:latex_inline})");
+            ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
             ax.set_ylabel("reflectivity");
             ax.legend();
     """
@@ -213,7 +213,7 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
                 label="fitted",
                 color="tab:orange",
             );
-            ax.set_xlabel(f"wavelength ({rays.wavelength.unit:latex_inline})")
+            ax.set_xlabel(f"wavelength ({ax.get_xlabel()})")
             ax.set_ylabel("reflectivity")
             ax.legend();
 
@@ -354,7 +354,7 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
                 axis="wavelength",
                 label="primary fit",
             );
-            ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
+            ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
             ax.set_ylabel("reflectivity");
             ax.legend();
 
@@ -410,7 +410,7 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
                 axis="wavelength",
                 label=angle,
             );
-            ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
+            ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
             ax.set_ylabel("reflectivity");
             ax.legend();
     """
