@@ -55,6 +55,9 @@ select = [
     "D",
     "DOC",
 ]
+ignore = [
+    "DOC201",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

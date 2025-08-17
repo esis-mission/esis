@@ -1,4 +1,4 @@
-"""Components and analyses specific to each flight of the instrument."""
+"""Models and data specific to each flight of the instrument."""
 
 from . import f1
 
