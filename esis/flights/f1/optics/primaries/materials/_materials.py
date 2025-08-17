@@ -111,17 +111,17 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
 
         # Load the witness sample measurements
         multilayer = primaries.materials.multilayer_witness_measured()
-        measurement = multilayer.efficiency_measured
+        meas = multilayer.efficiency_measured
 
         # Plot the measurement as a function of wavelength
         fig, ax = plt.subplots(constrained_layout=True)
         na.plt.plot(
-            measurement.inputs.wavelength,
-            measurement.outputs,
+            meas.inputs.wavelength,
+            meas.outputs,
             ax=ax,
-            label=measurement.inputs.direction,
+            label=meas.inputs.direction,
         )
-        ax.set_xlabel(f"wavelength ({measurement.inputs.wavelength.unit:latex_inline})");
+        ax.set_xlabel(f"wavelength ({meas.inputs.wavelength.unit:latex_inline})");
         ax.set_ylabel("reflectivity");
         ax.legend();
     """
@@ -151,7 +151,7 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
 
 def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
     """
-    Calculate multilayer stack fitted to the :func:`multilayer_witness_measured` measurement.
+    Fit a multilayer stack to the :func:`multilayer_witness_measured` measurement.
 
     Examples
     --------
@@ -214,7 +214,6 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
         # Print the fitted multilayer stack
         multilayer
     """
-
     design = multilayer_design()
 
     measurement = multilayer_witness_measured()
@@ -284,12 +283,14 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
 
 def multilayer_fit() -> optika.materials.MultilayerMirror:
     """
-    A multilayer coating determined by modifying :func:`multilayer_witness_fit`
-    to have a glass substrate with the appropriate roughness.
+    Modify the result of :func:`multilayer_witness_fit` to have the correct substrate.
+
+    The witness sample has a silicon substrate and the primary has a glass substrate.
+    So this function changes the substrate from silicon to glass and modifies the
+    roughness to be consistent with the actual primary mirror.
 
     Examples
     --------
-
     Plot the theoretical reflectivity of this multilayer stack vs. the
     theoretical reflectivity of :func:`multilayer_witness_fit`.
 
