@@ -68,7 +68,6 @@ def ruling_design(
             ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
             ax.set_ylabel("efficiency");
     """
-
     density = na.UniformUncertainScalarArray(
         nominal=(2.586608603456000 / u.um).to(1 / u.mm),
         width=1 / u.mm,
@@ -110,7 +109,7 @@ def ruling_measurement(
     num_distribution: int = 11,
 ):
     """
-    A model of the rulings based on the total efficiency of the gratings.
+    Load a model of the rulings based on the total efficiency of the gratings.
 
     The total efficiency of the gratings is given by
     :func:`esis.flights.f1.optics.gratings.efficiencies.efficiency_vs_wavelength()`,
@@ -126,7 +125,6 @@ def ruling_measurement(
 
     Examples
     --------
-
     Compare the as-designed efficiency of the rulings to the measured efficiency
     of the rulings.
 
