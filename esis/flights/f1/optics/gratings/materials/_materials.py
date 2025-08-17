@@ -16,16 +16,15 @@ __all__ = [
 
 def multilayer_design() -> optika.materials.MultilayerMirror:
     """
-    The as-designed multilayer coating for the ESIS diffraction gratings.
-    This coating is based on the design outlined in :cite:t:`Soufli2012`.
+    Load a model of the as-designed multilayer coating for the diffraction gratings.
 
+    This coating is based on the design outlined in :cite:t:`Soufli2012`.
     Based on the analysis of :cite:t:`Rebellato2018`, this model uses
     :cite:t:`Kortright1988` for the silicon carbide optical constants, and
     :cite:t:`VidalDasilva2010` for the magnesium optical constants.
 
     Examples
     --------
-
     Plot the reflectivity of the coating over the EUV wavelength range.
 
     .. jupyter-execute::
@@ -73,7 +72,6 @@ def multilayer_design() -> optika.materials.MultilayerMirror:
             )
             ax.set_axis_off()
     """
-
     layer_oxide = optika.materials.Layer(
         chemical="SiO2",
         thickness=1 * u.nm,
@@ -158,8 +156,9 @@ def multilayer_design() -> optika.materials.MultilayerMirror:
 
 def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
     """
-    A reflectivity measurement of the witness samples associated with the ESIS
-    diffraction gratings gathered by Eric Gullikson.
+    Load a measurement of the reflectivity of the witness samples.
+
+    Measured by Eric Gullikson.
 
     Examples
     --------
@@ -168,6 +167,7 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
     .. jupyter-execute::
 
         import matplotlib.pyplot as plt
+        import astropy.visualization
         import named_arrays as na
         from esis.flights.f1.optics import gratings
 
@@ -176,17 +176,18 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
         measurement = multilayer.efficiency_measured
 
         # Plot the measurement as a function of wavelength
-        fig, ax = plt.subplots(constrained_layout=True)
-        na.plt.plot(
-            measurement.inputs.wavelength,
-            measurement.outputs,
-            ax=ax,
-            axis="wavelength",
-            label=multilayer.serial_number,
-        )
-        ax.set_xlabel(f"wavelength ({measurement.inputs.wavelength.unit:latex_inline})");
-        ax.set_ylabel("reflectivity");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            na.plt.plot(
+                measurement.inputs.wavelength,
+                measurement.outputs,
+                ax=ax,
+                axis="wavelength",
+                label=multilayer.serial_number,
+            )
+            ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
+            ax.set_ylabel("reflectivity");
+            ax.legend();
     """
     path_base = pathlib.Path(__file__).parent / "_data"
 
@@ -252,8 +253,7 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
 
 def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
     r"""
-    A multilayer stack fitted to the witness sample measurements given by
-    :func:`multilayer_witness_measured`.
+    Fit a multilayer stack to the :func:`multilayer_witness_measured` measurement.
 
     This fit has five free parameters: the ratio of the thicknesses of
     :math:`\text{Mg}`, :math:`\text{Al}`, and the :math:`\text{SiC}` to their
@@ -262,7 +262,6 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
 
     Examples
     --------
-
     Plot the fitted vs. measured reflectivity of the grating witness samples.
 
     .. jupyter-execute::
@@ -338,7 +337,6 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
             ax.set_axis_off()
 
     """
-
     design = multilayer_design()
 
     measurement = multilayer_witness_measured()
@@ -438,12 +436,14 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
 
 def multilayer_fit() -> optika.materials.MultilayerMirror:
     """
-    A multilayer coating determined by modifying :func:`multilayer_witness_fit`
-    to have a glass substrate with the appropriate roughness.
+    Modify the result of :func:`multilayer_witness_fit` to have the correct substrate.
+
+    The witness sample has a silicon substrate and the gratings have a glass substrate.
+    So this function changes the substrate from silicon to glass and modifies
+    the roughness to be consistent with the actual gratings.
 
     Examples
     --------
-
     Plot the theoretical reflectivity of this multilayer stack vs. the
     theoretical reflectivity of :func:`multilayer_witness_fit`.
 
@@ -452,6 +452,7 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
         import numpy as np
         import matplotlib.pyplot as plt
         import astropy.units as u
+        import astropy.visualization
         import named_arrays as na
         import optika
         from esis.flights.f1.optics import gratings
@@ -484,24 +485,25 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
         reflectivity_fit = multilayer_fit.efficiency(rays, normal)
 
         # Plot the reflectivities as a function of wavelength
-        fig, ax = plt.subplots(constrained_layout=True)
-        na.plt.plot(
-            wavelength,
-            reflectivity_witness,
-            ax=ax,
-            axis="wavelength",
-            label="witness fit",
-        );
-        na.plt.plot(
-            wavelength,
-            reflectivity_fit,
-            ax=ax,
-            axis="wavelength",
-            label="grating fit",
-        );
-        ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
-        ax.set_ylabel("reflectivity");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            na.plt.plot(
+                wavelength,
+                reflectivity_witness,
+                ax=ax,
+                axis="wavelength",
+                label="witness fit",
+            );
+            na.plt.plot(
+                wavelength,
+                reflectivity_fit,
+                ax=ax,
+                axis="wavelength",
+                label="grating fit",
+            );
+            ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
+            ax.set_ylabel("reflectivity");
+            ax.legend();
 
     |
 

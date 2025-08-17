@@ -1,6 +1,4 @@
-"""
-Models of the grating multilayer coatings.
-"""
+"""Models of the grating multilayer coatings."""
 
 from ._materials import (
     multilayer_design,
