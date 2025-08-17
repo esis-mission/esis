@@ -112,9 +112,9 @@ def ruling_measurement(
     Load a model of the rulings based on the total efficiency of the gratings.
 
     The total efficiency of the gratings is given by
-    :func:`esis.flights.f1.optics.gratings.efficiencies.efficiency_vs_wavelength()`,
+    :func:`~esis.flights.f1.optics.gratings.efficiencies.efficiency_vs_wavelength()`,
     and the efficiency of the multilayer coating is given by
-    :func:`esis.flights.f1.optics.gratings.materials.multilayer_fit()`.
+    :func:`~esis.flights.f1.optics.gratings.materials.multilayer_fit()`.
     This function takes the ratio of those two functions to estimate the
     efficiency of the rulings.
 
