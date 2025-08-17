@@ -15,11 +15,10 @@ __all__ = [
 
 def multilayer_design() -> optika.materials.MultilayerMirror:
     """
-    The as-designed multilayer coating for the ESIS primary mirror.
+    Load the as-designed multilayer coating for the ESIS primary mirror.
 
     Examples
     --------
-
     Plot the efficiency of the coating across the EUV range
 
     .. jupyter-execute::
@@ -98,8 +97,7 @@ def multilayer_design() -> optika.materials.MultilayerMirror:
 
 def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
     """
-    A reflectivity measurement of the witness samples to the primary mirror
-    multilayer coating performed by Eric Gullikson.
+    Load the reflectivity measurement of the witness samples.
 
     Examples
     --------
@@ -153,7 +151,7 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
 
 def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
     """
-    A multilayer stack fitted to the :func:`multilayer_witness_measured` measurement.
+    Calculate multilayer stack fitted to the :func:`multilayer_witness_measured` measurement.
 
     Examples
     --------
