@@ -42,16 +42,17 @@ def efficiency_vs_wavelength() -> (
         efficiency = gratings.efficiencies.efficiency_vs_wavelength()
 
         # Plot the measurements using matplotlib
-        fig, ax = plt.subplots()
-        na.plt.plot(
-            efficiency.inputs.wavelength,
-            efficiency.outputs,
-            ax=ax,
-            label=efficiency.inputs.time.strftime("%Y-%m-%d"),
-        );
-        ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
-        ax.set_ylabel(f"efficiency");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots()
+            na.plt.plot(
+                efficiency.inputs.wavelength,
+                efficiency.outputs,
+                ax=ax,
+                label=efficiency.inputs.time.strftime("%Y-%m-%d"),
+            );
+            ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
+            ax.set_ylabel(f"efficiency");
+            ax.legend();
     """
     wavelength, efficiency = np.loadtxt(
         fname=_directory_data / "mul063315.abs",
