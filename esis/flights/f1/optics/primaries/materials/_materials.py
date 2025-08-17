@@ -25,6 +25,7 @@ def multilayer_design() -> optika.materials.MultilayerMirror:
 
         import matplotlib.pyplot as plt
         import astropy.units as u
+        import astropy.visualization
         import named_arrays as na
         import optika
         from esis.flights.f1.optics import primaries
@@ -48,10 +49,11 @@ def multilayer_design() -> optika.materials.MultilayerMirror:
         )
 
         # Plot the reflectivity vs wavelength
-        fig, ax = plt.subplots(constrained_layout=True)
-        na.plt.plot(wavelength, reflectivity, ax=ax);
-        ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
-        ax.set_ylabel("reflectivity");
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            na.plt.plot(wavelength, reflectivity, ax=ax);
+            ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
+            ax.set_ylabel("reflectivity");
     """
     return optika.materials.MultilayerMirror(
         layers=[
@@ -106,6 +108,7 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
     .. jupyter-execute::
 
         import matplotlib.pyplot as plt
+        import astropy.visualization
         import named_arrays as na
         from esis.flights.f1.optics import primaries
 
@@ -114,16 +117,17 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
         meas = multilayer.efficiency_measured
 
         # Plot the measurement as a function of wavelength
-        fig, ax = plt.subplots(constrained_layout=True)
-        na.plt.plot(
-            meas.inputs.wavelength,
-            meas.outputs,
-            ax=ax,
-            label=meas.inputs.direction,
-        )
-        ax.set_xlabel(f"wavelength ({meas.inputs.wavelength.unit:latex_inline})");
-        ax.set_ylabel("reflectivity");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            na.plt.plot(
+                meas.inputs.wavelength,
+                meas.outputs,
+                ax=ax,
+                label=meas.inputs.direction,
+            )
+            ax.set_xlabel(f"wavelength ({meas.inputs.wavelength.unit:latex_inline})");
+            ax.set_ylabel("reflectivity");
+            ax.legend();
     """
     wavelength, reflectivity = np.loadtxt(
         fname=pathlib.Path(__file__).parent / "_data/mul063931.abs",
@@ -161,6 +165,7 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
 
         import numpy as np
         import matplotlib.pyplot as plt
+        import astropy.visualization
         import named_arrays as na
         import optika
         from esis.flights.f1.optics import primaries
@@ -193,23 +198,24 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
         )
 
         # Plot the fitted vs. measured reflectivity
-        fig, ax = plt.subplots(constrained_layout=True)
-        na.plt.scatter(
-            measurement.inputs.wavelength,
-            measurement.outputs,
-            ax=ax,
-            label="measured"
-        );
-        na.plt.plot(
-            rays.wavelength,
-            reflectivity_fit,
-            ax=ax,
-            label="fitted",
-            color="tab:orange",
-        );
-        ax.set_xlabel(f"wavelength ({rays.wavelength.unit:latex_inline})")
-        ax.set_ylabel("reflectivity")
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            na.plt.scatter(
+                measurement.inputs.wavelength,
+                measurement.outputs,
+                ax=ax,
+                label="measured"
+            );
+            na.plt.plot(
+                rays.wavelength,
+                reflectivity_fit,
+                ax=ax,
+                label="fitted",
+                color="tab:orange",
+            );
+            ax.set_xlabel(f"wavelength ({rays.wavelength.unit:latex_inline})")
+            ax.set_ylabel("reflectivity")
+            ax.legend();
 
         # Print the fitted multilayer stack
         multilayer
@@ -299,6 +305,7 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
         import numpy as np
         import matplotlib.pyplot as plt
         import astropy.units as u
+        import astropy.visualization
         import named_arrays as na
         import optika
         from esis.flights.f1.optics import primaries
@@ -331,24 +338,25 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
         reflectivity_fit = multilayer_fit.efficiency(rays, normal)
 
         # Plot the reflectivities as a function of wavelength
-        fig, ax = plt.subplots(constrained_layout=True)
-        na.plt.plot(
-            wavelength,
-            reflectivity_witness,
-            ax=ax,
-            axis="wavelength",
-            label="witness fit",
-        );
-        na.plt.plot(
-            wavelength,
-            reflectivity_fit,
-            ax=ax,
-            axis="wavelength",
-            label="primary fit",
-        );
-        ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
-        ax.set_ylabel("reflectivity");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            na.plt.plot(
+                wavelength,
+                reflectivity_witness,
+                ax=ax,
+                axis="wavelength",
+                label="witness fit",
+            );
+            na.plt.plot(
+                wavelength,
+                reflectivity_fit,
+                ax=ax,
+                axis="wavelength",
+                label="primary fit",
+            );
+            ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
+            ax.set_ylabel("reflectivity");
+            ax.legend();
 
         # Print the fitted multilayer stack
         multilayer_fit
@@ -362,6 +370,7 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
         import numpy as np
         import matplotlib.pyplot as plt
         import astropy.units as u
+        import astropy.visualization
         import named_arrays as na
         import optika
         from esis.flights.f1.optics import primaries
@@ -392,17 +401,18 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
         )
 
         # Plot the reflectivity of the multilayer as a function of wavelength
-        fig, ax = plt.subplots(constrained_layout=True)
-        na.plt.plot(
-            wavelength,
-            reflectivity,
-            ax=ax,
-            axis="wavelength",
-            label=angle,
-        );
-        ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
-        ax.set_ylabel("reflectivity");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            na.plt.plot(
+                wavelength,
+                reflectivity,
+                ax=ax,
+                axis="wavelength",
+                label=angle,
+            );
+            ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
+            ax.set_ylabel("reflectivity");
+            ax.legend();
     """
     result = multilayer_design()
     witness = multilayer_witness_fit()
