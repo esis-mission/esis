@@ -22,7 +22,7 @@ def efficiency_vs_wavelength() -> (
     na.FunctionArray[na.TemporalSpectralDirectionalVectorArray, na.ScalarArray]
 ):
     """
-    The measured efficiency of the gratings as a function of wavelength.
+    Load the measured efficiency of the gratings as a function of wavelength.
 
     This includes contributions from both the coatings and grooves and was
     measured by Eric Gullikson.
@@ -34,6 +34,7 @@ def efficiency_vs_wavelength() -> (
     .. jupyter-execute::
 
         import matplotlib.pyplot as plt
+        import astropy.visualization
         import named_arrays as na
         from esis.flights.f1.optics import gratings
 
@@ -48,7 +49,7 @@ def efficiency_vs_wavelength() -> (
             ax=ax,
             label=efficiency.inputs.time.strftime("%Y-%m-%d"),
         );
-        ax.set_xlabel(f"wavelength ({efficiency.inputs.wavelength.unit:latex_inline})");
+        ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
         ax.set_ylabel(f"efficiency");
         ax.legend();
     """
@@ -77,7 +78,7 @@ def efficiency_vs_x() -> (
     na.FunctionArray[na.TemporalSpectralPositionalVectorArray, na.ScalarArray]
 ):
     """
-    The measured efficiency of the gratings as a function of position, :math:`x`.
+    Load the measured efficiency of the gratings as a function of position, :math:`x`.
 
     This includes contributions from both the coatings and grooves and was
     measured by Eric Gullikson.
@@ -89,6 +90,7 @@ def efficiency_vs_x() -> (
     .. jupyter-execute::
 
         import matplotlib.pyplot as plt
+        import astropy.visualization
         import named_arrays as na
         from esis.flights.f1.optics import gratings
 
@@ -96,16 +98,17 @@ def efficiency_vs_x() -> (
         efficiency = gratings.efficiencies.efficiency_vs_x()
 
         # Plot the measurements using matplotlib
-        fig, ax = plt.subplots()
-        na.plt.plot(
-            efficiency.inputs.position,
-            efficiency.outputs,
-            ax=ax,
-            label=efficiency.inputs.time.strftime("%Y-%m-%d"),
-        );
-        ax.set_xlabel(f"$x$ ({efficiency.inputs.position.unit:latex_inline})");
-        ax.set_ylabel(f"efficiency");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots()
+            na.plt.plot(
+                efficiency.inputs.position,
+                efficiency.outputs,
+                ax=ax,
+                label=efficiency.inputs.time.strftime("%Y-%m-%d"),
+            );
+            ax.set_xlabel(f"$x$ ({ax.get_xlabel()})");
+            ax.set_ylabel(f"efficiency");
+            ax.legend();
     """
     x, efficiency = np.loadtxt(
         fname=_directory_data / "mul063283.abs",
@@ -132,7 +135,7 @@ def efficiency_vs_y() -> (
     na.FunctionArray[na.TemporalSpectralPositionalVectorArray, na.ScalarArray]
 ):
     """
-    The measured efficiency of the gratings as a function of position, :math:`y`.
+    Load the measured efficiency of the gratings as a function of position, :math:`y`.
 
     This includes contributions from both the coatings and grooves and was
     measured by Eric Gullikson.
@@ -144,6 +147,7 @@ def efficiency_vs_y() -> (
     .. jupyter-execute::
 
         import matplotlib.pyplot as plt
+        import astropy.visualization
         import named_arrays as na
         from esis.flights.f1.optics import gratings
 
@@ -151,16 +155,17 @@ def efficiency_vs_y() -> (
         efficiency = gratings.efficiencies.efficiency_vs_y()
 
         # Plot the measurements using matplotlib
-        fig, ax = plt.subplots()
-        na.plt.plot(
-            efficiency.inputs.position,
-            efficiency.outputs,
-            ax=ax,
-            label=efficiency.inputs.time.strftime("%Y-%m-%d"),
-        );
-        ax.set_xlabel(f"$y$ ({efficiency.inputs.position.unit:latex_inline})");
-        ax.set_ylabel(f"efficiency");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots()
+            na.plt.plot(
+                efficiency.inputs.position,
+                efficiency.outputs,
+                ax=ax,
+                label=efficiency.inputs.time.strftime("%Y-%m-%d"),
+            );
+            ax.set_xlabel(f"$y$ ({ax.get_xlabel()})");
+            ax.set_ylabel(f"efficiency");
+            ax.legend();
     """
     y, efficiency = np.loadtxt(
         fname=_directory_data / "mul063282.txt",
@@ -187,7 +192,7 @@ def efficiency_vs_angle_0deg() -> (
     na.FunctionArray[na.TemporalSpectralDirectionalVectorArray, na.ScalarArray]
 ):
     """
-    The measured efficiency of the gratings at normal incidence vs. output angle.
+    Load the measured efficiency of the gratings at normal incidence vs. output angle.
 
     This includes contributions from both the coatings and grooves and was
     measured by Eric Gullikson.
@@ -199,6 +204,7 @@ def efficiency_vs_angle_0deg() -> (
     .. jupyter-execute::
 
         import matplotlib.pyplot as plt
+        import astropy.visualization
         import named_arrays as na
         from esis.flights.f1.optics import gratings
 
@@ -206,16 +212,17 @@ def efficiency_vs_angle_0deg() -> (
         efficiency = gratings.efficiencies.efficiency_vs_angle_0deg()
 
         # Plot the measurements using matplotlib
-        fig, ax = plt.subplots()
-        na.plt.plot(
-            efficiency.inputs.direction.output,
-            efficiency.outputs,
-            ax=ax,
-            label=efficiency.inputs.direction.input,
-        );
-        ax.set_xlabel(f"output angle ({efficiency.inputs.direction.input.unit:latex_inline})");
-        ax.set_ylabel(f"efficiency");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots()
+            na.plt.plot(
+                efficiency.inputs.direction.output,
+                efficiency.outputs,
+                ax=ax,
+                label=efficiency.inputs.direction.input,
+            );
+            ax.set_xlabel(f"output angle ({ax.get_xlabel()})");
+            ax.set_ylabel(f"efficiency");
+            ax.legend();
     """
     angle, efficiency = np.loadtxt(
         fname=_directory_data / "mul063284.txt",
@@ -245,7 +252,7 @@ def efficiency_vs_angle_3deg() -> (
     na.FunctionArray[na.TemporalSpectralDirectionalVectorArray, na.ScalarArray]
 ):
     """
-    The measured efficiency of the gratings at oblique incidence vs. output angle.
+    Load the measured efficiency of the gratings at oblique incidence vs. output angle.
 
     Measured at an input angle of 3 degrees.
     This includes contributions from both the coatings and grooves and was
@@ -258,6 +265,7 @@ def efficiency_vs_angle_3deg() -> (
     .. jupyter-execute::
 
         import matplotlib.pyplot as plt
+        import astropy.visualization
         import named_arrays as na
         from esis.flights.f1.optics import gratings
 
@@ -265,16 +273,17 @@ def efficiency_vs_angle_3deg() -> (
         efficiency = gratings.efficiencies.efficiency_vs_angle_3deg()
 
         # Plot the measurements using matplotlib
-        fig, ax = plt.subplots()
-        na.plt.plot(
-            efficiency.inputs.direction.output,
-            efficiency.outputs,
-            ax=ax,
-            label=efficiency.inputs.direction.input,
-        );
-        ax.set_xlabel(f"output angle ({efficiency.inputs.direction.input.unit:latex_inline})");
-        ax.set_ylabel(f"efficiency");
-        ax.legend();
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots()
+            na.plt.plot(
+                efficiency.inputs.direction.output,
+                efficiency.outputs,
+                ax=ax,
+                label=efficiency.inputs.direction.input,
+            );
+            ax.set_xlabel(f"output angle ({ax.get_xlabel()})");
+            ax.set_ylabel(f"efficiency");
+            ax.legend();
     """
     angle, efficiency = np.loadtxt(
         fname=_directory_data / "mul063281.txt",
