@@ -2,8 +2,10 @@
 
 from . import primaries
 from . import gratings
+from . import filters
 
 __all__ = [
     "primaries",
     "gratings",
+    "filters",
 ]
