@@ -11,6 +11,11 @@ launched from White Sands Missile Range on September 30th, 2019.
 
     esis
 
+.. figure:: _static/esis-rail.avif
+
+    The ESIS instrument on the rail preparing for launch. Image credit: NSROC
+    and Catharine Bunn.
+
 Reports
 =======
 
