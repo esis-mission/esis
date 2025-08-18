@@ -71,7 +71,16 @@ class AbstractInstrument(
     @property
     @abc.abstractmethod
     def wavelength(self) -> None | u.Quantity | na.AbstractScalar:
-        """A default grid of wavelengths to trace through the system."""
+        """
+        A default grid of wavelengths to trace through the system.
+
+        Can be either in normalized coordinates (in the range :math:`-1` to :math:`+1`)
+        or in physical coordinates (with units of length).
+
+        See Also
+        --------
+        :attr:`wavelength_physical`: This value converted into in physical coordinates.
+        """
 
     @property
     @abc.abstractmethod
@@ -169,6 +178,17 @@ class AbstractInstrument(
             axis=("wire_grating_input", "wire_grating_output"),
         )
 
+    @property
+    def wavelength_physical(self) -> na.ScalarArray:
+        """The value of :attr:`wavelength` converted to physical units if needed."""
+        wavelength = self.wavelength
+        if na.unit_normalized(wavelength).is_equivalent(u.dimensionless_unscaled):
+            wavelength_min = self.wavelength_min
+            wavelength_max = self.wavelength_max
+            wavelength_range = wavelength_max - wavelength_min
+            wavelength = wavelength_range * (wavelength + 1) / 2 + wavelength_min
+        return wavelength
+
     @functools.cached_property
     def system(self) -> optika.systems.SequentialSystem:
         """
@@ -188,7 +208,7 @@ class AbstractInstrument(
             surfaces=surfaces,
             sensor=self.camera.surface,
             grid_input=optika.vectors.ObjectVectorArray(
-                wavelength=self.wavelength,
+                wavelength=self.wavelength_physical,
                 field=self.field,
                 pupil=self.pupil,
             ),
