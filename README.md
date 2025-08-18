@@ -13,3 +13,5 @@ and is planning to launch again in 2027.
 
 This repository provides a Python package to model the ESIS optical system
 and analyze the images captured during flight.
+
+![ESIS on the rail](docs/_static/esis-rail.avif)
