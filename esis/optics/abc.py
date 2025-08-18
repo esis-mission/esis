@@ -6,6 +6,7 @@ from ._primary_mirrors import AbstractPrimaryMirror
 from ._field_stops import AbstractFieldStop
 from ._gratings import AbstractGrating
 from ._filters import AbstractFilter
+from ._instruments import AbstractInstrument
 
 __all__ = [
     "AbstractFrontAperture",
@@ -14,4 +15,5 @@ __all__ = [
     "AbstractFieldStop",
     "AbstractGrating",
     "AbstractFilter",
+    "AbstractInstrument",
 ]
