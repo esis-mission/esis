@@ -20,10 +20,9 @@ as part of this library.
 
     esis
 
-Reports
-=======
-A series of investigations into the optical performance of ESIS and how
-to invert observations.
+Tutorials
+=========
+A series of notebooks which demonstrate the functionality of this package.
 
 Flight 1 (2019)
 ---------------
