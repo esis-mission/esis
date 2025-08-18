@@ -8,11 +8,10 @@ __all__ = [
 
 def thin_film_design() -> optika.materials.ThinFilmFilter:
     """
-    The as-designed thin-film visible light filter material for the ESIS instrument.
+    Load a model of the thin-film filter design.
 
     Examples
     --------
-
     Plot the transmissivity of the thin-film filter over the EUV wavelength
     range.
 
@@ -61,7 +60,6 @@ def thin_film_design() -> optika.materials.ThinFilmFilter:
             ax.set_axis_off()
             ax.autoscale()
     """
-
     return optika.materials.ThinFilmFilter(
         layer=optika.materials.Layer(
             chemical="Al",
