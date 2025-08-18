@@ -51,7 +51,12 @@ class AbstractTestAbstractInstrument(
     def test_wavelength(self, a: esis.optics.abc.AbstractInstrument):
         result = a.wavelength
         if result is not None:
-            assert np.all(result > 0 * u.nm)
+            unit = na.unit_normalized(result)
+            if unit.is_equivalent(u.dimensionless_unscaled):
+                assert np.all(result <= 1)
+                assert np.all(result >= -1)
+            else:
+                assert np.all(result > 0 * u.nm)
 
     def test_field(self, a: esis.optics.abc.AbstractInstrument):
         result = a.field
@@ -87,6 +92,9 @@ class AbstractTestAbstractInstrument(
         result = a.wavelength_max
         assert isinstance(na.as_named_array(result), na.AbstractScalar)
         assert na.unit_normalized(result).is_equivalent(u.AA)
+
+    def test_wavlength_physical(self, a: esis.optics.abc.AbstractInstrument):
+        assert np.all(a.wavelength_physical > 0 * u.nm)
 
     def test_system(self, a: esis.optics.abc.AbstractInstrument):
         result = a.system
@@ -149,7 +157,7 @@ class AbstractTestAbstractInstrument(
                     translation=na.Cartesian3dVectorArray(z=2000) * u.mm,
                 ),
             ),
-            wavelength=na.linspace(100, 200, num=3, axis="wavelength") * u.nm,
+            wavelength=na.linspace(-1, 1, num=3, axis="wavelength"),
             field=na.Cartesian2dVectorArray(
                 x=na.linspace(0, 1, num=5, axis="field_x"),
                 y=na.linspace(0, 1, num=5, axis="field_y"),
