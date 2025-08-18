@@ -28,6 +28,7 @@ Flight 1 (2019)
 .. toctree::
 
     reports/point-spread-function
+    reports/throughput
 
 |
 
