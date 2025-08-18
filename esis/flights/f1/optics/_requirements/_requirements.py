@@ -18,8 +18,7 @@ def requirements() -> esis.optics.Requirements:
 
         import esis
 
-        requirements = esis.flights.f1.optics.requirements()
-        print(requirements)
+        esis.flights.f1.optics.requirements()
     """
     return esis.optics.Requirements(
         resolution_spatial=1.5 * u.Mm,
