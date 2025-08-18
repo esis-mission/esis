@@ -68,11 +68,6 @@ class AbstractTestAbstractInstrument(
         if result is not None:
             assert isinstance(result, na.AbstractCartesian2dVectorArray)
 
-    def test_requirements(self, a: esis.optics.abc.AbstractInstrument):
-        result = a.requirements
-        if result is not None:
-            assert isinstance(result, esis.optics.Requirements)
-
     def test_angle_grating_input(self, a: esis.optics.abc.AbstractInstrument):
         result = a.angle_grating_input
         assert isinstance(na.as_named_array(result), na.AbstractArray)

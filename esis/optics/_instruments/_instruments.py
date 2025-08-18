@@ -94,11 +94,6 @@ class AbstractInstrument(
 
     @property
     @abc.abstractmethod
-    def requirements(self) -> None | esis.optics.Requirements:
-        """The required optical performance of the instrument."""
-
-    @property
-    @abc.abstractmethod
     def kwargs_plot(self):
         """Extra keyword arguments used to plot the optical system."""
 
@@ -275,9 +270,6 @@ class Instrument(
 
     roll: u.Quantity | na.AbstractScalar = 0 * u.deg
     """The roll angle of the instrument."""
-
-    requirements: None | esis.optics.Requirements = None
-    """The optical requirements of the instrument."""
 
     kwargs_plot: None | dict = None
     """Extra keyword arguments used to plot the optical system."""
