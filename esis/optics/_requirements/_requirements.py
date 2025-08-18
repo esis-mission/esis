@@ -8,7 +8,7 @@ __all__ = [
 ]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(repr=False)
 class Requirements(
     optika.mixins.Printable,
 ):
