@@ -166,7 +166,7 @@ _instrument = esis.optics.Instrument(
     argnames="a",
     argvalues=[
         _instrument,
-        dataclasses.replace(_instrument, wavelength=630 * u.AA)
+        dataclasses.replace(_instrument, wavelength=630 * u.AA),
     ],
 )
 class TestInstrument(
