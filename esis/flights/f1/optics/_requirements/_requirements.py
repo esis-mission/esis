@@ -8,7 +8,7 @@ __all__ = [
 
 def requirements() -> esis.optics.Requirements:
     """
-    Load the required performance of the ESIS optical system for mission success.
+    Load the performance of the ESIS optical system required for mission success.
 
     Examples
     --------
