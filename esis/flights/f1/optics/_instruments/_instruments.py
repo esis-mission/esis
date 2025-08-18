@@ -322,6 +322,7 @@ def design_single(
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
 
+
     .. nblinkgallery::
         :caption: Examples
         :name: rst-link-gallery
