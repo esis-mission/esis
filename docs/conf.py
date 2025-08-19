@@ -106,6 +106,10 @@ bibtex_bibfiles = ['refs.bib']
 bibtex_default_style = 'plain'
 bibtex_reference_style = 'author_year'
 
+nbsphinx_execute = 'always'
+
+codeautolink_custom_blocks = {"jupyter-execute": None}
+
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('https://numpy.org/doc/stable/', None),
