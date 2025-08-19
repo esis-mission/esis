@@ -9,11 +9,10 @@ __all__ = [
 
 def multilayer_AlSc() -> optika.materials.MultilayerMirror:
     r"""
-    A proposed coating design for ESIS II which uses :math:`\text{Al/Sc}` layers.
+    Load a proposed coating design for ESIS II which uses :math:`\text{Al/Sc}` layers.
 
     Examples
     --------
-
     Plot the efficiency of the coating across the EUV range
 
     .. jupyter-execute::
@@ -107,11 +106,10 @@ def multilayer_AlSc() -> optika.materials.MultilayerMirror:
 
 def multilayer_SiSc() -> optika.materials.MultilayerMirror:
     r"""
-    A proposed coating design for ESIS II which uses :math:`\text{Si/Sc}` layers
+    Load a proposed coating design for ESIS II which uses :math:`\text{Si/Sc}` layers.
 
     Examples
     --------
-
     Plot the efficiency of the coating across the EUV range
 
     .. jupyter-execute::
