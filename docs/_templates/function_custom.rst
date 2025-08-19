@@ -4,4 +4,4 @@
 
 .. autofunction:: {{ fullname }}
 
-    .. autolink-examples:: {{ fullname }}
+    .. autolink-examples:: {{ name }}
