@@ -26,10 +26,12 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: empty_dir
-          token: ${{ secrets.ESIS_PR_PREVIEW_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
           repository-name: esis-mission/esis-pr-previews
           branch: 'main'
           clean: true
           target-folder: ${{ env.URL_SLUG }}
           commit-message: "Remove preview for PR ${{ env.URL_SLUG }}"
           single-commit: true
+          git-config-name: esis-bot
+          git-config-email: roytsmart+esis-bot@gmail.com
