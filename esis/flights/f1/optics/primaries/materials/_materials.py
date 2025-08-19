@@ -1,3 +1,4 @@
+import functools
 import pathlib
 import numpy as np
 import scipy.optimize
@@ -97,6 +98,7 @@ def multilayer_design() -> optika.materials.MultilayerMirror:
     )
 
 
+@functools.cache
 def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
     """
     Load the reflectivity measurement of the witness samples.
@@ -153,6 +155,7 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
     return result
 
 
+@functools.cache
 def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
     """
     Fit a multilayer stack to the :func:`multilayer_witness_measured` measurement.
@@ -287,6 +290,7 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
     return _multilayer(*fit.x)
 
 
+@functools.cache
 def multilayer_fit() -> optika.materials.MultilayerMirror:
     """
     Modify the result of :func:`multilayer_witness_fit` to have the correct substrate.
