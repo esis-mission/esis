@@ -25,9 +25,7 @@ class Level_0(
     """
 
     timeline: None | esis.nsroc.Timeline = None
-    """
-    The sequence of NSROC events associated with these images.
-    """
+    """The sequence of NSROC events associated with these images."""
 
     @classmethod
     def from_fits(
@@ -52,10 +50,7 @@ class Level_0(
 
     @property
     def channel(self) -> na.ScalarArray[npt.NDArray[str]]:
-        """
-        The name of each ESIS channel in a human-readable format.
-        """
-
+        """The name of each ESIS channel in a human-readable format."""
         sn = self.inputs.serial_number
         where_1 = sn == "6"
         where_2 = sn == "7"

@@ -26,7 +26,6 @@ import esis
             axis_y="y",
             camera=esis.optics.Camera(),
         ),
-        # esis.flights.f1.data.level_0(),
     ],
 )
 class TestLevel_0(
