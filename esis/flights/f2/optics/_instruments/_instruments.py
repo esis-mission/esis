@@ -13,7 +13,7 @@ def design_proposed(
     num_distribution: int = 11,
 ) -> esis.optics.Instrument:
     """
-    Final optical design for ESIS 2.
+    Load the proposed optical design for ESIS 2.
 
     Parameters
     ----------
