@@ -321,13 +321,6 @@ def design_single(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
-
-
-    .. nblinkgallery::
-        :caption: Examples
-        :name: rst-link-gallery
-
-        ../reports/point-spread-function
     """
     result = design(
         grid=grid,
