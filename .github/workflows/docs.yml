@@ -90,6 +90,8 @@ jobs:
           target-folder: ${{ env.URL_SLUG }}
           commit-message: "Update preview for PR ${{ env.URL_SLUG }}"
           single-commit: true
+          git-config-name: esis-bot
+          git-config-email: roytsmart+esis-bot@gmail.com
 
       - name: Comment PR
         uses: thollander/actions-comment-pull-request@v2
