@@ -36,6 +36,7 @@ import esis
                 axes="time",
             ),
             camera=msfc_ccd.Camera(),
+            timeline=esis.nsroc.Timeline(),
         ),
     ],
 )
