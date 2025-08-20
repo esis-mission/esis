@@ -7,7 +7,7 @@ __all__ = [
 ]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(repr=False)
 class Timeline(
     optika.mixins.Printable,
 ):
