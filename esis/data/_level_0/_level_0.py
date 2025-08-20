@@ -17,7 +17,7 @@ class Level_0(
     msfc_ccd.SensorData,
 ):
     """
-    Representation of ESIS Level-0 images, the raw images gathered by the instrument.
+    Representation of ESIS Level-0 images, the raw data gathered by the instrument.
 
     The Data Acquisition and Control System (DACS) reads out the cameras and
     saves the resulting images as FITS files.
@@ -31,7 +31,7 @@ class Level_0(
     def from_fits(
         cls,
         path: str | pathlib.Path | na.AbstractScalarArray,
-        sensor: msfc_ccd.abc.AbstractSensor,
+        camera: msfc_ccd.abc.AbstractCamera,
         axis_x: str = "detector_x",
         axis_y: str = "detector_y",
         timeline: None | esis.nsroc.Timeline = None,
@@ -39,7 +39,7 @@ class Level_0(
 
         self = super().from_fits(
             path=path,
-            sensor=sensor,
+            camera=camera,
             axis_x=axis_x,
             axis_y=axis_y,
         )

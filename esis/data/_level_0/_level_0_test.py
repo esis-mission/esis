@@ -1,6 +1,5 @@
 import pytest
-import astropy.units as u
-import astropy.time
+import numpy as np
 import named_arrays as na
 import msfc_ccd
 from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSensorData
@@ -10,21 +9,33 @@ import esis
 @pytest.mark.parametrize(
     argnames="a",
     argvalues=[
-        esis.data.Level_0(
-            inputs=msfc_ccd.ImageHeader(
-                pixel=na.Cartesian2dVectorArrayRange(
-                    start=0,
-                    stop=10,
-                    axis=na.Cartesian2dVectorArray("x", "y"),
+        esis.data.Level_0.from_fits(
+            path=msfc_ccd.samples.path_dark_esis1,
+            camera=msfc_ccd.Camera(),
+        ),
+        esis.data.Level_0.from_fits(
+            path=na.ScalarArray(
+                ndarray=np.array(
+                    [
+                        msfc_ccd.samples.path_dark_esis1,
+                        msfc_ccd.samples.path_dark_esis3,
+                    ]
                 ),
-                time=astropy.time.Time.now(),
-                timedelta=10 * u.s,
-                timedelta_requested=10 * u.s,
+                axes="channel",
             ),
-            outputs=na.random.uniform(0, 100, dict(x=10, y=10)),
-            axis_x="x",
-            axis_y="y",
-            camera=esis.optics.Camera(),
+            camera=msfc_ccd.Camera(),
+        ),
+        esis.data.Level_0.from_fits(
+            path=na.ScalarArray(
+                ndarray=np.array(
+                    [
+                        msfc_ccd.samples.path_dark_esis1,
+                        msfc_ccd.samples.path_fe55_esis1,
+                    ]
+                ),
+                axes="time",
+            ),
+            camera=msfc_ccd.Camera(),
         ),
     ],
 )
@@ -35,3 +46,7 @@ class TestLevel_0(
         result = a.timeline
         if result is not None:
             assert isinstance(result, esis.nsroc.Timeline)
+
+    def test_channel(self, a: esis.data.Level_0):
+        result = a.channel
+        assert isinstance(result, na.ScalarArray)
