@@ -7,7 +7,19 @@ __all__ = [
 
 
 def timeline() -> esis.nsroc.Timeline:
-    """Load the timeline of ESIS mission events provided by NSROC."""
+    """
+    Load the timeline of ESIS mission events provided by NSROC.
+
+    Examples
+    --------
+    Load and print this timeline.
+
+    .. jupyter-execute::
+
+        import esis
+
+        esis.flights.f1.nsroc.timeline()
+    """
     return esis.nsroc.Timeline(
         timedelta_esis_start=0.1 * u.s,
         timedelta_rail_release=0.6 * u.s,
