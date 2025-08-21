@@ -2,8 +2,10 @@
 
 from . import optics
 from . import nsroc
+from . import data
 
 __all__ = [
     "optics",
     "nsroc",
+    "data",
 ]
