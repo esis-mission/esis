@@ -27,7 +27,6 @@ def level_0(
     axis_y
         The name of the logical axis representing the detector's short axis.
     """
-
     path = path_fits(
         axis_time=axis_time,
         axis_channel=axis_channel,
