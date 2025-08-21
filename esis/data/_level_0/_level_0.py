@@ -1,8 +1,9 @@
-import numpy as np
 from typing_extensions import Self
 import dataclasses
 import pathlib
+import numpy as np
 import numpy.typing as npt
+import astropy.time
 import named_arrays as na
 import msfc_ccd
 import esis
@@ -65,3 +66,8 @@ class Level_0(
         result[where_4] = "Channel 4"
 
         return result
+
+    @property
+    def time_mission_start(self) -> astropy.time.Time:
+        """The :math:`T=0` time of the mission."""
+        return self.inputs.time.ndarray.min() - self.timeline.timedelta_esis_start
