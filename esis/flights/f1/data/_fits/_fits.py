@@ -13,8 +13,7 @@ def path_fits(
     axis_channel: str,
 ) -> na.ScalarArray[npt.NDArray[pathlib.Path]]:
     """
-    Construct an array of paths to all the FITS files captured during
-    the flight.
+    Construct an array of paths to all the FITS files captured during the flight.
 
     Parameters
     ----------
