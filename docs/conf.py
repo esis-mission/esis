@@ -89,7 +89,7 @@ html_theme_options = {
         },
     ],
     "analytics": {
-        "google_analytics_id": "G-2STXRNV5RS",
+        "google_analytics_id": "G-CQ9NDQQWKM",
     }
 }
 
