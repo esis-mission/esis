@@ -1,7 +1,7 @@
 Introduction
 ============
 The EUV Snapshot Imaging Spectrograph (ESIS) is a sounding rocket-based tomographic imaging spectrograph that was
-launched from White Sands Missile Range on September 30th, 2019 :cite:p`Parker2022`.
+launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2022`.
 
 .. figure:: _static/esis-rail.avif
 
@@ -38,7 +38,7 @@ Flight 1 (2019)
 
 Publications
 ============
-`First Flight of the EUV Snapshot Imaging Spectrograph (ESIS)
+`Mission Paper
 <https://iopscience.iop.org/article/10.3847/1538-4357/ac8eaa/meta>`_
 
 |
