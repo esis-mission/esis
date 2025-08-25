@@ -3,6 +3,7 @@ import dataclasses
 import pathlib
 import numpy as np
 import numpy.typing as npt
+import astropy.units as u
 import astropy.time
 import named_arrays as na
 import msfc_ccd
@@ -27,6 +28,12 @@ class Level_0(
 
     timeline: None | esis.nsroc.Timeline = None
     """The sequence of NSROC events associated with these images."""
+
+    axis_time: str = dataclasses.field(default="time", kw_only=True)
+    """The name of the logical axis corresponding to changing time."""
+
+    axis_channel: str = dataclasses.field(default="channel", kw_only=True)
+    """The name of the logical axis corresponding to the different channels."""
 
     @classmethod
     def from_fits(
@@ -71,3 +78,44 @@ class Level_0(
     def time_mission_start(self) -> astropy.time.Time:
         """The :math:`T=0` time of the mission."""
         return self.inputs.time.ndarray.min() - self.timeline.timedelta_esis_start
+
+    def _index_after(self, timedelta: u.Quantity) -> dict[str, int]:
+        """
+        Return the index of the image after the given mission time.
+
+        Parameters
+        ----------
+        timedelta
+            The mission time.
+        """
+        time = self.inputs.time_start
+        if self.axis_channel in time.shape:
+            time = time.mean(self.axis_channel)
+        t0 = self.time_mission_start
+        t = t0 + timedelta
+        where = time > t
+        return np.argmax(where)
+
+    @property
+    def _index_lights_start(self) -> dict[str, int]:
+        """The index representing the first good image."""
+        return self._index_after(self.timeline.timedelta_sparcs_rlg_enable)
+
+    @property
+    def _index_lights_stop(self) -> dict[str, int]:
+        """One greater than the index representing the last good image."""
+        return self._index_after(self.timeline.timedelta_sparcs_rlg_disable)
+
+    @property
+    def lights(self) -> Self:
+        """
+        The sequence of solar images taken during the flight.
+
+        This uses only the images where the ring-laser gyroscope was enabled,
+        so this should represent the images with the best-possible pointing stability.
+        """
+        axis_time = self.axis_time
+        index_start = self._index_lights_start[axis_time].ndarray
+        index_stop = self._index_lights_stop[axis_time].ndarray
+        index_lights = {axis_time: slice(index_start, index_stop)}
+        return self[index_lights]
