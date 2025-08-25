@@ -46,7 +46,7 @@ _timeline = esis.nsroc.Timeline(
                         [
                             msfc_ccd.samples.path_fe55_esis1,
                             msfc_ccd.samples.path_fe55_esis3,
-                        ]
+                        ],
                     ]
                 ),
                 axes=("time", "channel"),
