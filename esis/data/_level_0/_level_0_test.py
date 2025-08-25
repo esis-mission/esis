@@ -39,11 +39,17 @@ _timeline = esis.nsroc.Timeline(
             path=na.ScalarArray(
                 ndarray=np.array(
                     [
-                        msfc_ccd.samples.path_dark_esis1,
-                        msfc_ccd.samples.path_fe55_esis1,
+                        [
+                            msfc_ccd.samples.path_dark_esis1,
+                            msfc_ccd.samples.path_dark_esis3,
+                        ],
+                        [
+                            msfc_ccd.samples.path_fe55_esis1,
+                            msfc_ccd.samples.path_fe55_esis3,
+                        ]
                     ]
                 ),
-                axes="time",
+                axes=("time", "channel"),
             ),
             camera=msfc_ccd.Camera(),
             timeline=_timeline,
