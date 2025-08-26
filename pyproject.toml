@@ -16,7 +16,7 @@ classifiers = [
 dependencies = [
     "numpy",
     "matplotlib",
-    "astropy",
+    "astropy@git+https://github.com/mhvk/astropy.git#shapedlikendarray-concatenate",
     "optika>=0.12.0",
     "msfc-ccd>=0.4.0",
 ]

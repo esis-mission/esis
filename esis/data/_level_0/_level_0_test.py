@@ -11,6 +11,8 @@ _timeline = esis.nsroc.Timeline(
     timedelta_esis_start=1 * u.s,
     timedelta_sparcs_rlg_enable=60 * u.s,
     timedelta_sparcs_rlg_disable=120 * u.s,
+    timedelta_shutter_open=1 * u.s,
+    timedelta_parachute_deploy=2 * u.s,
 )
 
 
@@ -76,4 +78,9 @@ class TestLevel_0(
     def test_lights(self, a: esis.data.Level_0):
         if a.axis_time in a.shape:
             result = a.lights
+            assert isinstance(result, type(a))
+
+    def test_darks(self, a: esis.data.Level_0):
+        if a.axis_time in a.shape:
+            result = a.darks
             assert isinstance(result, type(a))
