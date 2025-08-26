@@ -9,14 +9,14 @@ authors = [
 ]
 description = "A Python library for modeling and interpreting data from the EUV Snapshot Imaging Spectrograph (ESIS)."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
     "numpy",
     "matplotlib",
-    "astropy",
+    "astropy@git+https://github.com/mhvk/astropy.git#shapedlikendarray-concatenate",
     "optika>=0.12.0",
     "msfc-ccd>=0.4.0",
 ]

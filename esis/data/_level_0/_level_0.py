@@ -119,3 +119,56 @@ class Level_0(
         index_stop = self._index_lights_stop[axis_time].ndarray
         index_lights = {axis_time: slice(index_start, index_stop)}
         return self[index_lights]
+
+    @property
+    def darks_up(self):
+        """
+        The dark images collected on the upleg of the trajectory.
+
+        This considers all the images up until the moment the shutter door
+        is opened.
+
+        Any images without an exposure time close to the median exposure
+        time are ignored.
+        This is intended to remove the first 1 or 2 images from the
+        beginning of each exposure sequence since these images often have
+        a different exposure time than the rest of the sequence.
+
+        """
+        axis_time = self.axis_time
+        dt = self.inputs.timedelta_requested.mean(self.axis_channel)
+        where = np.abs(dt - dt.median()) < (0.1 * u.s)
+        index_start = np.argmax(where)[axis_time].ndarray
+        index_stop = self._index_after(self.timeline.timedelta_shutter_open)[
+            axis_time
+        ].ndarray
+        index = {axis_time: slice(index_start, index_stop)}
+        return self[index]
+
+    @property
+    def darks_down(self):
+        """
+        The dark images collected on the downleg of the trajectory.
+
+        This considers all the images after the parachute deployment since there
+        is a transient, anomalous signal that occurs during atmospheric re-entry.
+        """
+        axis_time = self.axis_time
+        index_start = self._index_after(self.timeline.timedelta_parachute_deploy)[
+            axis_time
+        ].ndarray
+        index_stop = None
+        index = {axis_time: slice(index_start, index_stop)}
+        return self[index]
+
+    @property
+    def darks(self):
+        """
+        The dark images used to construct the master dark image.
+
+        This is a concatenation of :attr:`darks_up` and :attr:`darks_down`.
+        """
+        return np.concatenate(
+            arrays=[self.darks_up, self.darks_down],
+            axis=self.axis_time,
+        )
