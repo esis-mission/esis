@@ -1,61 +1,14 @@
 import pytest
-import numpy as np
-import astropy.units as u
 import astropy.time
 import named_arrays as na
-import msfc_ccd
 from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSensorData
 import esis
-
-_timeline = esis.nsroc.Timeline(
-    timedelta_esis_start=1 * u.s,
-    timedelta_sparcs_rlg_enable=60 * u.s,
-    timedelta_sparcs_rlg_disable=120 * u.s,
-    timedelta_shutter_open=1 * u.s,
-    timedelta_parachute_deploy=2 * u.s,
-)
 
 
 @pytest.mark.parametrize(
     argnames="a",
     argvalues=[
-        esis.data.Level_0.from_fits(
-            path=msfc_ccd.samples.path_dark_esis1,
-            camera=msfc_ccd.Camera(),
-            timeline=_timeline,
-        ),
-        esis.data.Level_0.from_fits(
-            path=na.ScalarArray(
-                ndarray=np.array(
-                    [
-                        msfc_ccd.samples.path_dark_esis1,
-                        msfc_ccd.samples.path_dark_esis3,
-                    ]
-                ),
-                axes="channel",
-            ),
-            camera=msfc_ccd.Camera(),
-            timeline=_timeline,
-        ),
-        esis.data.Level_0.from_fits(
-            path=na.ScalarArray(
-                ndarray=np.array(
-                    [
-                        [
-                            msfc_ccd.samples.path_dark_esis1,
-                            msfc_ccd.samples.path_dark_esis3,
-                        ],
-                        [
-                            msfc_ccd.samples.path_fe55_esis1,
-                            msfc_ccd.samples.path_fe55_esis3,
-                        ],
-                    ]
-                ),
-                axes=("time", "channel"),
-            ),
-            camera=msfc_ccd.Camera(),
-            timeline=_timeline,
-        ),
+        esis.flights.f1.data.level_0(),
     ],
 )
 class TestLevel_0(
