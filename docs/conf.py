@@ -119,6 +119,7 @@ intersphinx_mapping = {
     'scipy': ('https://docs.scipy.org/doc/scipy/', None),
     'matplotlib': ('https://matplotlib.org/stable', None),
     'astropy': ('https://docs.astropy.org/en/stable/', None),
+    'astroscrappy': ('https://astroscrappy.readthedocs.io/en/stable/', None),
     'named_arrays': ('https://named-arrays.readthedocs.io/en/stable/', None),
     'optika': ('https://optika.readthedocs.io/en/stable/', None),
     'msfc_ccd': ('https://msfc-ccd.readthedocs.io/en/stable/', None),
