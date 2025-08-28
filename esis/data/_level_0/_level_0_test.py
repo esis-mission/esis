@@ -23,6 +23,12 @@ class TestLevel_0(
         result = a.channel
         assert isinstance(result, na.ScalarArray)
 
+    def test_despiked(self, a: esis.data.Level_0):
+        a = a[{a.axis_time: slice(0, 1)}]
+        result = a.despiked
+        assert isinstance(result, type(a))
+        assert (result.outputs - a.outputs).mean() < 1e-6
+
     def test_time_mission_start(self, a: esis.data.Level_0):
         result = a.time_mission_start
         assert isinstance(result, astropy.time.Time)
