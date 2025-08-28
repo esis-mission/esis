@@ -52,5 +52,14 @@ class TestLevel_0(
         }
         result = a[index].dark
         assert isinstance(result, type(a))
-        assert np.all(result.outputs.std(a.axis_time) < 10)
+        assert np.all(result.outputs.std((a.axis_x, a.axis_y)) < 10)
         assert result.outputs.shape[a.axis_time] == 1
+
+    def test_dark_subtracted(self, a: esis.data.Level_0):
+        index = {
+            a.axis_x: slice(0, 100),
+            a.axis_y: slice(0, 100),
+        }
+        result = a[index].dark_subtracted
+        assert isinstance(result, type(a))
+        assert np.all(result.darks.outputs.mean() < 1)

@@ -183,10 +183,15 @@ class Level_0(
 
     @property
     def dark(self) -> Self:
-        """
+        r"""
         The master dark image for each channel.
 
-        Calculated by taking the mean of :attr:`darks`.:attr:`despiked`
+        Calculated by taking the mean of :attr:`darks`.\ :attr:`despiked`
         along :attr:`axis_time`.
         """
         return self.darks.despiked.mean(axis=self.axis_time)
+
+    @property
+    def dark_subtracted(self):
+        """Subtract the master :attr:`dark` from each image in the sequence."""
+        return self - self.dark.outputs
