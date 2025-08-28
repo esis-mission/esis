@@ -129,7 +129,7 @@ class Level_0(
         return self[index_lights]
 
     @property
-    def darks_up(self):
+    def darks_up(self) -> Self:
         """
         The dark images collected on the upleg of the trajectory.
 
@@ -154,7 +154,7 @@ class Level_0(
         return self[index]
 
     @property
-    def darks_down(self):
+    def darks_down(self) -> Self:
         """
         The dark images collected on the downleg of the trajectory.
 
@@ -170,7 +170,7 @@ class Level_0(
         return self[index]
 
     @property
-    def darks(self):
+    def darks(self) -> Self:
         """
         The dark images used to construct the master dark image.
 
@@ -180,3 +180,13 @@ class Level_0(
             arrays=[self.darks_up, self.darks_down],
             axis=self.axis_time,
         )
+
+    @property
+    def dark(self) -> Self:
+        """
+        The master dark image for each channel.
+
+        Calculated by taking the mean of :attr:`darks`.:attr:`despiked`
+        along :attr:`axis_time`.
+        """
+        return self.darks.despiked.mean(axis=self.axis_time)

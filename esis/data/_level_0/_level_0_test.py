@@ -1,4 +1,5 @@
 import pytest
+import numpy as np
 import astropy.time
 import named_arrays as na
 from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSensorData
@@ -43,3 +44,13 @@ class TestLevel_0(
         if a.axis_time in a.shape:
             result = a.darks
             assert isinstance(result, type(a))
+
+    def test_dark(self, a: esis.data.Level_0):
+        index = {
+            a.axis_x: slice(0, 100),
+            a.axis_y: slice(0, 100),
+        }
+        result = a[index].dark
+        assert isinstance(result, type(a))
+        assert np.all(result.outputs.std(a.axis_time) < 10)
+        assert result.outputs.shape[a.axis_time] == 1
