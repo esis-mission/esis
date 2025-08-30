@@ -3,6 +3,8 @@ import dataclasses
 import pathlib
 import numpy as np
 import numpy.typing as npt
+import matplotlib.axes
+import matplotlib.animation
 import astropy.units as u
 import astropy.time
 import named_arrays as na
@@ -180,3 +182,19 @@ class Level_0(
             arrays=[self.darks_up, self.darks_down],
             axis=self.axis_time,
         )
+
+    def movie(
+        self,
+        ax: None | matplotlib.axes.Axes | na.AbstractArray = None,
+    ) -> matplotlib.animation.FuncAnimation:
+        """
+        Creat an animation using the frames in this dataset.
+
+        Parameters
+        ----------
+        ax
+
+        Returns
+        -------
+
+        """
