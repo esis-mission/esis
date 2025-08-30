@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import astropy.units as u
 import astropy.time
 import named_arrays as na
 from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSensorData
@@ -50,7 +51,7 @@ class TestLevel_0(
         }
         result = a[index].dark
         assert isinstance(result, type(a))
-        assert np.all(result.outputs.std((a.axis_x, a.axis_y)) < 10)
+        assert np.all(result.outputs.std((a.axis_x, a.axis_y)) < 10 * u.DN)
         assert result.outputs.shape[a.axis_time] == 1
 
     def test_dark_subtracted(self, a: esis.data.Level_0):
@@ -60,4 +61,4 @@ class TestLevel_0(
         }
         result = a[index].dark_subtracted
         assert isinstance(result, type(a))
-        assert np.all(result.darks.outputs.mean() < 1)
+        assert np.all(result.darks.outputs.mean() < 1 * u.DN)
