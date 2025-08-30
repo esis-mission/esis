@@ -75,14 +75,6 @@ class Level_0(
         return result
 
     @property
-    def despiked(self) -> Self:
-        """Remove cosmic rays using :func:`astroscrappy.detect_cosmics`."""
-        return na.despike(
-            array=self,
-            axis=(self.axis_x, self.axis_y),
-        )
-
-    @property
     def time_mission_start(self) -> astropy.time.Time:
         """The :math:`T=0` time of the mission."""
         return self.inputs.time.ndarray.min() - self.timeline.timedelta_esis_start

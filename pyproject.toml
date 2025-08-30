@@ -18,7 +18,7 @@ dependencies = [
     "matplotlib",
     "astropy@git+https://github.com/mhvk/astropy.git#shapedlikendarray-concatenate",
     "optika>=0.12.0",
-    "msfc-ccd>=0.4.0",
+    "msfc-ccd>=0.5.0",
 ]
 dynamic = ["version"]
 
