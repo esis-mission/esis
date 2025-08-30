@@ -1,4 +1,6 @@
 import pytest
+import numpy as np
+import astropy.units as u
 import astropy.time
 import named_arrays as na
 from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSensorData
@@ -25,9 +27,7 @@ class TestLevel_0(
 
     def test_despiked(self, a: esis.data.Level_0):
         a = a[{a.axis_time: slice(0, 1)}]
-        result = a.despiked
-        assert isinstance(result, type(a))
-        assert (result.outputs - a.outputs).mean() < 1e-6
+        super().test_despiked(a)
 
     def test_time_mission_start(self, a: esis.data.Level_0):
         result = a.time_mission_start
@@ -43,3 +43,22 @@ class TestLevel_0(
         if a.axis_time in a.shape:
             result = a.darks
             assert isinstance(result, type(a))
+
+    def test_dark(self, a: esis.data.Level_0):
+        index = {
+            a.axis_x: slice(0, 100),
+            a.axis_y: slice(0, 100),
+        }
+        result = a[index].dark
+        assert isinstance(result, type(a))
+        assert np.all(result.outputs.std((a.axis_x, a.axis_y)) < 10 * u.DN)
+        assert result.outputs.shape[a.axis_time] == 1
+
+    def test_dark_subtracted(self, a: esis.data.Level_0):
+        index = {
+            a.axis_x: slice(0, 100),
+            a.axis_y: slice(0, 100),
+        }
+        result = a[index].dark_subtracted
+        assert isinstance(result, type(a))
+        assert np.all(result.darks.outputs.mean() < 1 * u.DN)

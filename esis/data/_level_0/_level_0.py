@@ -75,14 +75,6 @@ class Level_0(
         return result
 
     @property
-    def despiked(self) -> Self:
-        """Remove cosmic rays using :func:`astroscrappy.detect_cosmics`."""
-        return na.despike(
-            array=self,
-            axis=(self.axis_x, self.axis_y),
-        )
-
-    @property
     def time_mission_start(self) -> astropy.time.Time:
         """The :math:`T=0` time of the mission."""
         return self.inputs.time.ndarray.min() - self.timeline.timedelta_esis_start
@@ -129,7 +121,7 @@ class Level_0(
         return self[index_lights]
 
     @property
-    def darks_up(self):
+    def darks_up(self) -> Self:
         """
         The dark images collected on the upleg of the trajectory.
 
@@ -154,7 +146,7 @@ class Level_0(
         return self[index]
 
     @property
-    def darks_down(self):
+    def darks_down(self) -> Self:
         """
         The dark images collected on the downleg of the trajectory.
 
@@ -170,7 +162,7 @@ class Level_0(
         return self[index]
 
     @property
-    def darks(self):
+    def darks(self) -> Self:
         """
         The dark images used to construct the master dark image.
 
@@ -180,3 +172,18 @@ class Level_0(
             arrays=[self.darks_up, self.darks_down],
             axis=self.axis_time,
         )
+
+    @property
+    def dark(self) -> Self:
+        r"""
+        The master dark image for each channel.
+
+        Calculated by taking the mean of :attr:`darks`.\ :attr:`despiked`
+        along :attr:`axis_time`.
+        """
+        return self.darks.despiked.mean(axis=self.axis_time)
+
+    @property
+    def dark_subtracted(self):
+        """Subtract the master :attr:`dark` from each image in the sequence."""
+        return self - self.dark.outputs
