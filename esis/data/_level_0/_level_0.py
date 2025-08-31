@@ -207,7 +207,7 @@ class Level_0(
         Parameters
         ----------
         ax
-            The :class:`~Axes` instance(s) to use.
+            The :class:`~matplotlib.axes.Axes` instance(s) to use.
             If :obj:`None`, a new set of axes will be created.
         cmap
             The colormap used to map scalar data to colors.
@@ -313,14 +313,14 @@ class Level_0(
         """
         Create a Javascript animation ready to be displayed in a Jupyter notebook.
 
-        Converts the output of :method:`animate` to jshtml using
-        :meth:`matplotlib.animation.FuncAnimation.to_jshtml`,
+        Converts the output of :meth:`animate` to Javascript using
+        :meth:`matplotlib.animation.Animation.to_jshtml`,
         and then wraps the html string in :class:`IPython.display.HTML`.
 
         Parameters
         ----------
         ax
-            The :class:`~Axes` instance(s) to use.
+            The :class:`~matplotlib.axes.Axes` instance(s) to use.
             If :obj:`None`, a new set of axes will be created.
         cmap
             The colormap used to map scalar data to colors.
