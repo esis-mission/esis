@@ -192,7 +192,6 @@ class Level_0(
         """Subtract the master :attr:`dark` from each image in the sequence."""
         return self - self.dark.outputs
 
-    def movie(
     def animate(
         self,
         ax: None | matplotlib.axes.Axes | na.AbstractArray = None,
