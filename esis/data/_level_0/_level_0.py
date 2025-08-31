@@ -223,23 +223,24 @@ class Level_0(
         cbar_fraction
             The fraction of the space to use for the colorbar axes.
         """
-
         axis_time = self.axis_time
         axis_channel = self.axis_channel
 
         if ax is None:
             figwidth = plt.rcParams["figure.figsize"][0]
+            figwidth_eff = figwidth * (1 - 2 * cbar_fraction)
             shape = self.shape
             num_channel = shape[axis_channel]
             num_x = shape[self.axis_x]
             num_y = shape[self.axis_y]
+            figheight = num_channel * figwidth_eff * num_y / num_x
             fig, ax = na.plt.subplots(
                 axis_rows=axis_channel,
                 nrows=num_channel,
                 sharex=True,
                 sharey=True,
                 constrained_layout=True,
-                figsize=(figwidth, num_channel * figwidth * (1 - 2 * cbar_fraction) * num_y / num_x),
+                figsize=(figwidth, figheight),
                 origin="upper",
             )
             na.plt.set_xlabel("detector $x$ (pix)", ax=ax[{axis_channel: ~0}])
@@ -310,9 +311,11 @@ class Level_0(
         cbar_fraction: float = 0.1,
     ) -> IPython.display.HTML:
         """
-        Create an animation using :method:`animate` and then convert it to
-        jshtml using :meth:`matplotlib.animation.FuncAnimation.to_jshtml` for
-        displaying in Jupyter notebooks.
+        Create a Javascript animation ready to be displayed in a Jupyter notebook.
+
+        Converts the output of :method:`animate` to jshtml using
+        :meth:`matplotlib.animation.FuncAnimation.to_jshtml`,
+        and then wraps the html string in :class:`IPython.display.HTML`.
 
         Parameters
         ----------
