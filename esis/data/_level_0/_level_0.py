@@ -279,7 +279,7 @@ class Level_0(
             ax=ax,
             kwargs_pcolormesh=dict(
                 colorizer=colorizer,
-            )
+            ),
         )
         na.plt.text(
             x=0.5,
