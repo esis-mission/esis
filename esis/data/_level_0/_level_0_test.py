@@ -64,7 +64,7 @@ class TestLevel_0(
         assert isinstance(result, type(a))
         assert np.all(result.darks.outputs.mean() < 1 * u.DN)
 
-    def to_jshtml(self, a: esis.data.Level_0):
+    def test_to_jshtml(self, a: esis.data.Level_0):
         index = {
             a.axis_time: slice(0, 1),
             a.axis_x: slice(0, 100),
