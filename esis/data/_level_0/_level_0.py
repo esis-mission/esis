@@ -336,7 +336,7 @@ class Level_0(
         cbar_fraction
             The fraction of the space to use for the colorbar axes.
         """
-        ani = self.movie(
+        ani = self.animate(
             ax=ax,
             cmap=cmap,
             norm=norm,
