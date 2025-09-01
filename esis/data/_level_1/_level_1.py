@@ -4,7 +4,7 @@ import named_arrays as na
 from .. import Level_0
 
 __all__ = [
-    "Level_1"
+    "Level_1",
 ]
 
 
