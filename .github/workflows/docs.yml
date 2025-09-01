@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest-8gb
+    runs-on: ubuntu-latest-16gb
     steps:
       - name: Checkout
         uses: actions/checkout@v4
