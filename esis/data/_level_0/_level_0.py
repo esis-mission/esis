@@ -244,6 +244,7 @@ class Level_0(
                 origin="upper",
             )
             na.plt.set_xlabel("detector $x$ (pix)", ax=ax[{axis_channel: ~0}])
+            na.plt.set_ylabel("detector $y$ (pix)", ax=ax)
 
         data = self.outputs
         unit = na.unit(data)
