@@ -58,6 +58,8 @@ class Level_0(
 
         self.timeline = timeline
 
+        self.outputs = self.outputs.astype(np.float32)
+
         return self
 
     @property
