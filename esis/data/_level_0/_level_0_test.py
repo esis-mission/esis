@@ -1,4 +1,5 @@
 import pytest
+import IPython.display
 import numpy as np
 import astropy.units as u
 import astropy.time
@@ -62,3 +63,13 @@ class TestLevel_0(
         result = a[index].dark_subtracted
         assert isinstance(result, type(a))
         assert np.all(result.darks.outputs.mean() < 1 * u.DN)
+
+    def test_to_jshtml(self, a: esis.data.Level_0):
+        index = {
+            a.axis_time: slice(0, 1),
+            a.axis_x: slice(0, 100),
+            a.axis_y: slice(0, 100),
+        }
+        a = a[index]
+        result = a.to_jshtml()
+        assert isinstance(result, IPython.display.HTML)
