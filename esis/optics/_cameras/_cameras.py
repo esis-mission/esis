@@ -23,6 +23,14 @@ class Camera(
     If :obj:`None` (the default), :class:`esis.optics.Sensor()` will be used.
     """
 
+    gain: None | u.Quantity | na.AbstractScalar = 2.5 * u.electron / u.DN
+    """
+    The conversion factor between electrons and DN.
+
+    This is usually tap-dependent and contains :attr:`axis_tap_x` and
+    :attr:`axis_tap_y` dimensions.
+    """
+
     timedelta_sync: u.Quantity = 0 * u.s
     """The synchronization error between the different channels."""
 
