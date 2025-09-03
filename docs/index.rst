@@ -33,6 +33,7 @@ Flight 1 (2019)
     reports/point-spread-function
     reports/throughput
     reports/level-0
+    reports/level-1
 
 |
 
