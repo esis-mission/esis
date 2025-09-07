@@ -64,4 +64,12 @@ class Level_1(
         a = a.dark_subtracted
         a = a.lights
         a = a.despiked
-        return a
+
+        return cls(
+            inputs=a.inputs,
+            outputs=a.outputs,
+            axis_time=a.axis_time,
+            axis_channel=a.axis_channel,
+            axis_x=a.axis_x,
+            axis_y=a.axis_y,
+        )
