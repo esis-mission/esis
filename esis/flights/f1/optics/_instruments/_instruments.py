@@ -11,6 +11,7 @@ __all__ = [
     "design_full",
     "design",
     "design_single",
+    "as_built",
 ]
 
 
@@ -337,5 +338,114 @@ def design_single(
     result.camera.sensor.azimuth = result.camera.sensor.azimuth[index]
 
     result.roll = -result.grating.azimuth
+
+    return result
+
+
+def as_built(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    """
+    Load the as-built optical model.
+
+    Based on :func:`design`, but includes efficiency and figure measurements of the
+    primary mirror and gratings, as well as gain measurements of the sensor.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+
+    Examples
+    --------
+    Load the as-built optical model and print its parameters.
+
+    .. jupyter-execute::
+
+        import esis
+
+        esis.flights.f1.optics.as_built()
+    """
+    result = design(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+
+    result.primary_mirror.material = primaries.materials.multilayer_fit()
+
+    result.grating.serial_number = na.stack(
+        arrays=[
+            "89025",
+            "89024",
+            "89026",
+            "89027",
+        ],
+        axis=axis_channel,
+    )
+    result.grating.manufacturing_number = na.stack(
+        arrays=[
+            "UBO-16-024",
+            "UBO-16-017",
+            "UBO-16-019",
+            "UBO-16-014",
+        ],
+        axis=axis_channel,
+    )
+
+    radius_014 = [597.170, 597.210, 597.195] * u.mm
+    radius_017 = [597.065, 597.045, 597.050] * u.mm
+    radius_019 = [597.055, 597.045, 597.030] * u.mm
+    radius_024 = [596.890, 596.870, 596.880] * u.mm
+    result.grating.sag.radius = na.stack(
+        arrays=[
+            radius_024.mean(),
+            radius_017.mean(),
+            radius_019.mean(),
+            radius_014.mean(),
+        ],
+        axis=axis_channel,
+    )
+
+    result.grating.material = gratings.materials.multilayer_fit()
+
+    result.grating.rulings = gratings.rulings.ruling_measurement(
+        num_distribution=num_distribution,
+    )
+
+    axis_tap_x = result.camera.axis_tap_x
+    axis_tap_y = result.camera.axis_tap_y
+    shape_tap = {axis_channel: 4, axis_tap_y: 2, axis_tap_x: 2}
+    axis_tap_xy = "tap_xy"
+
+    result.camera.sensor.gain = na.ScalarArray(
+        ndarray=[
+            [2.57, 2.50, 2.52, 2.53],
+            [2.55, 2.58, 2.57, 2.63],
+            [2.57, 2.53, 2.52, 2.59],
+            [2.60, 2.60, 2.54, 2.58],
+        ]
+        * u.electron
+        / u.DN,
+        axes=(axis_channel, axis_tap_xy),
+    ).reshape(shape_tap)
+
+    result.camera.sensor.readout_noise = na.ScalarArray(
+        ndarray=[
+            [3.9, 4.0, 4.1, 3.7],
+            [3.9, 4.0, 4.0, 4.0],
+            [4.1, 4.1, 4.1, 4.3],
+            [3.9, 3.9, 4.2, 4.1],
+        ]
+        * u.adu,
+        axes=(axis_channel, axis_tap_xy),
+    ).reshape(shape_tap)
 
     return result

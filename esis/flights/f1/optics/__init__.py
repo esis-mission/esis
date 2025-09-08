@@ -8,6 +8,7 @@ from ._instruments import (
     design_full,
     design,
     design_single,
+    as_built,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "design",
     "design_single",
     "design_full",
+    "as_built",
 ]
