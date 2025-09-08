@@ -420,6 +420,16 @@ def as_built(
         num_distribution=num_distribution,
     )
 
+    result.camera.sensor.serial_number = na.stack(
+        arrays=[
+            "SN6",
+            "SN7",
+            "SN9",
+            "SN10",
+        ],
+        axis=axis_channel,
+    )
+
     axis_tap_x = result.camera.axis_tap_x
     axis_tap_y = result.camera.axis_tap_y
     shape_tap = {axis_channel: 4, axis_tap_y: 2, axis_tap_x: 2}
