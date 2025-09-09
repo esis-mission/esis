@@ -1,5 +1,5 @@
 import pytest
-from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSensorData
+from msfc_ccd._images._tests.test_images import AbstractTestAbstractImageData
 import esis
 
 
@@ -10,6 +10,6 @@ import esis
     ],
 )
 class TestLevel_1(
-    AbstractTestAbstractSensorData,
+    AbstractTestAbstractImageData,
 ):
     pass

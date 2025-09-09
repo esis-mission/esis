@@ -10,8 +10,9 @@ __all__ = [
 ]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, repr=False)
 class Camera(
+    optika.mixins.Printable,
     msfc_ccd.Camera,
 ):
     """A model of the cameras developed by MSFC."""

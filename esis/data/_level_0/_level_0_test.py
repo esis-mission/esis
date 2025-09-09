@@ -6,6 +6,7 @@ import astropy.time
 import named_arrays as na
 from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSensorData
 import esis
+from ..abc._channel_data_test import AbstractTestAbstractChannelData
 
 
 @pytest.mark.parametrize(
@@ -16,6 +17,7 @@ import esis
 )
 class TestLevel_0(
     AbstractTestAbstractSensorData,
+    AbstractTestAbstractChannelData,
 ):
     def test_timeline(self, a: esis.data.Level_0):
         result = a.timeline
@@ -63,13 +65,3 @@ class TestLevel_0(
         result = a[index].dark_subtracted
         assert isinstance(result, type(a))
         assert np.all(result.darks.outputs.mean() < 1 * u.DN)
-
-    def test_to_jshtml(self, a: esis.data.Level_0):
-        index = {
-            a.axis_time: slice(0, 1),
-            a.axis_x: slice(0, 100),
-            a.axis_y: slice(0, 100),
-        }
-        a = a[index]
-        result = a.to_jshtml()
-        assert isinstance(result, IPython.display.HTML)
