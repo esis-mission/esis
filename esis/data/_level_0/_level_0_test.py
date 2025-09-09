@@ -3,7 +3,6 @@ import IPython.display
 import numpy as np
 import astropy.units as u
 import astropy.time
-import named_arrays as na
 from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSensorData
 import esis
 from ..abc._channel_data_test import AbstractTestAbstractChannelData
@@ -23,10 +22,6 @@ class TestLevel_0(
         result = a.timeline
         if result is not None:
             assert isinstance(result, esis.nsroc.Timeline)
-
-    def test_channel(self, a: esis.data.Level_0):
-        result = a.channel
-        assert isinstance(result, na.ScalarArray)
 
     def test_despiked(self, a: esis.data.Level_0):
         a = a[{a.axis_time: slice(0, 1)}]

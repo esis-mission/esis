@@ -2,7 +2,6 @@ from typing_extensions import Self
 import dataclasses
 import pathlib
 import numpy as np
-import numpy.typing as npt
 import astropy.units as u
 import astropy.time
 import named_arrays as na
@@ -53,24 +52,6 @@ class Level_0(
         self.outputs = self.outputs.astype(np.float32)
 
         return self
-
-    @property
-    def channel(self) -> na.ScalarArray[npt.NDArray[str]]:
-        """The name of each ESIS channel in a human-readable format."""
-        sn = self.inputs.serial_number
-        where_1 = sn == "6"
-        where_2 = sn == "7"
-        where_3 = sn == "9"
-        where_4 = sn == "1"
-
-        result = np.empty_like(sn, dtype=object)
-
-        result[where_1] = "Channel 1"
-        result[where_2] = "Channel 2"
-        result[where_3] = "Channel 3"
-        result[where_4] = "Channel 4"
-
-        return result
 
     @property
     def time_mission_start(self) -> astropy.time.Time:

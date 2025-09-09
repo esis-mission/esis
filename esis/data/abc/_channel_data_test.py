@@ -1,4 +1,5 @@
 import IPython.display
+import named_arrays as na
 from msfc_ccd._images._tests.test_images import AbstractTestAbstractImageData
 import esis
 
@@ -6,6 +7,10 @@ import esis
 class AbstractTestAbstractChannelData(
     AbstractTestAbstractImageData,
 ):
+
+    def test_channel(self, a: esis.data.Level_0):
+        result = a.channel
+        assert isinstance(result, na.ScalarArray)
 
     def test_to_jshtml(self, a: esis.data.abc.AbstractChannelData):
         index = {

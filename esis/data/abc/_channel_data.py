@@ -1,5 +1,7 @@
 import dataclasses
 import IPython.display
+import numpy as np
+import numpy.typing as npt
 import matplotlib.axes
 import matplotlib.animation
 import matplotlib.pyplot as plt
@@ -30,6 +32,24 @@ class AbstractChannelData(
 
     axis_y: str = dataclasses.field(default="detector_y", kw_only=True)
     """The name of the vertical axis of the sensor."""
+
+    @property
+    def channel(self) -> na.ScalarArray[npt.NDArray[str]]:
+        """The name of each ESIS channel in a human-readable format."""
+        sn = self.inputs.serial_number
+        where_1 = sn == "6"
+        where_2 = sn == "7"
+        where_3 = sn == "9"
+        where_4 = sn == "1"
+
+        result = np.empty_like(sn, dtype=object)
+
+        result[where_1] = "Channel 1"
+        result[where_2] = "Channel 2"
+        result[where_3] = "Channel 3"
+        result[where_4] = "Channel 4"
+
+        return result
 
     def animate(
         self,
