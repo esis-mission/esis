@@ -13,7 +13,7 @@ __all__ = [
 
 @dataclasses.dataclass(eq=False, repr=False)
 class AbstractChannelData(
-    msfc_ccd.abc.AbstractImageData
+    msfc_ccd.abc.AbstractImageData,
 ):
     """
     An interface for representing images in the coordinate system of the sensor.
