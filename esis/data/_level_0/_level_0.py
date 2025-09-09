@@ -1,12 +1,8 @@
 from typing_extensions import Self
 import dataclasses
 import pathlib
-import IPython.display
 import numpy as np
 import numpy.typing as npt
-import matplotlib.axes
-import matplotlib.animation
-import matplotlib.pyplot as plt
 import astropy.units as u
 import astropy.time
 import named_arrays as na
