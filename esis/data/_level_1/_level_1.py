@@ -19,6 +19,7 @@ class Level_1(
     This class is intended to be created from an instance of :class:`Level_0`
     using the :meth:from_level_0` method.
     """
+
     instrument: None | esis.optics.Instrument = None
     """A model of the optical system associated with these images."""
 
