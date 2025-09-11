@@ -17,9 +17,7 @@ __all__ = [
 class AbstractChannelData(
     msfc_ccd.abc.AbstractImageData,
 ):
-    """
-    An interface for representing images in the coordinate system of the sensor.
-    """
+    """An interface for representing images in the coordinate system of the sensor."""
 
     axis_time: str = dataclasses.field(default="time", kw_only=True)
     """The name of the logical axis corresponding to changing time."""
