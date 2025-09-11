@@ -10,7 +10,12 @@ __all__ = [
 @esis.memory.cache
 def level_1() -> esis.data.Level_1:
     """
-    The ESIS data processed to the Level-1 stage.
+    Load the ESIS images and process them to the :doc:`reports/level_1` stage.
+
+    This function takes the result of :func:`level_0`,
+    creates a new instance of :class:`esis.data.Level_1` using the
+    :meth:`~esis.data.Level_1.from_level_0` classmethod,
+    and then caches the result for future use.
     """
     return esis.data.Level_1.from_level_0(
         a=level_0(),
