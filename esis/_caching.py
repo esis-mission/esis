@@ -1,9 +1,13 @@
+import inspect
 import pathlib
 import joblib
 
 __all__ = [
     "memory",
 ]
+
+f = inspect.isfunction
+inspect.isfunction = lambda x: f(x) or isinstance(x, joblib.memory.MemorizedFunc)
 
 _path_cache = pathlib.Path(__file__).parent.parent / ".cache"
 
