@@ -1,5 +1,4 @@
 import pytest
-import IPython.display
 import numpy as np
 import astropy.units as u
 import astropy.time
