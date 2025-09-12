@@ -57,7 +57,6 @@ class AbstractChannelData(
         vmin: None | na.ArrayLike = None,
         vmax: None | na.ArrayLike = None,
         cbar_fraction: float = 0.1,
-        fps: None | float = None,
     ) -> matplotlib.animation.FuncAnimation:
         """
         Create an animation using the frames in this dataset.
@@ -80,8 +79,6 @@ class AbstractChannelData(
             If `norm` is :obj:`None`, this parameter will be ignored.
         cbar_fraction
             The fraction of the space to use for the colorbar axes.
-        fps
-            The frames per second of the animation.
         """
         axis_time = self.axis_time
         axis_channel = self.axis_channel
@@ -140,9 +137,6 @@ class AbstractChannelData(
             ax=ax,
             kwargs_pcolormesh=dict(
                 colorizer=colorizer,
-            ),
-            kwargs_animation=dict(
-                interval=1000 / fps,
             ),
         )
         na.plt.text(
@@ -210,10 +204,9 @@ class AbstractChannelData(
             vmin=vmin,
             vmax=vmax,
             cbar_fraction=cbar_fraction,
-            fps=fps,
         )
 
-        result = ani.to_jshtml()
+        result = ani.to_jshtml(fps=fps)
         result = IPython.display.HTML(result)
 
         plt.close(ani._fig)
