@@ -33,16 +33,11 @@ class Level_1(
         Create a new instance of this class from an instance of :class:`Level_0`.
 
         This function applies the following operations to the :class:`Level_0` data:
-        * Removes the bias (or pedestal) using the :meth:`~esis.data.Level_0.unbiased`
-          property.
-        * Removes the non-active pixels using the :meth:`~esis.data.Level_0.active`
-          property.
-        * Converts the signal from DN units to electron units using the
-          :meth:`~esis.data.Level_0.electrons` property.
-        * Removes the dark signal by applying the
-          :attr:`~esis.data.Level_0.dark_subtracted` property.
-        * Removes the cosmic ray spikes
-        This function applies the :meth:`~esis.data.Level_0.unbiased
+        * Removes the bias (or pedestal) using :meth:`~esis.data.Level_0.unbiased`.
+        * Removes the non-active pixels using  :meth:`~esis.data.Level_0.active`.
+        * Converts the signal to electrons using :meth:`~esis.data.Level_0.electrons`.
+        * Removes the dark signal using :attr:`~esis.data.Level_0.dark_subtracted`.
+        * Removes the cosmic ray spikes using :meth:`~esis.data.Level_0.despiked`.
 
         Parameters
         ----------
