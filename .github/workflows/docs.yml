@@ -17,6 +17,11 @@ jobs:
   build:
     runs-on: ubuntu-latest-32gb
     steps:
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 32
+
       - name: Checkout
         uses: actions/checkout@v4
 
