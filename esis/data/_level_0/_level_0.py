@@ -147,10 +147,20 @@ class Level_0(
 
         This is a concatenation of :attr:`darks_up` and :attr:`darks_down`.
         """
-        return np.concatenate(
+        result = np.concatenate(
             arrays=[self.darks_up, self.darks_down],
             axis=self.axis_time,
         )
+
+        serial_number = result.inputs.serial_number
+        for axis in serial_number.shape:
+            sn0 = serial_number[{axis: 0}]
+            if np.all(sn0 == serial_number):
+                serial_number = sn0
+
+        result.inputs.serial_number = serial_number
+
+        return result
 
     @property
     def dark(self) -> Self:

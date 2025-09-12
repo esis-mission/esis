@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, repr=False)
 class Level_1(
     abc.AbstractChannelData,
 ):
