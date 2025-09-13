@@ -17,10 +17,6 @@ jobs:
         python-version: ["3.11", "3.12"]
     name: ${{ matrix.os }}, Python ${{ matrix.python-version }} tests
     steps:
-      - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 10
 
       - name: Checkout repository
         uses: actions/checkout@v4
