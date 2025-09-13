@@ -1,30 +1,26 @@
 import pytest
-import IPython.display
 import numpy as np
 import astropy.units as u
 import astropy.time
-import named_arrays as na
 from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSensorData
 import esis
+from ..abc._channel_data_test import AbstractTestAbstractChannelData
 
 
 @pytest.mark.parametrize(
     argnames="a",
     argvalues=[
-        esis.flights.f1.data.level_0(),
+        esis.flights.f1.data.level_0()[dict(time=slice(None, None, 8))],
     ],
 )
 class TestLevel_0(
     AbstractTestAbstractSensorData,
+    AbstractTestAbstractChannelData,
 ):
     def test_timeline(self, a: esis.data.Level_0):
         result = a.timeline
         if result is not None:
             assert isinstance(result, esis.nsroc.Timeline)
-
-    def test_channel(self, a: esis.data.Level_0):
-        result = a.channel
-        assert isinstance(result, na.ScalarArray)
 
     def test_despiked(self, a: esis.data.Level_0):
         a = a[{a.axis_time: slice(0, 1)}]
@@ -63,13 +59,3 @@ class TestLevel_0(
         result = a[index].dark_subtracted
         assert isinstance(result, type(a))
         assert np.all(result.darks.outputs.mean() < 1 * u.DN)
-
-    def test_to_jshtml(self, a: esis.data.Level_0):
-        index = {
-            a.axis_time: slice(0, 1),
-            a.axis_x: slice(0, 100),
-            a.axis_y: slice(0, 100),
-        }
-        a = a[index]
-        result = a.to_jshtml()
-        assert isinstance(result, IPython.display.HTML)

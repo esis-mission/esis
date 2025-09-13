@@ -432,30 +432,32 @@ def as_built(
 
     axis_tap_x = result.camera.axis_tap_x
     axis_tap_y = result.camera.axis_tap_y
-    shape_tap = {axis_channel: 4, axis_tap_y: 2, axis_tap_x: 2}
-    axis_tap_xy = "tap_xy"
 
-    result.camera.sensor.gain = na.ScalarArray(
+    # Results from Laurel Rachmeler presented on 2017-07-06 and 2017-07-12.
+    result.camera.gain = na.ScalarArray(
         ndarray=[
-            [2.57, 2.50, 2.52, 2.53],
-            [2.55, 2.58, 2.57, 2.63],
-            [2.57, 2.53, 2.52, 2.59],
-            [2.60, 2.60, 2.54, 2.58],
+            [
+                [2.55, 2.63],
+                [2.57, 2.57],
+            ],
+            [
+                [2.57, 2.53],
+                [2.50, 2.52],
+            ],
+            [
+                [2.57, 2.59],
+                [2.53, 2.52],
+            ],
+            [
+                [2.60, 2.58],
+                [2.60, 2.54],
+            ],
         ]
         * u.electron
         / u.DN,
-        axes=(axis_channel, axis_tap_xy),
-    ).reshape(shape_tap)
+        axes=(axis_channel, axis_tap_y, axis_tap_x),
+    )
 
-    result.camera.sensor.readout_noise = na.ScalarArray(
-        ndarray=[
-            [3.9, 4.0, 4.1, 3.7],
-            [3.9, 4.0, 4.0, 4.0],
-            [4.1, 4.1, 4.1, 4.3],
-            [3.9, 3.9, 4.2, 4.1],
-        ]
-        * u.adu,
-        axes=(axis_channel, axis_tap_xy),
-    ).reshape(shape_tap)
+    result.camera.sensor.readout_noise = 6 * u.electron
 
     return result

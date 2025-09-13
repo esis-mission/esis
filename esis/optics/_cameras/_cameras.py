@@ -10,8 +10,9 @@ __all__ = [
 ]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, repr=False)
 class Camera(
+    optika.mixins.Printable,
     msfc_ccd.Camera,
 ):
     """A model of the cameras developed by MSFC."""
@@ -21,6 +22,14 @@ class Camera(
     A model of the sensor used by this camera to capture light.
 
     If :obj:`None` (the default), :class:`esis.optics.Sensor()` will be used.
+    """
+
+    gain: None | u.Quantity | na.AbstractScalar = 2.5 * u.electron / u.DN
+    """
+    The conversion factor between electrons and DN.
+
+    This is usually tap-dependent and contains :attr:`axis_tap_x` and
+    :attr:`axis_tap_y` dimensions.
     """
 
     timedelta_sync: u.Quantity = 0 * u.s
