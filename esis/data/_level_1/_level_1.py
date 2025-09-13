@@ -33,6 +33,7 @@ class Level_1(
         Create a new instance of this class from an instance of :class:`Level_0`.
 
         This function applies the following operations to the :class:`Level_0` data:
+
         * Removes the bias (or pedestal) using :meth:`~esis.data.Level_0.unbiased`.
         * Removes the non-active pixels using  :meth:`~esis.data.Level_0.active`.
         * Converts the signal to electrons using :meth:`~esis.data.Level_0.electrons`.

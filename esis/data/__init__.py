@@ -19,6 +19,7 @@ DN to photons incident on the front surface of the sensor.
 
 The following steps are applied to the Level-0 dataset to create the Level-1
 dataset.
+
 * Bias subtraction
 * Non-active pixel removal
 * Dark frame subtraction
