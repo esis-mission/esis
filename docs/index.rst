@@ -18,12 +18,15 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
     a = a[{a.axis_channel: 2}]
 
     fig, ax = na.plt.subplots(
-        figsize=(9, 4),
+        figsize=(9, 4.3),
         constrained_layout=True,
     )
+    na.plt.set_xlabel("detector $x$ (pix)", ax=ax)
+    na.plt.set_ylabel("detector $y$ (pix)", ax=ax)
     a.to_jshtml(
         ax=ax,
-        vmax=a.outputs.percentile(99.9).ndarray
+        vmax=a.outputs.percentile(99.9).ndarray,
+        cmap="gray",
     )
 
 API Reference
