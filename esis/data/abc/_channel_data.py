@@ -109,7 +109,7 @@ class AbstractChannelData(
 
         if norm is None:
             if vmin is None:
-                vmin = data.percentile(1).ndarray
+                vmin = 0 * unit if unit is not None else 0
             if vmax is None:
                 vmax = data.percentile(99).ndarray
 

@@ -20,6 +20,7 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
     fig, ax = na.plt.subplots(
         figsize=(9, 4.3),
         constrained_layout=True,
+        dpi=100,
     )
     na.plt.set_xlabel("detector $x$ (pix)", ax=ax)
     na.plt.set_ylabel("detector $y$ (pix)", ax=ax)
@@ -28,6 +29,8 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
         vmax=a.outputs.percentile(99.9).ndarray,
         cmap="gray",
     )
+
+|
 
 API Reference
 =============
