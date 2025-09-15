@@ -99,6 +99,7 @@ class AbstractChannelData(
                 constrained_layout=True,
                 figsize=(figwidth, figheight),
                 origin="upper",
+                squeeze=False,
             )
             na.plt.set_xlabel("detector $x$ (pix)", ax=ax[{axis_channel: ~0}])
             na.plt.set_ylabel("detector $y$ (pix)", ax=ax)
@@ -128,8 +129,12 @@ class AbstractChannelData(
 
         pixel = self.inputs.pixel
 
+        time = self.inputs.time
+        if axis_channel in time.shape:
+            time = time.mean(axis_channel)
+
         ani = na.plt.pcolormovie(
-            self.inputs.time.mean(axis_channel),
+            time,
             pixel.x,
             pixel.y,
             C=data,

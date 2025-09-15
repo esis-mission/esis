@@ -8,6 +8,24 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
     The ESIS instrument on the rail preparing for launch. Image credit: NSROC
     and Catharine Bunn.
 
+.. jupyter-execute::
+    :hide-code:
+
+    import named_arrays as na
+    import esis
+
+    a = esis.flights.f1.data.level_1()
+    a = a[{a.axis_channel: 2}]
+
+    fig, ax = na.plt.subplots(
+        figsize=(9, 4),
+        constrained_layout=True,
+    )
+    a.to_jshtml(
+        ax=ax,
+        vmax=a.outputs.percentile(99.9).ndarray
+    )
+
 API Reference
 =============
 An in-depth explanation of all the functions, classes, etc. that are implemented
