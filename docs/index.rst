@@ -27,6 +27,7 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
         ax=ax,
         vmax=a.outputs.percentile(99.9).ndarray,
         cmap="gray",
+        fps=10
     )
 
 |
