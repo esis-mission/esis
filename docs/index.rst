@@ -11,24 +11,48 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
 .. jupyter-execute::
     :hide-code:
 
+    import IPython.display
+    import matplotlib.pyplot as plt
     import named_arrays as na
     import esis
+
+    plt.rcParams["animation.embed_limit"] = 50
 
     a = esis.flights.f1.data.level_1()
     a = a[{a.axis_channel: 2}]
 
-    fig, ax = na.plt.subplots(
-        figsize=(9, 4.15),
+    fig, ax = plt.subplots(
         constrained_layout=True,
+        figsize=(9, 4.5),
     )
-    na.plt.set_xlabel("detector $x$ (pix)", ax=ax)
-    na.plt.set_ylabel("detector $y$ (pix)", ax=ax)
-    a.to_jshtml(
+    ax.set_axis_off()
+
+    unit = na.unit(a.outputs)
+
+    vmin = 0
+    vmax = a.outputs.percentile(99.9).ndarray.value
+
+    pixel = a.inputs.pixel
+
+    time = a.inputs.time
+
+    ani = na.plt.pcolormovie(
+        time,
+        pixel.x,
+        pixel.y,
+        C=a.outputs.value,
+        axis_time=a.axis_time,
         ax=ax,
-        vmax=a.outputs.percentile(99.9).ndarray,
-        cmap="gray",
-        fps=10
+        vmin=vmin,
+        vmax=vmax,
     )
+
+    result = ani.to_jshtml(fps=10)
+    result = IPython.display.HTML(result)
+
+    plt.close(ani._fig)
+
+    result
 
 |
 
