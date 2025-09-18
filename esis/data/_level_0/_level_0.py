@@ -176,3 +176,13 @@ class Level_0(
     def dark_subtracted(self):
         """Subtract the master :attr:`dark` from each image in the sequence."""
         return self - self.dark.outputs
+
+    @property
+    def despiked(self) -> Self:
+        """Remove cosmic rays using :func:`astroscrappy.detect_cosmics`."""
+        return na.despike(
+            array=self,
+            sigclip=6,
+            objlim=3,
+            axis=(self.axis_x, self.axis_y),
+        )

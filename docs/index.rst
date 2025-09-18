@@ -16,14 +16,12 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
     import named_arrays as na
     import esis
 
-    plt.rcParams["animation.embed_limit"] = 50
-
     a = esis.flights.f1.data.level_1()
     a = a[{a.axis_channel: 2}]
 
     fig, ax = plt.subplots(
         constrained_layout=True,
-        figsize=(9, 4.5),
+        figsize=(8, 4),
     )
     ax.set_axis_off()
 
