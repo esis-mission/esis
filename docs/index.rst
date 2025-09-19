@@ -89,7 +89,7 @@ Flight 1 (2019)
 
 Publications
 ============
-`Mission Paper
+`Mission Paper (Parker et al. 2022)
 <https://iopscience.iop.org/article/10.3847/1538-4357/ac8eaa/meta>`_
 
 |
