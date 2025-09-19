@@ -11,7 +11,6 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
 .. jupyter-execute::
     :hide-code:
 
-    import IPython.display
     import matplotlib.pyplot as plt
     import named_arrays as na
     import esis
@@ -22,35 +21,40 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
     fig, ax = plt.subplots(
         constrained_layout=True,
         figsize=(8, 4),
+        dpi=300,
     )
     ax.set_axis_off()
 
-    unit = na.unit(a.outputs)
-
     vmin = 0
-    vmax = a.outputs.percentile(99.9).ndarray.value
+    vmax = a.outputs.percentile(99.99).ndarray.value
 
-    pixel = a.inputs.pixel
+    a = a[{a.axis_time: 15}]
 
-    time = a.inputs.time
-
-    ani = na.plt.pcolormovie(
-        time,
-        pixel.x,
-        pixel.y,
+    img = na.plt.pcolormesh(
+        a.inputs.pixel,
         C=a.outputs.value,
-        axis_time=a.axis_time,
         ax=ax,
         vmin=vmin,
         vmax=vmax,
     )
-
-    result = ani.to_jshtml(fps=10)
-    result = IPython.display.HTML(result)
-
-    plt.close(ani._fig)
-
-    result
+    ax.text(
+        x=0.01,
+        y=0.98,
+        s=a.channel.ndarray,
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        color="white",
+    )
+    ax.text(
+        x=.99,
+        y=0.98,
+        s=a.inputs.time.ndarray,
+        transform=ax.transAxes,
+        ha="right",
+        va="top",
+        color="white",
+    );
 
 |
 
