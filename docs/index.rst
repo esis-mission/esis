@@ -1,12 +1,24 @@
 Introduction
 ============
-The EUV Snapshot Imaging Spectrograph (ESIS) is a sounding rocket-based tomographic imaging spectrograph that was
-launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2022`.
+The EUV Snapshot Imaging Spectrograph (ESIS) is a NASA
+`sounding rocket <https://en.wikipedia.org/wiki/Sounding_rocket>`_ mission
+designed to measure the speed of plasma in the
+`solar atmosphere <https://en.wikipedia.org/wiki/Sun#Atmosphere>`_.
+ESIS was launched from
+`White Sands Missile Range <https://en.wikipedia.org/wiki/White_Sands_Missile_Range>`_
+on September 30th, 2019 and is planned to launch again in 2027.
 
 .. figure:: _static/esis-rail.avif
 
     The ESIS instrument on the rail preparing for launch. Image credit: NSROC
     and Catharine Bunn.
+
+ESIS is a
+`computed tomography imaging spectrometer (CTIS) <https://en.wikipedia.org/wiki/Computed_tomography_imaging_spectrometer>`_
+which forms overlapping images of a few solar
+`spectral lines <https://en.wikipedia.org/wiki/Spectral_line>`_ to measure
+their `Doppler shift <https://en.wikipedia.org/wiki/Doppler_effect>`_.
+Below is an example of one image captured during the 2019 flight.
 
 .. jupyter-execute::
     :hide-code:
@@ -26,7 +38,7 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
     ax.set_axis_off()
 
     vmin = 0
-    vmax = a.outputs.percentile(99.99).ndarray.value
+    vmax = a.outputs.percentile(99.9).ndarray.value
 
     a = a[{a.axis_time: 15}]
 
@@ -57,6 +69,9 @@ launched from White Sands Missile Range on September 30th, 2019 :cite:p:`Parker2
     );
 
 |
+
+This library provides a model of the ESIS optical system as well as utilities
+to interpret the images in terms of physically-meaningful quantities.
 
 API Reference
 =============
