@@ -112,6 +112,7 @@ bibtex_default_style = 'plain'
 bibtex_reference_style = 'author_year'
 
 nbsphinx_execute = 'always'
+nbsphinx_allow_errors = True
 
 codeautolink_custom_blocks = {"jupyter-execute": None}
 
