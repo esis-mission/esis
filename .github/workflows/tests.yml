@@ -17,6 +17,11 @@ jobs:
         python-version: ["3.11", "3.12"]
     name: ${{ matrix.os }}, Python ${{ matrix.python-version }} tests
     steps:
+      - name: Set Swap Space
+        if: runner.os == 'Linux'
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 8
 
       - name: Checkout repository
         uses: actions/checkout@v4
