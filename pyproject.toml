@@ -19,7 +19,7 @@ dependencies = [
     "matplotlib",
     "astropy@git+https://github.com/astropy/astropy.git",
     "joblib",
-    "optika>=0.13.0",
+    "optika@git+https://github.com/sun-data/optika.git",
     "msfc-ccd>=0.6.0",
 ]
 dynamic = ["version"]
