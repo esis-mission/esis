@@ -58,7 +58,7 @@ class Level_1(
 
         return cls(
             inputs=a.inputs,
-            outputs=a.outputs,
+            outputs=a.outputs[dict(detector_y=slice(None, None, -1))],
             instrument=instrument,
             axis_time=a.axis_time,
             axis_channel=a.axis_channel,
