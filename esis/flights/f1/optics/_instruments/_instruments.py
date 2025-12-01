@@ -251,6 +251,18 @@ def design_full(
             ),
         )
 
+    if num_distribution == 0:
+        primary.translation = na.nominal(primary.translation)
+        field_stop.translation = na.nominal(field_stop.translation)
+        grating.sag.radius = na.nominal(grating.sag.radius)
+        grating.rulings.spacing.coefficients[0] = na.nominal(grating.rulings.spacing.coefficients[0])
+        grating.rulings.spacing.coefficients[1] = na.nominal(grating.rulings.spacing.coefficients[1])
+        grating.rulings.spacing.coefficients[2] = na.nominal(grating.rulings.spacing.coefficients[2])
+        grating.rulings.depth = na.nominal(grating.rulings.depth)
+        grating.rulings.ratio_duty = na.nominal(grating.rulings.ratio_duty)
+        grating.translation = na.nominal(grating.translation)
+        grating.roll = na.nominal(grating.roll)
+
     return esis.optics.Instrument(
         name="ESIS 1 final design (all channels)",
         axis_channel=axis_channel,
