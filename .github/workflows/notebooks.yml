@@ -1,4 +1,4 @@
-name: Check Jupyter Outputs
+name: Notebooks
 
 on:
   push:
