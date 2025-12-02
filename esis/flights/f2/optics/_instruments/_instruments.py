@@ -91,13 +91,19 @@ def design_proposed(
     c1 = -2.852e-5 * (u.um / u.mm)
     c2 = -2.112e-7 * (u.um / u.mm**2)
 
-    result.grating.rulings.spacing.coefficients[0].nominal = c0
-    result.grating.rulings.spacing.coefficients[1].nominal = c1
-    result.grating.rulings.spacing.coefficients[2].nominal = c2
+    if num_distribution == 0:
+        result.grating.rulings.spacing.coefficients[0] = c0
+        result.grating.rulings.spacing.coefficients[1] = c1
+        result.grating.rulings.spacing.coefficients[2] = c2
+        z_filter = result.grating.translation.z + 1291.012 * u.mm
+    else:
+        result.grating.rulings.spacing.coefficients[0].nominal = c0
+        result.grating.rulings.spacing.coefficients[1].nominal = c1
+        result.grating.rulings.spacing.coefficients[2].nominal = c2
+        z_filter = result.grating.translation.z.nominal + 1291.012 * u.mm
 
     result.grating.yaw = -3.65 * u.deg
 
-    z_filter = result.grating.translation.z.nominal + 1291.012 * u.mm
     dz = z_filter - result.filter.translation.z
     result.filter.translation.z += dz
     result.camera.sensor.translation.z += dz
