@@ -17,7 +17,7 @@ dependencies = [
     "ipython",
     "numpy",
     "matplotlib",
-    "astropy@git+https://github.com/astropy/astropy.git",
+    "astropy~=7.2",
     "joblib",
     "optika>=0.13.0",
     "msfc-ccd>=0.6.0",

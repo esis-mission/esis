@@ -51,7 +51,7 @@ Below is an example of one image captured during the 2019 flight.
     )
     ax.text(
         x=0.01,
-        y=0.98,
+        y=0.05,
         s=a.channel.ndarray,
         transform=ax.transAxes,
         ha="left",
@@ -60,7 +60,7 @@ Below is an example of one image captured during the 2019 flight.
     )
     ax.text(
         x=.99,
-        y=0.98,
+        y=0.05,
         s=a.inputs.time.ndarray,
         transform=ax.transAxes,
         ha="right",
