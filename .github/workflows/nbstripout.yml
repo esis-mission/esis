@@ -12,4 +12,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: pip install nbstripout
-      - run: find . -name "*.ipynb" -exec nbstripout --validate {} +
+      - run: find . -name "*.ipynb" -exec nbstripout --verify {} +
