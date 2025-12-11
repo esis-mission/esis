@@ -1,5 +1,6 @@
 import numpy as np
 import astropy.units as u
+import optika
 
 def esis_distortion_merit(
         guess,
@@ -31,8 +32,8 @@ def esis_distortion_merit(
     model.yaw = model_yaw
     model.roll = model_roll
 
-    if model.system:
-        del model.system
+    del model.system
+
     image = model.system.image(
         scene=scene,
         pupil=pupil,
@@ -67,7 +68,7 @@ def esis_distortion_merit(
 
 
     # merit = lse + (distance_off_target)
-    merit = -1000*np.abs(cc) + (distance_off_target)
+    merit = -1000*cc + distance_off_target
     print(f'{merit.ndarray=}',f'{guess=}')
 
     return merit.ndarray
