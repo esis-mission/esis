@@ -12,7 +12,6 @@ __all__ = [
 
 @dataclasses.dataclass(eq=False, repr=False)
 class Camera(
-    optika.mixins.Printable,
     msfc_ccd.Camera,
 ):
     """A model of the cameras developed by MSFC."""
@@ -54,9 +53,7 @@ class Camera(
             axis_pixel=na.Cartesian2dVectorArray("detector_x", "detector_y"),
             num_pixel=self.sensor.num_pixel_active,
             timedelta_exposure=self.timedelta_exposure,
-            material=optika.sensors.materials.e2v_ccd97(
-                temperature=self.sensor.temperature,
-            ),
+            material=self.sensor.material,
             aperture_mechanical=optika.apertures.RectangularAperture(
                 half_width=self.sensor.width_package / 2,
             ),
