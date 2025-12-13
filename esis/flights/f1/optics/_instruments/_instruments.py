@@ -213,7 +213,6 @@ def design_full(
     )
 
     sensor = esis.optics.Sensor(
-        temperature=-55 * u.deg_C,
         distance_radial=108 * u.mm,
         azimuth=angle_channel.copy(),
         translation=na.Cartesian3dVectorArray(
@@ -222,6 +221,9 @@ def design_full(
             z=filter.translation.z + 200 * u.mm,
         ),
         yaw=-12.252 * u.deg,
+        material=optika.sensors.materials.e2v_ccd97(
+            temperature=-55 * u.deg_C,
+        ),
     )
 
     camera = esis.optics.Camera(
