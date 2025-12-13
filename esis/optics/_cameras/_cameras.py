@@ -12,7 +12,6 @@ __all__ = [
 
 @dataclasses.dataclass(eq=False, repr=False)
 class Camera(
-    optika.mixins.Printable,
     msfc_ccd.Camera,
 ):
     """A model of the cameras developed by MSFC."""
@@ -41,9 +40,6 @@ class Camera(
     channel_trigger: int = 0
     """The master channel which triggers the other channels to start exposing."""
 
-    sensor_material: None | optika.sensors.materials.AbstractSensorMaterial = None
-    """ Sensor material used in optika."""
-
     def __post_init__(self):
         if self.sensor is None:
             self.sensor = Sensor()
@@ -51,10 +47,6 @@ class Camera(
     @property
     def surface(self) -> optika.sensors.AbstractImagingSensor:
         """Represent this object as an :mod:`optika` surface."""
-        if self.sensor_material is None:
-            material = optika.sensors.materials.e2v_ccd97(temperature=self.sensor.temperature)
-        else:
-            material = self.sensor_material
 
         return optika.sensors.ImagingSensor(
             name="sensor",
@@ -62,7 +54,7 @@ class Camera(
             axis_pixel=na.Cartesian2dVectorArray("detector_x", "detector_y"),
             num_pixel=self.sensor.num_pixel_active,
             timedelta_exposure=self.timedelta_exposure,
-            material=material,
+            material=self.sensor.material,
             aperture_mechanical=optika.apertures.RectangularAperture(
                 half_width=self.sensor.width_package / 2,
             ),

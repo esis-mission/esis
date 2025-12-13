@@ -19,8 +19,9 @@ dependencies = [
     "matplotlib",
     "astropy~=7.2",
     "joblib",
-    "optika>=0.13.0",
-    "msfc-ccd>=0.6.0",
+    "named-arrays~=1.0",
+    "optika~=1.0",
+    "msfc-ccd~=1.0",
 ]
 dynamic = ["version"]
 
