@@ -6,7 +6,7 @@ from ..mixins import _mixins_test
 
 
 @pytest.mark.parametrize(
-    argnames="sensor",
+    argnames="a",
     argvalues=[
         esis.optics.Sensor(),
     ],
