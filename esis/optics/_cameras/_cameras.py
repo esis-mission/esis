@@ -47,7 +47,6 @@ class Camera(
     @property
     def surface(self) -> optika.sensors.AbstractImagingSensor:
         """Represent this object as an :mod:`optika` surface."""
-
         return optika.sensors.ImagingSensor(
             name="sensor",
             width_pixel=self.sensor.width_pixel,
