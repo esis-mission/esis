@@ -21,7 +21,8 @@ def esis_distortion_merit(
     model.grating.yaw = g_yaw
     model.grating.pitch = g_pitch
     model.grating.roll = g_roll
-    model.camera.sensor.roll = camera_roll
+    # model.camera.sensor.roll = camera_roll
+    model.field_stop.roll = camera_roll
     model.grating.rulings.spacing.coefficients[0] = d_grating
     model.primary_mirror.sag.focal_length = -1000 * u.mm + primary_displacement
     model.primary_mirror.translation.z = -primary_displacement
