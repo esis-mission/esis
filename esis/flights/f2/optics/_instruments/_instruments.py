@@ -195,7 +195,7 @@ def design_guess(
 
     .. math::
 
-        \alpha &= a - \theta
+        \alpha &= a - \theta \\
         \beta_i &= b_i - \theta,
 
     and the grating equation becomes
@@ -229,10 +229,10 @@ def design_guess(
 
     .. math::
 
-        d = \frac{m \lambda_1}{(a - \theta)} + \sin{(b_1 - \theta)}.
+        d = \frac{m \lambda_1}{\sin(a - \theta) + \sin(b_1 - \theta)}.
 
     The radius of the grating surface can be found using Equation 31 of
-    :cite:t`Poletto2004`,
+    :cite:t:`Poletto2004`,
 
     .. math::
 
