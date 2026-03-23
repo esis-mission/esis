@@ -151,7 +151,6 @@ def design_guess(
 
     Examples
     --------
-
     Plot a spot diagram for this design.
 
     .. jupyter-execute::
@@ -171,7 +170,6 @@ def design_guess(
 
     Notes
     -----
-
     Let :math:`\mathbf{a}` be the vector pointing from the apex of the grating
     to the center of the field stop, and let :math:`\mathbf{b}_i` be the vector
     pointing from the apex of the grating to target location of wavelength
@@ -339,7 +337,11 @@ def design_guess(
 
     R = r_A * (np.cos(alpha) + np.cos(beta)) * M_c / (1 + M_c)
 
-    sigma_1 = -(np.square(np.cos(alpha)) / r_A + np.square(np.cos(beta)) / r_B - (np.cos(alpha) + np.cos(beta)) / R) / (m * (w1 + w2) / 2)
+    sigma_1 = -(
+        np.square(np.cos(alpha)) / r_A
+        + np.square(np.cos(beta)) / r_B
+        - (np.cos(alpha) + np.cos(beta)) / R
+    ) / (m * (w1 + w2) / 2)
 
     d_1 = -sigma_1 * np.square(d)
 
