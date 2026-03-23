@@ -121,7 +121,7 @@ def design_guess(
     num_distribution: int = 11,
 ) -> esis.optics.Instrument:
     r"""
-    The starting point for optimization of the ESIS-II design.
+    Load the starting point (or guess) for optimization of the ESIS-II design.
 
     This model uses the entire optical bench length for increased resolution.
 
@@ -149,25 +149,6 @@ def design_guess(
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
 
-    Examples
-    --------
-    Plot a spot diagram for this design.
-
-    .. jupyter-execute::
-
-        # Import this package
-        import esis
-
-        # Load this design into memory
-        instrument = esis.flights.f2.optics.design_guess(num_distribution=0)
-
-        # Lower the number of field angles for clearer plotting
-        instrument.field.num = 5
-
-        # Plot the spot diagram for each field angle
-        fig, ax = instrument.system.spot_diagram()
-
-
     Notes
     -----
     Let :math:`\mathbf{a}` be the vector pointing from the apex of the grating
@@ -180,16 +161,19 @@ def design_guess(
 
     .. math::
 
-        a = \arctan{\frac{\mathbf{a} \cdot \hat{\mathbf{x}}}{\mathbf{a} \cdot \hat{\mathbf{z}}}},
+        a = \arctan{\frac{\mathbf{a} \cdot \hat{\mathbf{x}}}
+                   {\mathbf{a} \cdot \hat{\mathbf{z}}}},
 
     and similarly for :math:`\mathbf{b}_i`,
 
     .. math::
 
-        b_i = \arctan{\frac{\mathbf{b}_i \cdot \hat{\mathbf{x}}}{\mathbf{b}_i \cdot \hat{\mathbf{z}}}}.
+        b_i = \arctan{\frac{\mathbf{b}_i \cdot \hat{\mathbf{x}}}
+                     {\mathbf{b}_i \cdot \hat{\mathbf{z}}}}.
 
-    If the grating is rotated about the :math:`\hat{\mathbf{y}}` axis by :math:`\theta`,
-    then the relationship between the incident/diffracted angles and :math:`a`/:math:`b` is
+    If the grating is rotated about the :math:`\hat{\mathbf{y}}` axis by
+    :math:`\theta`, then the relationship between the incident/diffracted angles
+    and :math:`a`/:math:`b` is
 
     .. math::
 
@@ -214,10 +198,13 @@ def design_guess(
     .. math::
 
         \theta = -\arccos \left[
-            \frac{(\lambda_2 - \lambda_1) \cos a + \lambda_2 \cos b_1 - \lambda_1 \cos b_2}
+            \frac{(\lambda_2 - \lambda_1) \cos a
+                  + \lambda_2 \cos b_1
+                  - \lambda_1 \cos b_2}
                  {\sqrt{2} \sqrt{
                     \lambda_1^2 - \lambda_1 \lambda_2 + \lambda_2^2
-                    + \left( \lambda_1 - \lambda_2)(\lambda_1 \cos (a-b_2) - \lambda_2 \cos(a-b1) \right)
+                    + \left( \lambda_1 - \lambda_2)(\lambda_1 \cos (a-b_2)
+                        - \lambda_2 \cos(a-b1) \right)
                     - \lambda_1 \lambda_2 \cos(b1-b2)
                  }
             }
@@ -255,7 +242,25 @@ def design_guess(
         \right).
 
     These equations taken together can be used to formulate a close guess
-    to an optimal ESIS-II design
+    to an optimal ESIS-II design.
+
+    Examples
+    --------
+    Plot a spot diagram for this design.
+
+    .. jupyter-execute::
+
+        # Import this package
+        import esis
+
+        # Load this design into memory
+        instrument = esis.flights.f2.optics.design_guess(num_distribution=0)
+
+        # Lower the number of field angles for clearer plotting
+        instrument.field.num = 5
+
+        # Plot the spot diagram for each field angle
+        fig, ax = instrument.system.spot_diagram()
     """
     result = esis.flights.f1.optics.design_single(
         grid=grid,
