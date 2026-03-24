@@ -224,7 +224,7 @@ class AbstractInstrument(
         footprint: bool = True,
         color: str = "black",
         kwargs_footprint: None | dict[str, Any] = None,
-        **kwargs
+        **kwargs,
     ) -> matplotlib.axes.Axes:
         """
         Plot a schematic of the primary mirror along with the footprint of the
@@ -264,7 +264,7 @@ class AbstractInstrument(
 
         kwargs_footprint = kwargs_footprint | dict(
             facecolor="none",
-            edgecolor="tab:blue"
+            edgecolor="tab:blue",
         )
 
         shape = self.system.shape

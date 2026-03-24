@@ -468,11 +468,11 @@ def design_single(
         num_distribution=num_distribution,
     )
 
-    yaw_grating = -2.42796088e+00 * u.deg
+    yaw_grating = -2.42796088e00 * u.deg
     c0 = 5.57902824e-04 * u.mm
     c1 = -1.79596543e-05 * u.um / u.mm
-    c2 = -1.67614260e-07 * u.um / u.mm ** 2
-    radius_grating = -9.24015556e+02 * u.mm
+    c2 = -1.67614260e-07 * u.um / u.mm**2
+    radius_grating = -9.24015556e02 * u.mm
 
     result.grating.yaw = yaw_grating
 
