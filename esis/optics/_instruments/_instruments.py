@@ -301,8 +301,8 @@ class AbstractInstrument(
                 position_i = rays.position[i]
                 where_i = where[i]
 
-                position_x = position_i.x[where_i].ndarray
-                position_y = position_i.y[where_i].ndarray
+                position_x = na.nominal(position_i.x[where_i]).ndarray
+                position_y = na.nominal(position_i.y[where_i]).ndarray
 
                 position = np.stack(
                     arrays=[
