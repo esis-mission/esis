@@ -225,7 +225,7 @@ class AbstractInstrument(
         color: str = "black",
         kwargs_footprint: None | dict[str, Any] = None,
         **kwargs,
-    ) -> matplotlib.axes.Axes:
+    ) -> None:
         """
         Plot a schematic of the primary mirror along with the beam footprint.
 
