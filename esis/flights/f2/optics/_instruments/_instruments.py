@@ -436,7 +436,7 @@ def design_single(
         import esis
 
         # Load this design into memory
-        instrument = esis.flights.f2.optics.design_guess(num_distribution=0)
+        instrument = esis.flights.f2.optics.design_single(num_distribution=0)
 
         # Lower the number of field angles for clearer plotting
         instrument.field.num = 5
@@ -461,6 +461,10 @@ def design_single(
     .. jupyter-execute::
 
         instrument.grating.rulings.spacing.coefficients[1].ndarray
+
+    .. jupyter-execute::
+
+        instrument.grating.rulings.spacing.coefficients[2].ndarray
     """
     result = design_guess(
         grid=grid,
