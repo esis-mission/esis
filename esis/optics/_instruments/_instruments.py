@@ -227,8 +227,7 @@ class AbstractInstrument(
         **kwargs,
     ) -> matplotlib.axes.Axes:
         """
-        Plot a schematic of the primary mirror along with the footprint of the
-        beam and the central obscuration.
+        Plot a schematic of the primary mirror along with the beam footprint.
 
         Parameters
         ----------
@@ -249,7 +248,6 @@ class AbstractInstrument(
             Additional kwargs for plotting the primary mirror.
 
         """
-
         if ax is None:
             ax = plt.gca()
 

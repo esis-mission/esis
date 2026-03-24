@@ -410,7 +410,7 @@ def design_single(
     num_distribution: int = 11,
 ) -> esis.optics.Instrument:
     r"""
-    A single channel of the ESIS-II design.
+    Load a single channel of the ESIS-II design.
 
     This model starts with :func:`~esis.flights.f2.optics.design_guess`
     and modifies the grating yaw, radius, and VLS parameters to those
@@ -496,7 +496,7 @@ def design(
     num_distribution: int = 11,
 ) -> esis.optics.Instrument:
     r"""
-    All six channels of the ESIS-II design.
+    Load all six channels of the ESIS-II design.
 
     This model starts with :func:`~esis.flights.f2.optics.design_single`
     and modifies the azimuth of the gratings, filters, and detectors
@@ -512,7 +512,6 @@ def design(
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
     """
-
     old = esis.flights.f1.optics.design_full(
         grid=grid,
         axis_channel=axis_channel,
