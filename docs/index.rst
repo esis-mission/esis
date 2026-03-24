@@ -115,6 +115,11 @@ Publications
 
 |
 
+Future Work
+===========
+.. toctree::
+    roadmap.rst
+
 References
 ==========
 
