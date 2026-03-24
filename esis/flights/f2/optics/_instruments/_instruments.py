@@ -448,23 +448,23 @@ def design_single(
 
     .. jupyter-execute::
 
-        instrument.grating.sag.radius.ndarray
+        instrument.grating.sag.radius
 
     .. jupyter-execute::
 
-        instrument.grating.yaw.ndarray
+        instrument.grating.yaw
 
     .. jupyter-execute::
 
-        instrument.grating.rulings.spacing.coefficients[0].ndarray
+        instrument.grating.rulings.spacing.coefficients[0]
 
     .. jupyter-execute::
 
-        instrument.grating.rulings.spacing.coefficients[1].ndarray
+        instrument.grating.rulings.spacing.coefficients[1]
 
     .. jupyter-execute::
 
-        instrument.grating.rulings.spacing.coefficients[2].ndarray
+        instrument.grating.rulings.spacing.coefficients[2]
     """
     result = design_guess(
         grid=grid,
