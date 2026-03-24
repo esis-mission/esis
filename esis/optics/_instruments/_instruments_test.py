@@ -1,6 +1,6 @@
 import pytest
-import dataclasses
 import numpy as np
+import matplotlib.pyplot as plt
 import astropy.units as u
 import named_arrays as na
 import optika._tests.test_mixins
@@ -97,76 +97,22 @@ class AbstractTestAbstractInstrument(
         assert isinstance(result, optika.systems.AbstractSequentialSystem)
         assert result.surfaces
 
+    def test_schematic_primary(self, a: esis.optics.abc.AbstractInstrument):
 
-_instrument = esis.optics.Instrument(
-    name="esis-test",
-    front_aperture=esis.optics.FrontAperture(),
-    central_obscuration=esis.optics.CentralObscuration(
-        num_folds=8,
-    ),
-    primary_mirror=esis.optics.PrimaryMirror(
-        sag=optika.sags.ParabolicSag(-1000 * u.mm),
-        num_folds=8,
-        width_clear=100 * u.mm,
-        width_border=1 * u.mm,
-        material=optika.materials.Mirror(),
-        translation=na.Cartesian3dVectorArray(z=2000) * u.mm,
-    ),
-    field_stop=esis.optics.FieldStop(
-        num_folds=8,
-        radius_clear=2 * u.mm,
-        radius_mechanical=20 * u.mm,
-        translation=na.Cartesian3dVectorArray(z=1000) * u.mm,
-    ),
-    grating=esis.optics.Grating(
-        serial_number="abc123",
-        manufacturing_number="123abc",
-        sag=optika.sags.SphericalSag(radius=500 * u.mm),
-        material=optika.materials.Mirror(),
-        rulings=optika.rulings.SawtoothRulings(
-            spacing=1 * u.um,
-            depth=10 * u.nm,
-            diffraction_order=1,
-        ),
-        num_folds=8,
-        halfwidth_inner=15 * u.mm,
-        halfwidth_outer=10 * u.mm,
-        width_border=1 * u.mm,
-        width_border_inner=1.5 * u.mm,
-        clearance=1 * u.mm,
-        distance_radial=50 * u.mm,
-        translation=na.Cartesian3dVectorArray(z=750) * u.mm,
-        yaw=-5 * u.deg,
-    ),
-    filter=esis.optics.Filter(
-        radius_clear=20 * u.mm,
-        width_border=1 * u.mm,
-        distance_radial=75 * u.mm,
-        translation=na.Cartesian3dVectorArray(z=1750) * u.mm,
-    ),
-    camera=esis.optics.Camera(
-        sensor=esis.optics.Sensor(
-            distance_radial=85 * u.mm,
-            translation=na.Cartesian3dVectorArray(z=2000) * u.mm,
-        ),
-    ),
-    wavelength=na.linspace(-1, 1, num=3, axis="wavelength"),
-    field=na.Cartesian2dVectorArray(
-        x=na.linspace(0, 1, num=5, axis="field_x"),
-        y=na.linspace(0, 1, num=5, axis="field_y"),
-    ),
-    pupil=na.Cartesian2dVectorArray(
-        x=na.linspace(0, 1, num=5, axis="pupil_x"),
-        y=na.linspace(0, 1, num=5, axis="pupil_y"),
-    ),
-)
+        fig, ax = plt.subplots()
+
+        a.schematic_primary()
+
+        assert ax.has_data()
+
+        plt.close(fig)
 
 
 @pytest.mark.parametrize(
     argnames="a",
     argvalues=[
-        _instrument,
-        dataclasses.replace(_instrument, wavelength=630 * u.AA),
+        esis.flights.f1.optics.design_single(num_distribution=2),
+        esis.flights.f1.optics.design(num_distribution=0),
     ],
 )
 class TestInstrument(
