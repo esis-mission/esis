@@ -119,6 +119,7 @@ Future Work
 ===========
 .. toctree::
     roadmap.rst
+    schedule.rst
 
 References
 ==========
