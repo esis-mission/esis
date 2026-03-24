@@ -266,19 +266,19 @@ def design_guess(
 
     .. jupyter-execute::
 
-        instrument.grating.sag.radius
+        instrument.grating.sag.radius.ndarray
 
     .. jupyter-execute::
 
-        instrument.grating.yaw
+        instrument.grating.yaw.ndarray
 
     .. jupyter-execute::
 
-        instrument.grating.rulings.spacing.coefficients[0]
+        instrument.grating.rulings.spacing.coefficients[0].ndarray
 
     .. jupyter-execute::
 
-        instrument.grating.rulings.spacing.coefficients[1]
+        instrument.grating.rulings.spacing.coefficients[1].ndarray
     """
     result = esis.flights.f1.optics.design_single(
         grid=grid,
