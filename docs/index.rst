@@ -118,8 +118,12 @@ Publications
 Future Work
 ===========
 .. toctree::
+    :maxdepth: 1
+
     roadmap.rst
     schedule.rst
+
+|
 
 References
 ==========
