@@ -1,8 +1,12 @@
 from __future__ import annotations
+from typing import Any
 import abc
 import dataclasses
 import functools
 import numpy as np
+import scipy.spatial
+import matplotlib.axes
+import matplotlib.pyplot as plt
 import astropy.units as u
 import named_arrays as na
 import optika
@@ -212,6 +216,120 @@ class AbstractInstrument(
         )
 
         return result
+
+    def schematic_primary(
+        self,
+        ax: None | matplotlib.axes.Axes = None,
+        transformation: None | na.transformations.AbstractTransformation = None,
+        footprint: bool = True,
+        color: str = "black",
+        kwargs_footprint: None | dict[str, Any] = None,
+        **kwargs
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot a schematic of the primary mirror along with the footprint of the
+        beam and the central obscuration.
+
+        Parameters
+        ----------
+        ax
+            The :mod:`matplotlib` axes on which to plot this schematic.
+            If :obj:`None` (the default), the schematic is plotted on the
+            current axes.
+        transformation
+            An additional transformation to apply to the coordinates
+            before plotting the schematic.
+        footprint
+            Whether to plot the footprint of the rays on the mirror surface.
+        color
+            The color of the primary mirror.
+        kwargs_footprint
+            Additional kwargs for plotting the footprint of the beam.
+        kwargs
+            Additional kwargs for plotting the primary mirror.
+
+        """
+
+        if ax is None:
+            ax = plt.gca()
+
+        if transformation is None:
+            transformation = na.transformations.IdentityTransformation()
+
+        if self.transformation is not None:
+            transformation = transformation @ self.transformation
+
+        if kwargs_footprint is None:
+            kwargs_footprint = dict()
+
+        kwargs_footprint = kwargs_footprint | dict(
+            facecolor="none",
+            edgecolor="tab:blue"
+        )
+
+        shape = self.system.shape
+
+        primary = self.primary_mirror.surface
+
+        components = ("x", "y")
+
+        primary.plot(
+            ax=ax,
+            transformation=transformation,
+            components=components,
+            color=color,
+            **kwargs,
+        )
+
+        if footprint:
+
+            index_primary = self.system.surfaces_all.index(primary)
+            index_primary = {self.system.axis_surface: index_primary}
+
+            rays = self.system.raytrace().outputs
+
+            where = rays.unvignetted[{self.system.axis_surface: ~0}]
+
+            rays = rays[index_primary]
+
+            rays = transformation(rays)
+
+            rays = primary.transformation.inverse(rays)
+
+            for i in na.ndindex(shape):
+
+                position_i = rays.position[i]
+                where_i = where[i]
+
+                position_x = position_i.x[where_i].ndarray
+                position_y = position_i.y[where_i].ndarray
+
+                position = np.stack(
+                    arrays=[
+                        position_x,
+                        position_y,
+                    ],
+                    axis=~0,
+                )
+
+                hull = scipy.spatial.ConvexHull(position)
+
+                px = position_x[hull.vertices]
+                py = position_y[hull.vertices]
+
+                ax.fill(px, py, **kwargs_footprint)
+
+                sx = px.mean()
+                sy = py.mean()
+
+                ax.text(
+                    x=sx,
+                    y=sy,
+                    s=f"Ch. {self.camera.channel[i].ndarray}",
+                    ha="center",
+                    va="center",
+                    color=kwargs_footprint["edgecolor"],
+                )
 
 
 @dataclasses.dataclass(eq=False, repr=False)

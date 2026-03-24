@@ -8,6 +8,8 @@ from ... import wavelength_Ne_VII, wavelength_Si_XII
 __all__ = [
     "design_proposed",
     "design_guess",
+    "design_single",
+    "design",
 ]
 
 
@@ -398,5 +400,137 @@ def design_guess(
             arrays=[w1, w2],
             axis="wavelength",
         )
+
+    return result
+
+
+def design_single(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    r"""
+    A single channel of the ESIS-II design.
+
+    This model starts with :func:`~esis.flights.f2.optics.design_guess`
+    and modifies the grating yaw, radius, and VLS parameters to those
+    found by Jacob D. Parker in July 2024.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+
+    Examples
+    --------
+    Plot a spot diagram for this design.
+
+    .. jupyter-execute::
+
+        # Import this package
+        import esis
+
+        # Load this design into memory
+        instrument = esis.flights.f2.optics.design_guess(num_distribution=0)
+
+        # Lower the number of field angles for clearer plotting
+        instrument.field.num = 5
+
+        # Plot the spot diagram for each field angle
+        fig, ax = instrument.system.spot_diagram()
+
+    Print the calculated parameters of this design.
+
+    .. jupyter-execute::
+
+        instrument.grating.sag.radius.ndarray
+
+    .. jupyter-execute::
+
+        instrument.grating.yaw.ndarray
+
+    .. jupyter-execute::
+
+        instrument.grating.rulings.spacing.coefficients[0].ndarray
+
+    .. jupyter-execute::
+
+        instrument.grating.rulings.spacing.coefficients[1].ndarray
+    """
+    result = design_guess(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+
+    yaw_grating = -2.42796088e+00 * u.deg
+    c0 = 5.57902824e-04 * u.mm
+    c1 = -1.79596543e-05 * u.um / u.mm
+    c2 = -1.67614260e-07 * u.um / u.mm ** 2
+    radius_grating = -9.24015556e+02 * u.mm
+
+    result.grating.yaw = yaw_grating
+
+    if num_distribution == 0:
+        result.grating.rulings.spacing.coefficients[0] = c0
+        result.grating.rulings.spacing.coefficients[1] = c1
+        result.grating.rulings.spacing.coefficients[2] = c2
+        result.grating.sag.radius = radius_grating
+    else:
+        result.grating.rulings.spacing.coefficients[0].nominal = c0
+        result.grating.rulings.spacing.coefficients[1].nominal = c1
+        result.grating.rulings.spacing.coefficients[2].nominal = c2
+        result.grating.sag.radius.nominal = radius_grating
+
+    return result
+
+
+def design(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    r"""
+    All six channels of the ESIS-II design.
+
+    This model starts with :func:`~esis.flights.f2.optics.design_single`
+    and modifies the azimuth of the gratings, filters, and detectors
+    to be a six-element vector.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+    """
+
+    old = esis.flights.f1.optics.design_full(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+
+    result = design_single(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+
+    result.grating.azimuth = old.grating.azimuth
+    result.filter.azimuth = old.filter.azimuth
+    result.camera.sensor.azimuth = old.camera.sensor.azimuth
+
+    result.camera.channel = old.camera.channel
+
+    result.roll = old.roll
 
     return result

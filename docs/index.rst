@@ -100,6 +100,12 @@ Flight 1 (2019)
     reports/level-0
     reports/level-1
 
+Flight 2 (Planned 2027)
+-----------------------
+.. toctree::
+
+    reports/f2/design
+
 |
 
 Publications
