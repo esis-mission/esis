@@ -265,15 +265,19 @@ def design_guess(
     Print the calculated parameters of this design.
 
     .. jupyter-execute::
+
         instrument.grating.sag.radius
 
     .. jupyter-execute::
+
         instrument.grating.yaw
 
     .. jupyter-execute::
+
         instrument.grating.rulings.spacing.coefficients[0]
 
     .. jupyter-execute::
+
         instrument.grating.rulings.spacing.coefficients[1]
     """
     result = esis.flights.f1.optics.design_single(
