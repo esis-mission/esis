@@ -161,15 +161,15 @@ def design_guess(
 
     .. math::
 
-        a = \arctan{\frac{\mathbf{a} \cdot \hat{\mathbf{x}}}
-                   {\mathbf{a} \cdot \hat{\mathbf{z}}}},
+        a = \arctan \left( \frac{\mathbf{a} \cdot \hat{\mathbf{x}}}
+                                {\mathbf{a} \cdot \hat{\mathbf{z}}} \right),
 
     and similarly for :math:`\mathbf{b}_i`,
 
     .. math::
 
-        b_i = \arctan{\frac{\mathbf{b}_i \cdot \hat{\mathbf{x}}}
-                     {\mathbf{b}_i \cdot \hat{\mathbf{z}}}}.
+        b_i = \arctan \left( \frac{\mathbf{b}_i \cdot \hat{\mathbf{x}}}
+                                  {\mathbf{b}_i \cdot \hat{\mathbf{z}}} \right).
 
     If the grating is rotated about the :math:`\hat{\mathbf{y}}` axis by
     :math:`\theta`, then the relationship between the incident/diffracted angles
@@ -261,6 +261,20 @@ def design_guess(
 
         # Plot the spot diagram for each field angle
         fig, ax = instrument.system.spot_diagram()
+
+    Print the calculated parameters of this design.
+
+    .. jupyter-execute::
+        instrument.grating.sag.radius
+
+    .. jupyter-execute::
+        instrument.grating.yaw
+
+    .. jupyter-execute::
+        instrument.grating.rulings.spacing.coefficients[0]
+
+    .. jupyter-execute::
+        instrument.grating.rulings.spacing.coefficients[1]
     """
     result = esis.flights.f1.optics.design_single(
         grid=grid,
