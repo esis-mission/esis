@@ -13,22 +13,7 @@ def esis_distortion_merit(
         axis_field=None,
 ):
 
-    guess = [guess * unit for guess, unit in zip(guess, units)]
-
-    # g_yaw, g_pitch, g_roll, camera_phi = guess
-    g_yaw, g_pitch, g_roll, camera_roll, d_grating, primary_displacement, model_pitch, model_yaw, model_roll = guess
-
-    model.grating.yaw = g_yaw
-    model.grating.pitch = g_pitch
-    model.grating.roll = g_roll
-    # model.camera.sensor.roll = camera_roll
-    model.field_stop.roll = camera_roll
-    model.grating.rulings.spacing.coefficients[0] = d_grating
-    model.primary_mirror.sag.focal_length = -1000 * u.mm + primary_displacement
-    model.primary_mirror.translation.z = -primary_displacement
-    model.pitch = model_pitch
-    model.yaw = model_yaw
-    model.roll = model_roll
+    model = update_esis_model(guess, model, units)
 
     if model.system:
         del model.system
@@ -71,6 +56,25 @@ def esis_distortion_merit(
     # print(f'{merit.ndarray=}',f'{guess=}')
 
     return merit.ndarray
+
+
+def update_esis_model(guess, model, units):
+    guess = [guess * unit for guess, unit in zip(guess, units)]
+
+    g_yaw, g_pitch, g_roll, field_stop_roll, d_grating, primary_displacement, model_pitch, model_yaw, model_roll = guess
+
+    model.grating.yaw = g_yaw
+    model.grating.pitch = g_pitch
+    model.grating.roll = g_roll
+    model.field_stop.roll = field_stop_roll
+    model.grating.rulings.spacing.coefficients[0] = d_grating
+    model.primary_mirror.sag.focal_length = -1000 * u.mm + primary_displacement
+    model.primary_mirror.translation.z = -primary_displacement
+    model.pitch = model_pitch
+    model.yaw = model_yaw
+    model.roll = model_roll
+
+    return model
 
 from datetime import datetime
 from pathlib import Path
@@ -134,3 +138,4 @@ class DECallback:
         plt.tight_layout()
         plt.savefig(self.plot_path)
         plt.close()
+

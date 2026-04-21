@@ -9,6 +9,7 @@ from ._instruments import (
     design,
     design_single,
     as_built,
+    distortion_fit,
 )
 
 __all__ = [
