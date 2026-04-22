@@ -262,7 +262,7 @@ class AbstractInstrument(
 
         kwargs_footprint = kwargs_footprint | dict(
             facecolor="none",
-            edgecolor="tab:blue",
+            edgecolor="tab:orange",
         )
 
         shape = self.system.shape
@@ -271,12 +271,29 @@ class AbstractInstrument(
 
         components = ("x", "y")
 
-        primary.plot(
+        primary.aperture.plot(
+            ax=ax,
+            transformation=transformation,
+            components=components,
+            color="tab:blue",
+            label="outer C.A.",
+            **kwargs,
+        )
+        primary.aperture_mechanical.plot(
             ax=ax,
             transformation=transformation,
             components=components,
             color=color,
             **kwargs,
+        )
+
+        radius_inner = 15 * u.mm
+        az = na.linspace(0, 360, axis="az", num=101) * u.deg
+        na.plt.plot(
+            radius_inner * np.cos(az),
+            radius_inner * np.sin(az),
+            color="tab:cyan",
+            label="inner C.A.",
         )
 
         if footprint:
