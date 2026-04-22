@@ -94,6 +94,7 @@ A series of notebooks which demonstrate the functionality of this package.
 Flight 1 (2019)
 ---------------
 .. toctree::
+    :maxdepth: 2
 
     reports/point-spread-function
     reports/throughput
@@ -103,6 +104,7 @@ Flight 1 (2019)
 Flight 2 (Planned 2027)
 -----------------------
 .. toctree::
+    :maxdepth: 2
 
     reports/f2/design
 
