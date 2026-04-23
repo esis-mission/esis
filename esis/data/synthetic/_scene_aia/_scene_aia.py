@@ -3,6 +3,8 @@ import astropy.units as u
 import astropy.time
 import named_arrays as na
 import sdo
+from astropy import constants as const
+import numpy as np
 
 __all__ = [
     "scene_aia",
@@ -11,10 +13,10 @@ __all__ = [
 def scene_aia(
     time_start: astropy.time.Time,
     time_stop: astropy.time.Time,
-    wavelength: u.Quantity | na.AbstractScalarArray,
+    wavelength_aia: u.Quantity | na.AbstractScalarArray,
     wavelength_new: u.Quantity | na.AbstractScalarArray,
     radiance: u.Quantity | na.AbstractScalarArray,
-    width: u.Quantity | na.AbstractScalarArray,
+    width_doppler: u.Quantity | na.AbstractScalarArray,
     axis_time: str = "time",
     axis_detector_x: str = "detector_x",
     axis_detector_y: str = "detector_y",
@@ -33,13 +35,13 @@ def scene_aia(
         The start time of the AIA observations.
     time_stop
         The stop time of the AIA observations.
-    wavelength
-        The wavelength of the AIA observations.
+    wavelength_aia
+        The wavelength label of the AIA channel.
     wavelength_new
-        The rest wavelength of each spectral line in the synthetic scene.
+        The rest wavelength of each spectral line in the synthetic scene replacing wavelength AIA.
     radiance
-        The average radiance of each spectral line in the synthetic scene.
-    width
+        The average radiance of each spectral line in the synthetic scene, units of energy/cm^2/sr/s.
+    width_doppler
         The average standard deviation of each spectral line in the synthetic scene.
     axis_time
         The logical axis corresponding to changes in time.
@@ -59,21 +61,8 @@ def scene_aia(
         environment variable.
     """
 
-    obs = sdo.aia.Filtergram.from_time_range(
-        time_start=time_start,
-        time_stop=time_stop,
-        wavelength=wavelength,
-        user_email=user_email,
-        axis_time=axis_time,
-        axis_detector_x=axis_detector_x,
-        axis_detector_y=axis_detector_y,
-    )
-
-    axis_detector_xy = axis_detector_x, axis_detector_y
-
-    outputs = radiance * obs.outputs / obs.outputs.mean(axis_detector_xy)
-
-    velocity_max = width * num_std
+    velocity_max = width_doppler * num_std
+    sigma = width_doppler/const.c * wavelength_new
 
     velocity = na.linspace(
         start=-velocity_max,
@@ -82,6 +71,32 @@ def scene_aia(
         num=num_velocity + 1,
     )
 
-    v = velocity.cell_centers()
+    wavelength = (1 + velocity/const.c) * wavelength_new
 
-    na.TemporalSpectralPositionalVectorArray
+    obs = sdo.aia.Filtergram.from_time_range(
+        time_start=time_start,
+        time_stop=time_stop,
+        wavelength=wavelength_aia,
+        user_email=user_email,
+        axis_time=axis_time,
+        axis_detector_x=axis_detector_x,
+        axis_detector_y=axis_detector_y,
+    )
+    axis_detector_xy = axis_detector_x, axis_detector_y
+
+    outputs = radiance * obs.outputs / obs.outputs.mean(axis_detector_xy)
+
+    wv_center = wavelength.cell_centers(axis=axis_velocity)
+
+    gaussian = 1/(sigma.to(wavelength_new.unit)*np.sqrt(2*np.pi)) * np.exp(-((wv_center - wavelength_new) ** 2 / (2 * sigma ** 2)).to(''))
+
+    outputs = outputs*gaussian
+
+    return na.FunctionArray(
+        inputs = na.TemporalSpectralPositionalVectorArray(
+            time=obs.inputs.time,
+            wavelength = wavelength,
+            position = obs.inputs.position
+        ),
+        outputs = outputs,
+    )

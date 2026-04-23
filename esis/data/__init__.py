@@ -30,9 +30,11 @@ dataset:
 from . import abc
 from ._level_0 import Level_0
 from ._level_1 import Level_1
+from .synthetic._scene_aia import scene_aia
 
 __all__ = [
     "abc",
     "Level_0",
     "Level_1",
+    "scene_aia",
 ]
