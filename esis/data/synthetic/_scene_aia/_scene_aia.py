@@ -5,6 +5,7 @@ import named_arrays as na
 import sdo
 from astropy import constants as const
 import numpy as np
+from scipy.special import erf
 
 __all__ = [
     "scene_aia",
@@ -26,8 +27,9 @@ def scene_aia(
     user_email: None | str = None,
 ):
     """
-    Create a synthetic solar scene using AIA images from the specified
-    time range shifted to a different wavelength.
+    Create a synthetic solar scene (radiance as a function of time, space, and wavelength) using AIA images from channel
+    wavelength_aia.  Each radiance is distributed using a gaussian distribution along axis_velocity with width_doppler and
+    into num_velocity bins.
 
     Parameters
     ---------
@@ -38,7 +40,8 @@ def scene_aia(
     wavelength_aia
         The wavelength label of the AIA channel.
     wavelength_new
-        The rest wavelength of each spectral line in the synthetic scene replacing wavelength AIA.
+        The rest wavelength of each spectral line in the synthetic scene replacing wavelength AIA. Axes of wavelength_new
+        should be aligned to the axes of wavelength_aia.
     radiance
         The average radiance of each spectral line in the synthetic scene, units of energy/cm^2/sr/s.
     width_doppler
@@ -62,7 +65,6 @@ def scene_aia(
     """
 
     velocity_max = width_doppler * num_std
-    sigma = width_doppler/const.c * wavelength_new
 
     velocity = na.linspace(
         start=-velocity_max,
@@ -70,6 +72,10 @@ def scene_aia(
         axis=axis_velocity,
         num=num_velocity + 1,
     )
+
+    z_a = velocity[{axis_velocity:slice(0,-1)}] / (width_doppler * np.sqrt(2))
+    z_b = velocity[{axis_velocity:slice(1,None)}] / (width_doppler * np.sqrt(2))
+    gaussian = 0.5 * (erf(z_b) - erf(z_a))
 
     wavelength = (1 + velocity/const.c) * wavelength_new
 
@@ -85,12 +91,8 @@ def scene_aia(
     axis_detector_xy = axis_detector_x, axis_detector_y
 
     outputs = radiance * obs.outputs / obs.outputs.mean(axis_detector_xy)
-
-    wv_center = wavelength.cell_centers(axis=axis_velocity)
-
-    gaussian = 1/(sigma.to(wavelength_new.unit)*np.sqrt(2*np.pi)) * np.exp(-((wv_center - wavelength_new) ** 2 / (2 * sigma ** 2)).to(''))
-
-    outputs = outputs*gaussian
+    delta_lambda= np.diff(wavelength,axis=axis_velocity)
+    outputs = outputs*gaussian/delta_lambda
 
     return na.FunctionArray(
         inputs = na.TemporalSpectralPositionalVectorArray(
