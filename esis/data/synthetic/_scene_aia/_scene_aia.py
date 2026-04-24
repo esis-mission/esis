@@ -1,4 +1,3 @@
-from typing import Literal
 import astropy.units as u
 import astropy.time
 import named_arrays as na
@@ -10,6 +9,7 @@ from scipy.special import erf
 __all__ = [
     "scene_aia",
 ]
+
 
 def scene_aia(
     time_start: astropy.time.Time,
@@ -32,7 +32,7 @@ def scene_aia(
     into num_velocity bins.
 
     Parameters
-    ---------
+    ----------
     time_start
         The start time of the AIA observations.
     time_stop
@@ -63,7 +63,6 @@ def scene_aia(
         If :obj:`None`, the value is taken from the ``JSOC_EMAIL``
         environment variable.
     """
-
     velocity_max = width_doppler * num_std
 
     velocity = na.linspace(
@@ -73,11 +72,11 @@ def scene_aia(
         num=num_velocity + 1,
     )
 
-    z_a = velocity[{axis_velocity:slice(0,-1)}] / (width_doppler * np.sqrt(2))
-    z_b = velocity[{axis_velocity:slice(1,None)}] / (width_doppler * np.sqrt(2))
+    z_a = velocity[{axis_velocity: slice(0, -1)}] / (width_doppler * np.sqrt(2))
+    z_b = velocity[{axis_velocity: slice(1, None)}] / (width_doppler * np.sqrt(2))
     gaussian = 0.5 * (erf(z_b) - erf(z_a))
 
-    wavelength = (1 + velocity/const.c) * wavelength_new
+    wavelength = (1 + velocity / const.c) * wavelength_new
 
     obs = sdo.aia.Filtergram.from_time_range(
         time_start=time_start,
@@ -91,14 +90,14 @@ def scene_aia(
     axis_detector_xy = axis_detector_x, axis_detector_y
 
     outputs = radiance * obs.outputs / obs.outputs.mean(axis_detector_xy)
-    delta_lambda= np.diff(wavelength,axis=axis_velocity)
-    outputs = outputs*gaussian/delta_lambda
+    delta_lambda = np.diff(wavelength, axis=axis_velocity)
+    outputs = outputs * gaussian / delta_lambda
 
     return na.FunctionArray(
-        inputs = na.TemporalSpectralPositionalVectorArray(
+        inputs=na.TemporalSpectralPositionalVectorArray(
             time=obs.inputs.time,
-            wavelength = wavelength,
-            position = obs.inputs.position
+            wavelength=wavelength,
+            position=obs.inputs.position
         ),
-        outputs = outputs,
+        outputs=outputs,
     )
