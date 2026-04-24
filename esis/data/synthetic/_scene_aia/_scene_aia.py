@@ -27,9 +27,14 @@ def scene_aia(
     user_email: None | str = None,
 ):
     """
-    Create a synthetic solar scene (radiance as a function of time, space, and wavelength) using AIA images from channel
-    wavelength_aia.  Each radiance is distributed using a gaussian distribution along axis_velocity with width_doppler
-    and into num_velocity bins.
+    Create a synthetic solar scene using AIA images.
+
+    AIA images from channels wavelength_aia over a supplied time range are used to
+    represent estimates of images at wavelength_new.  A supplied mean radiance is
+    assigned to
+    each image at wavelength_new and distributed using a gaussian distribution along
+    axis_velocity with width_doppler and into num_velocity
+    bins.
 
     Parameters
     ----------
@@ -40,10 +45,14 @@ def scene_aia(
     wavelength_aia
         The wavelength label of the AIA channel.
     wavelength_new
-        The rest wavelength of each spectral line in the synthetic scene replacing wavelength AIA. Axes of
+        The rest wavelength of each spectral line in the synthetic scene replacing
+        wavelength AIA.
+        Axes of
         wavelength_new should be aligned to the axes of wavelength_aia.
     radiance
-        The average radiance of each spectral line in the synthetic scene, units of energy/cm^2/sr/s.
+        The average radiance of each spectral line in the synthetic scene,
+        units of
+        energy/cm^2/sr/s.
     width_doppler
         The average standard deviation of each spectral line in the synthetic scene.
     axis_time
@@ -56,7 +65,7 @@ def scene_aia(
         The number of velocity bins in the synthetic scene.
     num_std
         The size of the domain for each spectral line in standard deviation units.
-    user_email
+    use  # noqa: E501
         An email address used to notify the user that their JSOC request
         is complete.
         This email must be registered with JSOC before using this function.
@@ -96,9 +105,7 @@ def scene_aia(
 
     return na.FunctionArray(
         inputs=na.TemporalSpectralPositionalVectorArray(
-            time=obs.inputs.time,
-            wavelength=wavelength,
-            position=obs.inputs.position
+            time=obs.inputs.time, wavelength=wavelength, position=obs.inputs.position
         ),
         outputs=outputs,
     )
