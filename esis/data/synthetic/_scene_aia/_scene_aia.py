@@ -28,8 +28,8 @@ def scene_aia(
 ):
     """
     Create a synthetic solar scene (radiance as a function of time, space, and wavelength) using AIA images from channel
-    wavelength_aia.  Each radiance is distributed using a gaussian distribution along axis_velocity with width_doppler and
-    into num_velocity bins.
+    wavelength_aia.  Each radiance is distributed using a gaussian distribution along axis_velocity with width_doppler
+    and into num_velocity bins.
 
     Parameters
     ----------
@@ -40,8 +40,8 @@ def scene_aia(
     wavelength_aia
         The wavelength label of the AIA channel.
     wavelength_new
-        The rest wavelength of each spectral line in the synthetic scene replacing wavelength AIA. Axes of wavelength_new
-        should be aligned to the axes of wavelength_aia.
+        The rest wavelength of each spectral line in the synthetic scene replacing wavelength AIA. Axes of
+        wavelength_new should be aligned to the axes of wavelength_aia.
     radiance
         The average radiance of each spectral line in the synthetic scene, units of energy/cm^2/sr/s.
     width_doppler
@@ -62,6 +62,7 @@ def scene_aia(
         This email must be registered with JSOC before using this function.
         If :obj:`None`, the value is taken from the ``JSOC_EMAIL``
         environment variable.
+
     """
     velocity_max = width_doppler * num_std
 
