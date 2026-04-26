@@ -22,7 +22,7 @@ dependencies = [
     "named-arrays~=1.0",
     "optika~=1.1",
     "msfc-ccd~=1.0",
-    "solar-dynamics-obseravtory~=0.1",
+    "solar-dynamics-obseravtory",
 ]
 dynamic = ["version"]
 
