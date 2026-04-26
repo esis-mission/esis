@@ -1,9 +1,10 @@
+import numpy as np
+import scipy.special as sp
 import astropy.units as u
 import astropy.time
+from astropy import constants as const
 import named_arrays as na
 import sdo
-from astropy import constants as const
-import numpy as np
 from scipy.special import erf
 
 __all__ = [
@@ -26,15 +27,14 @@ def scene_aia(
     num_std: float = 3,
     user_email: None | str = None,
 ):
-    """
+    r"""
     Create a synthetic solar scene using AIA images.
 
-    AIA images from channels wavelength_aia over a supplied time range are used to
-    represent estimates of images at wavelength_new.  A supplied mean radiance is
-    assigned to
-    each image at wavelength_new and distributed using a gaussian distribution along
-    axis_velocity with width_doppler and into num_velocity
-    bins.
+    AIA images from channels `wavelength_aia` over a supplied time range are used to
+    represent estimates of images at `wavelength_new`.
+    A supplied mean radiance is assigned to each image at `wavelength_new`
+    and distributed along `axis_velocity` into `num_velocity` bins
+    using a Gaussian with standard deviation `width_doppler`.
 
     Parameters
     ----------
@@ -50,9 +50,8 @@ def scene_aia(
         Axes of
         wavelength_new should be aligned to the axes of wavelength_aia.
     radiance
-        The average radiance of each spectral line in the synthetic scene,
-        units of
-        energy/cm^2/sr/s.
+        The average radiance of each spectral line in the synthetic scene in
+        units of :math:`\text{erg} \text{cm}^{-2} \text{sr}^{-1} \text{s}^{-1}.`
     width_doppler
         The average standard deviation of each spectral line in the synthetic scene.
     axis_time
@@ -65,7 +64,7 @@ def scene_aia(
         The number of velocity bins in the synthetic scene.
     num_std
         The size of the domain for each spectral line in standard deviation units.
-    use  # noqa: E501
+    user_email  # noqa: E501
         An email address used to notify the user that their JSOC request
         is complete.
         This email must be registered with JSOC before using this function.
@@ -105,7 +104,9 @@ def scene_aia(
 
     return na.FunctionArray(
         inputs=na.TemporalSpectralPositionalVectorArray(
-            time=obs.inputs.time, wavelength=wavelength, position=obs.inputs.position
+            time=obs.inputs.time,
+            wavelength=wavelength,
+            position=obs.inputs.position,
         ),
         outputs=outputs,
     )
