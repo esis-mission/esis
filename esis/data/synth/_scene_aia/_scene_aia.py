@@ -5,7 +5,6 @@ import astropy.time
 from astropy import constants as const
 import named_arrays as na
 import sdo
-from scipy.special import erf
 
 __all__ = [
     "scene_aia",
@@ -83,7 +82,7 @@ def scene_aia(
 
     z_a = velocity[{axis_velocity: slice(0, -1)}] / (width_doppler * np.sqrt(2))
     z_b = velocity[{axis_velocity: slice(1, None)}] / (width_doppler * np.sqrt(2))
-    gaussian = 0.5 * (erf(z_b) - erf(z_a))
+    gaussian = 0.5 * (sp.erf(z_b) - sp.erf(z_a))
 
     wavelength = (1 + velocity / const.c) * wavelength_new
 
