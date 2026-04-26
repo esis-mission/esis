@@ -5,6 +5,7 @@ from . import nsroc
 from . import data
 
 __all__ = [
+    "spectrum",
     "optics",
     "nsroc",
     "data",
