@@ -6,7 +6,7 @@ import astropy.units as u
 __all__ = [
     "wavelength",
     "radiance",
-    "fwhm",
+    "width_doppler",
 ]
 
 #: Rest wavelength calculated by the Chianti Atomic Database :cite:p:`Dere1997`.
