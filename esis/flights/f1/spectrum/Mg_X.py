@@ -1,4 +1,4 @@
-r"""Properties of the :math:`\text{Mg,\textsc{x}} 609\,\AA` spectral line."""
+r"""Properties of the :math:`\text{Mg\,X} 609\,\AA` spectral line."""
 
 import numpy as np
 import astropy.units as u

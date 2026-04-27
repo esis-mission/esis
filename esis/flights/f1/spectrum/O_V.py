@@ -1,4 +1,4 @@
-r"""Properties of the :math:`\text{O\,\textsc{v}} 630\,\AA` spectral line."""
+r"""Properties of the :math:`\text{O\,V} 630\,\AA` spectral line."""
 
 import numpy as np
 import astropy.units as u

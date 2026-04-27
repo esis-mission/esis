@@ -1,4 +1,4 @@
-r"""Properties of the :math:`\text{He\,\textsc{i}} 584\,\AA` spectral line."""
+r"""Properties of the :math:`\text{He\,I} 584\,\AA` spectral line."""
 
 import astropy.units as u
 
