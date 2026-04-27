@@ -65,16 +65,12 @@ def scene_aia(
     limit
         The maximum number of files to download per wavelength.
     """
-    l1 = None
+    l1 = level_1()
 
     if time_start is None:
-        if l1 is None:
-            l1 = level_1()
         time_start = l1.inputs.time_start[{l1.axis_time: 0}].ndarray.mean()
 
     if time_stop is None:
-        if l1 is None:
-            l1 = level_1()
         time_stop = l1.inputs.time_end[{l1.axis_time: ~0}].ndarray.mean()
 
     wavelength_aia = [304, 193, 304] * u.AA
