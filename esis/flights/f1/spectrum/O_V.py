@@ -19,5 +19,7 @@ _fwhm = 0.129 * u.mAA
 
 _width = _fwhm / (2 * np.sqrt(2 * np.log(2)))
 
+_eq = u.doppler_optical(wavelength)
+
 #: Average quiet-sun Doppler width measured by :cite:t:`Doschek2004`.
-width_doppler = _width.to(u.km / u.s, equivalencies=u.doppler_optical(wavelength))
+width_doppler = (wavelength + _width).to(u.km / u.s, equivalencies=_eq)
