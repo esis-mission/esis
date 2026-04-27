@@ -1,4 +1,4 @@
-r"""Properties of the :math:`\text{Mg\,X} 609\,\AA` spectral line."""
+r"""Properties of the :math:`\text{Mg\,X}\;609\,\AA` spectral line."""
 
 import numpy as np
 import astropy.units as u
@@ -15,7 +15,7 @@ wavelength = 609.793 * u.AA
 #: Average quiet-sun radiance measured by :cite:t:`Vernazza1978`.
 radiance = 125.05 * u.erg / u.cm**2 / u.sr / u.s
 
-_fwhm = 0.138 * u.mAA
+_fwhm = 0.138 * u.AA
 
 _width = _fwhm / (2 * np.sqrt(2 * np.log(2)))
 

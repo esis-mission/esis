@@ -31,8 +31,8 @@ def scene_aia(
     to produce the synthic scene.
 
     Only the brightest three lines in the ESIS passband are recreated:
-    :math:`\text{O\,V} 630\,\AA`, :math:`\text{Mg\,X} 609\,\AA`, and
-    :math:`\text{He\,I} 584\,\AA`.
+    :math:`\text{O\,V}\;630\,\AA`, :math:`\text{Mg\,X}\;609\,\AA`, and
+    :math:`\text{He\,I}\;584\,\AA`.
 
     Parameters
     ----------
@@ -48,6 +48,8 @@ def scene_aia(
         The logical axis corresponding to changes in detector :math:`x`-coordinate.
     axis_detector_y
         The logical axis corresponding to changes in detector :math:`y`-coordinate.
+    axis_wavelength
+        The logical axis corresponding to changing spectral line.
     axis_velocity
        The logical axis corresponding to changes in line-of-sight velocity.
     num_velocity

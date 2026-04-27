@@ -73,6 +73,10 @@ def scene_aia(
         environment variable.
     limit
         The maximum number of files to download per wavelength.
+
+    See Also
+    --------
+    :func:`esis.flights.f1.data.synth.scene_aia`: A wrapper around this function for ESIS-I.
     """
     velocity_max = width_doppler * num_std
 
