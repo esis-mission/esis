@@ -1,6 +1,5 @@
 import astropy.units as u
 import astropy.time
-import numpy as np
 import named_arrays as na
 import esis
 from ... import level_1
@@ -25,7 +24,7 @@ def scene_aia(
     limit: None | int = None,
 ):
     r"""
-    A synthetic solar scene composed of AIA images captured during the flight.
+    Load a synthetic solar scene composed of AIA images captured during the flight.
 
     This function plugs the spectral line properties in
     :mod:`esis.flights.f1.spectrum` into :func:`esis.data.synth.scene_aia`
@@ -64,7 +63,6 @@ def scene_aia(
     limit
         The maximum number of files to download per wavelength.
     """
-
     l1 = None
 
     if time_start is None:

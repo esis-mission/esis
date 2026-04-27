@@ -1,6 +1,5 @@
 import pytest
 import astropy.units as u
-import named_arrays as na
 import numpy as np
 import esis
 from esis.flights.f1.spectrum import O_V, Mg_X, He_I
