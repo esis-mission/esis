@@ -10,6 +10,7 @@ __all__ = [
     "scene_aia",
 ]
 
+
 def scene_aia(
     time_start: None | astropy.time.Time = None,
     time_stop: None | astropy.time.Time = None,
