@@ -113,6 +113,10 @@ bibtex_reference_style = 'author_year'
 
 nbsphinx_execute = 'always'
 
+suppress_warnings = [
+    'nbsphinx',
+]
+
 codeautolink_custom_blocks = {"jupyter-execute": None}
 
 intersphinx_mapping = {

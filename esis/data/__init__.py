@@ -28,11 +28,13 @@ dataset:
 """
 
 from . import abc
+from . import synth
 from ._level_0 import Level_0
 from ._level_1 import Level_1
 
 __all__ = [
     "abc",
+    "synth",
     "Level_0",
     "Level_1",
 ]
