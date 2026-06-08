@@ -7,12 +7,7 @@ from .. import primaries
 from .. import gratings
 from .. import filters
 
-__all__ = [
-    "design_full",
-    "design",
-    "design_single",
-    "as_built",
-]
+__all__ = ["design_full", "design", "design_single", "as_built", "distortion_fit"]
 
 
 def design_full(
@@ -481,3 +476,134 @@ def as_built(
     result.camera.sensor.readout_noise = 6 * u.electron
 
     return result
+
+
+def update_esis_model(guess, model, units):
+    guess = [guess * unit for guess, unit in zip(guess, units)]
+
+    (
+        g_yaw,
+        g_pitch,
+        g_roll,
+        field_stop_roll,
+        d_grating,
+        primary_displacement,
+        model_pitch,
+        model_yaw,
+        model_roll,
+    ) = guess
+
+    model.grating.yaw = g_yaw
+    model.grating.pitch = g_pitch
+    model.grating.roll = g_roll
+    model.field_stop.roll = field_stop_roll
+    model.grating.rulings.spacing.coefficients[0] = d_grating
+    model.primary_mirror.sag.focal_length = -1000 * u.mm + primary_displacement
+    model.primary_mirror.translation.z = -primary_displacement
+    model.pitch = model_pitch
+    model.yaw = model_yaw
+    model.roll = model_roll
+
+    return model
+
+
+def distortion_fit(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    """
+    Apply the best-fit distortion parameters to the ESIS-I :func:`design`.
+
+    The parameters are hard-coded from the best fit of the ESIS-I flight data.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+    """
+    model = design(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+
+    channel_0_fit = [
+        -2.693e02,
+        3.704e00,
+        1.027e00,
+        -2.066e-01,
+        3.854e-01,
+        -5.649e00,
+        -2.024e01,
+        -1.832e01,
+        -8.681e-01,
+    ]
+    channel_1_fit = [
+        -2.681e02,
+        1.522e00,
+        2.393e-01,
+        -2.891e-01,
+        3.859e-01,
+        -2.207e-02,
+        -2.096e01,
+        -1.675e01,
+        -3.391e-01,
+    ]
+    channel_2_fit = [
+        -2.687e02,
+        1.316e00,
+        3.678e-01,
+        -5.264e-01,
+        3.855e-01,
+        -2.795e00,
+        -1.973e01,
+        -1.604e01,
+        -3.378e-01,
+    ]
+    channel_3_fit = [
+        -2.680e02,
+        5.705e00,
+        1.020e00,
+        1.182e00,
+        3.863e-01,
+        -1.616e00,
+        -2.119e01,
+        -1.498e01,
+        -1.109e00,
+    ]
+
+    fit = []
+    for i in range(len(channel_0_fit)):
+        fit.append(
+            na.ScalarArray(
+                np.array(
+                    [
+                        channel_0_fit[i],
+                        channel_1_fit[i],
+                        channel_2_fit[i],
+                        channel_3_fit[i],
+                    ]
+                ),
+                axes=axis_channel,
+            )
+        )
+
+    guess_units = [
+        u.Unit("arcmin"),
+        u.Unit("arcmin"),
+        u.Unit("deg"),
+        u.Unit("deg"),
+        u.Unit("um"),
+        u.Unit("mm"),
+        u.Unit("arcsec"),
+        u.Unit("arcsec"),
+        u.Unit("deg"),
+    ]
+
+    return update_esis_model(fit, model, guess_units)
