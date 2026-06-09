@@ -7,7 +7,13 @@ from .. import primaries
 from .. import gratings
 from .. import filters
 
-__all__ = ["design_full", "design", "design_single", "as_built", "distortion_fit"]
+__all__ = [
+    "design_full",
+    "design",
+    "design_single",
+    "as_built",
+    "distortion_fit",
+]
 
 
 def design_full(
@@ -478,8 +484,12 @@ def as_built(
     return result
 
 
-def update_esis_model(guess, model, units):
-    guess = [guess * unit for guess, unit in zip(guess, units)]
+def _update_esis_model(
+    model: esis.optics.Instrument,
+    guess: list[na.AbstractScalar],
+    units: list[u.UnitBase],
+) -> esis.optics.Instrument:
+    guess = [g * unit for g, unit in zip(guess, units)]
 
     (
         g_yaw,
@@ -498,7 +508,9 @@ def update_esis_model(guess, model, units):
     model.grating.roll = g_roll
     model.field_stop.roll = field_stop_roll
     model.grating.rulings.spacing.coefficients[0] = d_grating
-    model.primary_mirror.sag.focal_length = -1000 * u.mm + primary_displacement
+    model.primary_mirror.sag.focal_length = (
+        model.primary_mirror.sag.focal_length + primary_displacement
+    )
     model.primary_mirror.translation.z = -primary_displacement
     model.pitch = model_pitch
     model.yaw = model_yaw
@@ -606,4 +618,4 @@ def distortion_fit(
         u.Unit("deg"),
     ]
 
-    return update_esis_model(fit, model, guess_units)
+    return _update_esis_model(model, fit, guess_units)
