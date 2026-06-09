@@ -18,14 +18,17 @@ def test_scene_aia(
 
     limit = 1
 
-    result = esis.flights.f1.data.synth.scene_aia(
-        axis_detector_x=axis_x,
-        axis_detector_y=axis_y,
-        axis_wavelength=axis_wavelength,
-        axis_velocity=axis_velocity,
-        num_velocity=num_velocity,
-        limit=limit,
-    )
+    try:
+        result = esis.flights.f1.data.synth.scene_aia(
+            axis_detector_x=axis_x,
+            axis_detector_y=axis_y,
+            axis_wavelength=axis_wavelength,
+            axis_velocity=axis_velocity,
+            num_velocity=num_velocity,
+            limit=limit,
+        )
+    except OSError as e:
+        pytest.skip(f"JSOC is unreachable, skipping live-network test: {e}")
 
     assert result.shape[axis_velocity] == num_velocity
     assert result.outputs.unit.is_equivalent(u.erg / u.cm**2 / u.sr / u.AA / u.s)
