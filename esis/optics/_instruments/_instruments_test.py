@@ -119,3 +119,46 @@ class TestInstrument(
     AbstractTestAbstractInstrument,
 ):
     pass
+
+
+@pytest.mark.parametrize("channel", [0, 1, 2, 3])
+def test_isel(channel: int):
+    """Selecting a channel via the `na.Indexable` interface yields a valid system.
+
+    ``AbstractInstrument`` inherits :class:`named_arrays.Indexable`, so a single
+    channel can be selected with ``instrument.isel(channel=...)`` (equivalently
+    ``instrument[{instrument.axis_channel: ...}]``) without a bespoke method.
+    """
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    axis = instrument.axis_channel
+
+    # make a grating orientation and a (dict-stored) ruling coefficient vary by
+    # channel, mimicking a distortion-fit model
+    yaw = na.ScalarArray(np.array([1.0, 2.0, 3.0, 4.0]) * u.deg, axes=axis)
+    coefficient = na.ScalarArray(np.array([10.0, 20.0, 30.0, 40.0]) * u.um, axes=axis)
+    instrument.grating.yaw = yaw
+    instrument.grating.rulings.spacing.coefficients[0] = coefficient
+
+    result = instrument.isel(**{axis: channel})
+
+    # isel and the equivalent dict-indexing agree
+    assert result.grating.yaw.ndarray == instrument[{axis: channel}].grating.yaw.ndarray
+
+    # the selected element is kept and the channel axis is removed
+    assert result.grating.yaw.ndarray == yaw.ndarray[channel]
+    assert axis not in result.grating.yaw.axes
+    assert (
+        result.grating.rulings.spacing.coefficients[0].ndarray
+        == coefficient.ndarray[channel]
+    )
+    assert axis not in result.grating.rulings.spacing.coefficients[0].axes
+    assert axis not in na.as_named_array(result.grating.azimuth).axes
+    assert axis not in na.as_named_array(result.camera.channel).axes
+
+    # the original instrument is left unmodified (na.getitem rebuilds via replace)
+    assert axis in instrument.grating.yaw.axes
+    assert np.all(instrument.grating.yaw.ndarray == yaw.ndarray)
+
+    # the single-channel instrument still resolves into an optical system
+    assert isinstance(result.system, optika.systems.AbstractSequentialSystem)
+    assert result.system.surfaces

@@ -20,6 +20,7 @@ __all__ = [
 
 @dataclasses.dataclass(eq=False, repr=False)
 class AbstractInstrument(
+    na.Indexable,
     optika.mixins.Printable,
     optika.mixins.Rollable,
     optika.mixins.Yawable,
