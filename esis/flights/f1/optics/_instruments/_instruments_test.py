@@ -32,3 +32,11 @@ def test_as_built(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+
+
+@pytest.mark.parametrize("num_distribution", [0, 11])
+def test_distortion_fit(num_distribution: int):
+    result = esis.flights.f1.optics.distortion_fit(
+        num_distribution=num_distribution,
+    )
+    assert isinstance(result, esis.optics.abc.AbstractInstrument)
