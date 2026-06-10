@@ -579,7 +579,7 @@ def distortion_fit(
                 where=rays.unvignetted[j],
                 label=spectral_lines[i],
             )
-        ax.ndarray[0].legend(loc="upper right")
+        ax.ndarray[0].legend(loc="upper right");
     """
     model = design(
         grid=grid,
