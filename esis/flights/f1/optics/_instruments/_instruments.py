@@ -214,6 +214,11 @@ def design_full(
     )
 
     sensor = esis.optics.Sensor(
+        # The physical mask on the ESIS-I detectors was undersized, leaving
+        # readout-buffer rows exposed to light.  Science data extends into
+        # those rows, so the active area is 2 x 1040 rows, matching the
+        # 1040-row halves of the Level-1 frames.
+        num_pixel_y=2 * 1040,
         distance_radial=108 * u.mm,
         azimuth=angle_channel.copy(),
         translation=na.Cartesian3dVectorArray(
