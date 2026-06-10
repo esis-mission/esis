@@ -535,17 +535,21 @@ def distortion_fit(
         position = rays.position.to(u.um).mean(axis=("pupil_x", "pupil_y"))
         position = position / model.camera.sensor.width_pixel * u.pixel
 
-        colors = na.linspace(
-            0, 1, axis="wavelength", num=position.shape["wavelength"]
-        )
-
         fig, ax = na.plt.subplots(
-            figsize=(16, 14),
+            figsize=(8, 17),
             constrained_layout=True,
             axis_rows="channel",
             nrows=l1.shape["channel"],
             sharex=True,
+            origin="upper",
         )
+        fig.suptitle(
+            "ESIS-I distortion fit vs. Level-1 data"
+            " (2019-09-30 18:08:41 UTC)"
+        )
+        na.plt.set_xlabel("detector $x$ (pix)", ax=ax[dict(channel=~0)])
+        na.plt.set_ylabel("detector $y$ (pix)", ax=ax)
+        na.plt.set_aspect("equal", ax=ax)
         na.plt.pcolormesh(
             l1.inputs.pixel.x,
             l1.inputs.pixel.y,
@@ -553,15 +557,29 @@ def distortion_fit(
             ax=ax,
             vmax=np.percentile(l1.outputs.value, 99),
         )
-        na.plt.scatter(
-            position.x + 1024 * u.pixel,
-            position.y + 512 * u.pixel,
-            c=colors,
-            cmap="autumn",
+        na.plt.text(
+            x=0.5,
+            y=1.01,
+            s=l1.channel,
+            transform=na.plt.transAxes(ax),
             ax=ax,
-            s=8,
-            where=rays.unvignetted,
+            ha="center",
+            va="bottom",
         )
+        spectral_lines = ["He I", "Mg X", "O V"]
+        colors = ["red", "orange", "yellow"]
+        for i in range(len(spectral_lines)):
+            j = dict(wavelength=i)
+            na.plt.scatter(
+                position.x[j] + 1024 * u.pixel,
+                position.y[j] + 512 * u.pixel,
+                color=colors[i],
+                ax=ax,
+                s=8,
+                where=rays.unvignetted[j],
+                label=spectral_lines[i],
+            )
+        ax.ndarray[0].legend(loc="upper right")
     """
     model = design(
         grid=grid,
