@@ -3,6 +3,7 @@ import astropy.units as u
 import named_arrays as na
 import optika
 import esis
+from esis.flights.f1.spectrum import He_I, Mg_X, O_V
 from .. import primaries
 from .. import gratings
 from .. import filters
@@ -12,6 +13,7 @@ __all__ = [
     "design",
     "design_single",
     "as_built",
+    "distortion_fit",
 ]
 
 
@@ -213,6 +215,11 @@ def design_full(
     )
 
     sensor = esis.optics.Sensor(
+        # The physical mask on the ESIS-I detectors was undersized, leaving
+        # readout-buffer rows exposed to light.  Science data extends into
+        # those rows, so the active area is 2 x 1040 rows, matching the
+        # 1040-row halves of the Level-1 frames.
+        num_pixel_y=2 * 1040,
         distance_radial=108 * u.mm,
         azimuth=angle_channel.copy(),
         translation=na.Cartesian3dVectorArray(
@@ -481,3 +488,184 @@ def as_built(
     result.camera.sensor.readout_noise = 6 * u.electron
 
     return result
+
+
+def distortion_fit(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    """
+    Apply the best-fit distortion parameters to the ESIS-I :func:`design`.
+
+    The parameters are hard-coded from the best distortion fit of the ESIS-I
+    flight data, optimized against the ``time=15`` frame of the 2019-09-30
+    flight (:func:`esis.flights.f1.data.level_1`, with a start time of
+    2019-09-30T18:08:41.642 UTC). The values are per-channel and were produced
+    by the ``ESISI_distortion_optimization_20260213_151715`` run.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+
+    Examples
+    --------
+    Overplot the ray-traced detector footprint of each spectral line onto the
+    Level-1 frame that the distortion fit was optimized against.
+    Each line's footprint should land on its corresponding image of the
+    field stop.
+
+    .. jupyter-execute::
+
+        import numpy as np
+        import astropy.units as u
+        import named_arrays as na
+        import esis
+
+        l1 = esis.flights.f1.data.level_1()[dict(time=15)]
+        model = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+
+        rays = model.system.rayfunction_default.outputs
+        position = rays.position.to(u.um).mean(axis=("pupil_x", "pupil_y"))
+        position = position / model.camera.sensor.width_pixel * u.pixel
+
+        fig, ax = na.plt.subplots(
+            figsize=(8, 17),
+            constrained_layout=True,
+            axis_rows="channel",
+            nrows=l1.shape["channel"],
+            sharex=True,
+            origin="upper",
+        )
+        fig.suptitle(
+            "ESIS-I distortion fit vs. Level-1 data"
+            " (2019-09-30 18:08:41 UTC)"
+        )
+        na.plt.set_xlabel("detector $x$ (pix)", ax=ax[dict(channel=~0)])
+        na.plt.set_ylabel("detector $y$ (pix)", ax=ax)
+        na.plt.set_aspect("equal", ax=ax)
+        na.plt.pcolormesh(
+            l1.inputs.pixel.x,
+            l1.inputs.pixel.y,
+            C=l1.outputs.value,
+            ax=ax,
+            vmax=np.percentile(l1.outputs.value, 99),
+        )
+        na.plt.text(
+            x=0.5,
+            y=1.01,
+            s=l1.channel,
+            transform=na.plt.transAxes(ax),
+            ax=ax,
+            ha="center",
+            va="bottom",
+        )
+        spectral_lines = ["He I", "Mg X", "O V"]
+        colors = ["red", "orange", "yellow"]
+        for i in range(len(spectral_lines)):
+            j = dict(wavelength=i)
+            na.plt.scatter(
+                position.x[j] + 1024 * u.pixel,
+                position.y[j] + 512 * u.pixel,
+                color=colors[i],
+                ax=ax,
+                s=8,
+                where=rays.unvignetted[j],
+                label=spectral_lines[i],
+            )
+        ax.ndarray[0].legend(loc="upper right");
+    """
+    model = design(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+
+    model.wavelength = na.ScalarArray(
+        u.Quantity(
+            [
+                He_I.wavelength,
+                Mg_X.wavelength,
+                O_V.wavelength,
+            ]
+        ),
+        axes="wavelength",
+    )
+
+    model.grating.yaw = (
+        na.ScalarArray(
+            np.array([-2.693e02, -2.681e02, -2.687e02, -2.680e02]),
+            axes=axis_channel,
+        )
+        * u.arcmin
+    )
+    model.grating.pitch = (
+        na.ScalarArray(
+            np.array([3.704e00, 1.522e00, 1.316e00, 5.705e00]),
+            axes=axis_channel,
+        )
+        * u.arcmin
+    )
+    model.grating.roll = (
+        na.ScalarArray(
+            np.array([1.027e00, 2.393e-01, 3.678e-01, 1.020e00]),
+            axes=axis_channel,
+        )
+        * u.deg
+    )
+    model.field_stop.roll = (
+        na.ScalarArray(
+            np.array([-2.066e-01, -2.891e-01, -5.264e-01, 1.182e00]),
+            axes=axis_channel,
+        )
+        * u.deg
+    )
+    model.grating.rulings.spacing.coefficients[0] = (
+        na.ScalarArray(
+            np.array([3.854e-01, 3.859e-01, 3.855e-01, 3.863e-01]),
+            axes=axis_channel,
+        )
+        * u.um
+    )
+
+    # The fitted primary-mirror displacement relative to its -1000 mm nominal
+    # focal length; this hard reference is what the fit is measured from.
+    primary_displacement = (
+        na.ScalarArray(
+            np.array([-5.649e00, -2.207e-02, -2.795e00, -1.616e00]),
+            axes=axis_channel,
+        )
+        * u.mm
+    )
+    model.primary_mirror.sag.focal_length = -1000 * u.mm + primary_displacement
+    model.primary_mirror.translation.z = -primary_displacement
+
+    model.pitch = (
+        na.ScalarArray(
+            np.array([-2.024e01, -2.096e01, -1.973e01, -2.119e01]),
+            axes=axis_channel,
+        )
+        * u.arcsec
+    )
+    model.yaw = (
+        na.ScalarArray(
+            np.array([-1.832e01, -1.675e01, -1.604e01, -1.498e01]),
+            axes=axis_channel,
+        )
+        * u.arcsec
+    )
+    model.roll = (
+        na.ScalarArray(
+            np.array([-8.681e-01, -3.391e-01, -3.378e-01, -1.109e00]),
+            axes=axis_channel,
+        )
+        * u.deg
+    )
+
+    return model

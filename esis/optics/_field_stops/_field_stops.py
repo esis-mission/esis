@@ -13,6 +13,7 @@ __all__ = [
 @dataclasses.dataclass(eq=False, repr=False)
 class AbstractFieldStop(
     optika.mixins.Printable,
+    optika.mixins.Rollable,
     optika.mixins.Translatable,
 ):
     """An interface describing the field stop of the instrument."""
@@ -81,3 +82,6 @@ class FieldStop(
 
     translation: u.Quantity | na.AbstractCartesian3dVectorArray = 0 * u.mm
     """A transformation which can arbitrarily translate this object."""
+
+    roll: u.Quantity | na.AbstractScalar = 0 * u.deg
+    """The roll angle of this object"""
