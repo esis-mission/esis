@@ -10,6 +10,7 @@ from ._instruments import (
     design_single,
     as_built,
     distortion_fit,
+    distortion_fit_bounds,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "design_full",
     "as_built",
     "distortion_fit",
+    "distortion_fit_bounds",
 ]

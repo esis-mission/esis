@@ -14,6 +14,7 @@ __all__ = [
     "design_single",
     "as_built",
     "distortion_fit",
+    "distortion_fit_bounds",
 ]
 
 
@@ -669,3 +670,68 @@ def distortion_fit(
     )
 
     return model
+
+
+def distortion_fit_bounds(
+    parameters: esis.optics.DistortionParameters,
+) -> tuple[esis.optics.DistortionParameters, esis.optics.DistortionParameters]:
+    r"""
+    Compute the parameter bounds used when fitting the ESIS-I distortion.
+
+    Most parameters are bounded at :math:`\pm 20\%` of the given initial
+    guess. The roll angles and the primary-mirror displacement are instead
+    given the hand-tuned absolute bounds of the
+    ``ESISI_distortion_optimization_20260213_151715`` run, the best fit of the
+    ESIS-I flight data (and the source of the values in
+    :func:`distortion_fit`), since their initial guesses are zero or nearly so.
+
+    The bounds are expressed in the same units as `parameters` so that
+    flattening both with :func:`named_arrays.pack` yields consistent vectors.
+
+    Parameters
+    ----------
+    parameters
+        The initial guess of the fit.
+
+    Examples
+    --------
+    Compute the bounds for fitting the ESIS flight-1 design.
+
+    .. jupyter-execute::
+
+        import named_arrays as na
+        import esis
+
+        instrument = esis.flights.f1.optics.design(num_distribution=0)
+        parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+        lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+
+        na.pack(lower), na.pack(upper)
+    """
+    p = parameters
+
+    lower = esis.optics.DistortionParameters(
+        yaw_grating=np.minimum(0.8 * p.yaw_grating, 1.2 * p.yaw_grating),
+        pitch_grating=np.minimum(0.8 * p.pitch_grating, 1.2 * p.pitch_grating),
+        roll_grating=(-2 * u.deg).to(na.unit(p.roll_grating)),
+        roll_field_stop=(-4 * u.deg).to(na.unit(p.roll_field_stop)),
+        spacing_rulings=np.minimum(0.8 * p.spacing_rulings, 1.2 * p.spacing_rulings),
+        displacement_primary=(-10 * u.mm).to(na.unit(p.displacement_primary)),
+        pitch=np.minimum(0.8 * p.pitch, 1.2 * p.pitch),
+        yaw=np.minimum(0.8 * p.yaw, 1.2 * p.yaw),
+        roll=(-4 * u.deg).to(na.unit(p.roll)),
+    )
+
+    upper = esis.optics.DistortionParameters(
+        yaw_grating=np.maximum(0.8 * p.yaw_grating, 1.2 * p.yaw_grating),
+        pitch_grating=np.maximum(0.8 * p.pitch_grating, 1.2 * p.pitch_grating),
+        roll_grating=(2 * u.deg).to(na.unit(p.roll_grating)),
+        roll_field_stop=(4 * u.deg).to(na.unit(p.roll_field_stop)),
+        spacing_rulings=np.maximum(0.8 * p.spacing_rulings, 1.2 * p.spacing_rulings),
+        displacement_primary=(0 * u.mm).to(na.unit(p.displacement_primary)),
+        pitch=np.maximum(0.8 * p.pitch, 1.2 * p.pitch),
+        yaw=np.maximum(0.8 * p.yaw, 1.2 * p.yaw),
+        roll=(0 * u.deg).to(na.unit(p.roll)),
+    )
+
+    return lower, upper
