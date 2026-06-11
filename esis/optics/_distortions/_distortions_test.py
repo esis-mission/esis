@@ -87,14 +87,8 @@ class TestDistortionParameters(
             assert _allclose(getattr(b, field.name), getattr(a, field.name))
 
 
-def test_distortion_objective():
-    instrument = esis.flights.f1.optics.design(
-        grid=_grid_coarse,
-        num_distribution=0,
-    )[dict(channel=0)]
-    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
-
-    scene = na.FunctionArray(
+def _scene() -> na.FunctionArray:
+    return na.FunctionArray(
         inputs=na.SpectralPositionalVectorArray(
             wavelength=na.linspace(
                 start=629 * u.AA,
@@ -115,6 +109,16 @@ def test_distortion_objective():
             shape_random=dict(scene_x=5, scene_y=5),
         ),
     )
+
+
+def test_distortion_objective():
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )[dict(channel=0)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+
+    scene = _scene()
 
     observation = instrument.system.image(
         scene=scene,
@@ -155,6 +159,53 @@ def test_correlation():
     constant = na.ScalarArray(np.ones((11, 11)), axes=("x", "y"))
     correlation = esis.optics._distortions._distortions._correlation(a, constant)
     assert np.isfinite(na.value(correlation).ndarray)
+
+
+def test_fit_distortion(tmp_path: pathlib.Path):
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )[dict(channel=0)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    bounds = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+
+    scene = _scene()
+
+    observation = instrument.system.image(
+        scene=scene,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        noise=False,
+    ).outputs
+
+    lower = na.pack(bounds[0]).ndarray
+    upper = na.pack(bounds[1]).ndarray
+
+    result = esis.optics.fit_distortion(
+        instrument=instrument,
+        scene=scene,
+        observation=observation,
+        bounds=bounds,
+        parameters=parameters,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        directory=tmp_path / "fit",
+        kwargs_optimizer=dict(
+            init=np.linspace(lower, upper, num=5),
+            maxiter=1,
+            tol=1e6,
+            polish=False,
+        ),
+    )
+
+    assert isinstance(result, esis.optics.DistortionParameters)
+
+    x = na.pack(result).ndarray
+    assert np.all(lower <= x)
+    assert np.all(x <= upper)
+
+    assert (tmp_path / "fit" / "full_output.log").exists()
+    assert (tmp_path / "fit" / "convergence_data.csv").exists()
 
 
 def test_convergence_logger(tmp_path: pathlib.Path):

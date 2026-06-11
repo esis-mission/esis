@@ -1,9 +1,12 @@
 from __future__ import annotations
+from typing import Any
 import copy
 import dataclasses
 import datetime
 import pathlib
+import time
 import numpy as np
+import scipy.optimize
 import matplotlib.pyplot as plt
 import astropy.units as u
 import named_arrays as na
@@ -14,6 +17,7 @@ __all__ = [
     "DistortionParameters",
     "DistortionObjective",
     "ConvergenceLogger",
+    "fit_distortion",
 ]
 
 
@@ -288,6 +292,152 @@ def _correlation(
         b = b / deviation_b
 
     return (a * b).sum() / a.size
+
+
+def fit_distortion(
+    instrument: esis.optics.abc.AbstractInstrument,
+    scene: na.FunctionArray,
+    observation: na.AbstractScalar,
+    bounds: tuple[DistortionParameters, DistortionParameters],
+    parameters: None | DistortionParameters = None,
+    pupil: None | na.AbstractCartesian2dVectorArray = None,
+    axis_wavelength: None | str = None,
+    axis_field: None | tuple[str, str] = None,
+    weight_correlation: float = 1000,
+    directory: None | pathlib.Path = None,
+    kwargs_optimizer: None | dict[str, Any] = None,
+) -> DistortionParameters:
+    """
+    Fit the distortion parameters of an instrument to an observed image.
+
+    Wraps :func:`scipy.optimize.differential_evolution` around a
+    :class:`DistortionObjective`: the given `parameters` are flattened with
+    :func:`named_arrays.pack` to seed the optimizer, the `bounds` are
+    flattened the same way, and the best solution found is unpacked back
+    into a :class:`DistortionParameters`, which can be applied to the
+    instrument with :meth:`DistortionParameters.to_instrument`.
+
+    Parameters
+    ----------
+    instrument
+        The instrument model to fit, usually reduced to a single channel.
+    scene
+        The spectral radiance of the scene as a function of wavelength and
+        field position, imaged through the instrument on every evaluation.
+    observation
+        The observed image that the modeled images are compared against.
+        Any axes of the modeled image which are not present in this array
+        are summed over before comparing.
+    bounds
+        The lower and upper bounds of the fit, expressed in the same units
+        as `parameters`.
+    parameters
+        The initial guess of the fit, which also defines the units and
+        structure of the parameter vector seen by the optimizer.
+        If :obj:`None`, the current parameters of `instrument` are used.
+    pupil
+        The vertices of the pupil grid used to image the scene.
+    axis_wavelength
+        The logical axis of the scene corresponding to changing wavelength.
+    axis_field
+        The logical axes of the scene corresponding to changing field position.
+    weight_correlation
+        The weight of the correlation term of the objective relative to its
+        off-target distance penalty.
+    directory
+        A directory where the convergence history is logged using a
+        :class:`ConvergenceLogger`.
+        If :obj:`None`, the fit is not logged.
+    kwargs_optimizer
+        Additional keyword arguments passed to
+        :func:`scipy.optimize.differential_evolution`, for example
+        ``dict(workers=-1, popsize=40)``.
+
+    Examples
+    --------
+    Fit each channel of the ESIS flight-1 design to the Level-1 frame that
+    :func:`esis.flights.f1.optics.distortion_fit` was optimized against.
+
+    .. code-block:: python
+
+        import pathlib
+        import named_arrays as na
+        import esis
+
+        obs = esis.flights.f1.data.level_1()[dict(time=15)]
+        scene = esis.flights.f1.data.synth.scene_aia()[dict(time=15)]
+
+        instrument = esis.flights.f1.optics.design(num_distribution=0)
+
+        for i in range(obs.shape[instrument.axis_channel]):
+            channel = instrument[dict(channel=i)]
+            parameters = esis.optics.DistortionParameters.from_instrument(channel)
+
+            # the scene's wavelength coordinate varies within each spectral
+            # line along "velocity"; its per-line axis ("wavelength") is
+            # absent from the observation and therefore summed over
+            fitted = esis.optics.fit_distortion(
+                instrument=channel,
+                scene=scene,
+                observation=obs.outputs[dict(channel=i)].value,
+                bounds=esis.flights.f1.optics.distortion_fit_bounds(parameters),
+                parameters=parameters,
+                axis_wavelength="velocity",
+                axis_field=("detector_x", "detector_y"),
+                directory=pathlib.Path(f"distortion_fit/channel_{i}"),
+                kwargs_optimizer=dict(workers=-1, popsize=40),
+            )
+
+            model = fitted.to_instrument(channel)
+    """
+    if parameters is None:
+        parameters = DistortionParameters.from_instrument(instrument)
+
+    if kwargs_optimizer is None:
+        kwargs_optimizer = dict()
+
+    objective = DistortionObjective(
+        instrument=instrument,
+        parameters=parameters,
+        scene=scene,
+        observation=observation,
+        pupil=pupil,
+        axis_wavelength=axis_wavelength,
+        axis_field=axis_field,
+        weight_correlation=weight_correlation,
+    )
+
+    lower, upper = bounds
+
+    callback = None
+    if directory is not None:
+        callback = ConvergenceLogger(
+            directory=directory,
+            offset_energy=weight_correlation,
+        )
+
+    time_start = time.perf_counter()
+
+    result = scipy.optimize.differential_evolution(
+        objective,
+        bounds=scipy.optimize.Bounds(
+            lb=na.pack(lower).ndarray,
+            ub=na.pack(upper).ndarray,
+        ),
+        x0=na.pack(parameters).ndarray,
+        callback=callback,
+        **kwargs_optimizer,
+    )
+
+    result_parameters = na.unpack(result.x, parameters)
+
+    if callback is not None:
+        elapsed = time.perf_counter() - time_start
+        callback.log(f"{result}")
+        callback.log(f"{result_parameters}")
+        callback.log(f"elapsed time: {datetime.timedelta(seconds=elapsed)}")
+
+    return result_parameters
 
 
 @dataclasses.dataclass(repr=False)
