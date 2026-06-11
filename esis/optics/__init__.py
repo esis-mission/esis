@@ -12,6 +12,11 @@ from ._sensors import Sensor
 from ._cameras import Camera
 from ._requirements import Requirements
 from ._instruments import Instrument
+from ._distortions import (
+    DistortionParameters,
+    DistortionObjective,
+    ConvergenceLogger,
+)
 
 __all__ = [
     "abc",
@@ -26,4 +31,7 @@ __all__ = [
     "Camera",
     "Requirements",
     "Instrument",
+    "DistortionParameters",
+    "DistortionObjective",
+    "ConvergenceLogger",
 ]
