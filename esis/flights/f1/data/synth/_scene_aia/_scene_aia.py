@@ -10,6 +10,7 @@ __all__ = [
 ]
 
 
+@esis.memory.cache
 def scene_aia(
     time_start: None | astropy.time.Time = None,
     time_stop: None | astropy.time.Time = None,
@@ -25,6 +26,9 @@ def scene_aia(
 ):
     r"""
     Load a synthetic solar scene composed of AIA images captured during the flight.
+
+    The result is cached to disk, so the JSOC queries are only performed on
+    the first call.
 
     This function plugs the spectral line properties in
     :mod:`esis.flights.f1.spectrum` into :func:`esis.data.synth.scene_aia`
