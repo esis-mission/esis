@@ -161,6 +161,25 @@ def test_correlation():
     assert np.isfinite(na.value(correlation).ndarray)
 
 
+def test_correlation_axis():
+    a = na.random.uniform(
+        low=0,
+        high=100,
+        shape_random=dict(x=11, y=11),
+    )
+    scale = na.ScalarArray(np.array([1.0, 5.0]), axes="channel")
+
+    # a linear per-channel rescaling should not affect
+    # the per-channel correlation
+    correlation = esis.optics._distortions._distortions._correlation(
+        a=a * scale,
+        b=a,
+        axis=("x", "y"),
+    )
+    assert na.shape(correlation) == {"channel": 2}
+    assert np.allclose(na.value(correlation).ndarray, 1)
+
+
 def test_fit_distortion(tmp_path: pathlib.Path):
     instrument = esis.flights.f1.optics.design(
         grid=_grid_coarse,

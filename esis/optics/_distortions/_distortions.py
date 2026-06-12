@@ -223,6 +223,18 @@ class DistortionObjective(
     axis_field: None | tuple[str, str] = None
     """The logical axes of the scene corresponding to changing field position."""
 
+    axis_channel: None | str = None
+    """
+    The logical axis of the observation corresponding to changing camera
+    channel.
+
+    If given, the correlation and the off-target penalty are computed
+    independently for each channel and then averaged, so that brightness
+    differences between the channels (e.g. from differing gains) do not
+    suppress the correlation. This is the appropriate setting when fitting
+    several channels at once with shared parameters.
+    """
+
     weight_correlation: float = 1000
     """The weight of the correlation term relative to the distance penalty."""
 
@@ -255,12 +267,14 @@ class DistortionObjective(
         if axis_extra:
             image = image.sum(axis=axis_extra)
 
-        correlation = _correlation(image, observation)
+        axis_image = tuple(set(na.shape(observation)) - {self.axis_channel})
+        correlation = _correlation(image, observation, axis=axis_image).mean()
 
-        position = system.rayfunction_default.outputs.position
-        distance = np.square(position.to(u.mm).mean().length.value)
+        position = system.rayfunction_default.outputs.position.to(u.mm)
+        axis_position = tuple(set(na.shape(position)) - {self.axis_channel})
+        distance = np.square(position.mean(axis_position).length).mean()
 
-        result = -self.weight_correlation * correlation + distance
+        result = -self.weight_correlation * correlation + distance.value
 
         return float(na.value(result).ndarray)
 
@@ -268,6 +282,7 @@ class DistortionObjective(
 def _correlation(
     a: na.AbstractScalar,
     b: na.AbstractScalar,
+    axis: None | tuple[str, ...] = None,
 ) -> na.AbstractScalar:
     """
     Compute the Pearson correlation coefficient of two arrays.
@@ -276,22 +291,24 @@ def _correlation(
     ----------
     a
         The first array, standardized before comparing.
-        If it is constant, it is compared without standardizing.
+        If it is constant, the correlation is zero.
     b
         The second array, standardized before comparing.
-        If it is constant, it is compared without standardizing.
+        If it is constant, the correlation is zero.
+    axis
+        The logical axes along which to compute the correlation.
+        If :obj:`None`, the correlation is computed over every axis.
     """
-    a = a - a.mean()
-    deviation_a = a.std()
-    if na.value(deviation_a).ndarray != 0:
-        a = a / deviation_a
+    a = a - a.mean(axis)
+    b = b - b.mean(axis)
 
-    b = b - b.mean()
-    deviation_b = b.std()
-    if na.value(deviation_b).ndarray != 0:
-        b = b / deviation_b
+    deviation_a = a.std(axis)
+    deviation_b = b.std(axis)
 
-    return (a * b).sum() / a.size
+    a = a / np.where(deviation_a == 0, 1, deviation_a)
+    b = b / np.where(deviation_b == 0, 1, deviation_b)
+
+    return (a * b).mean(axis)
 
 
 def fit_distortion(
@@ -303,6 +320,7 @@ def fit_distortion(
     pupil: None | na.AbstractCartesian2dVectorArray = None,
     axis_wavelength: None | str = None,
     axis_field: None | tuple[str, str] = None,
+    axis_channel: None | str = None,
     weight_correlation: float = 1000,
     directory: None | pathlib.Path = None,
     kwargs_optimizer: None | dict[str, Any] = None,
@@ -341,6 +359,11 @@ def fit_distortion(
         The logical axis of the scene corresponding to changing wavelength.
     axis_field
         The logical axes of the scene corresponding to changing field position.
+    axis_channel
+        The logical axis of the observation corresponding to changing camera
+        channel, used to compare each channel independently when fitting
+        several channels at once with shared parameters.
+        See :attr:`DistortionObjective.axis_channel`.
     weight_correlation
         The weight of the correlation term of the objective relative to its
         off-target distance penalty.
@@ -404,6 +427,7 @@ def fit_distortion(
         pupil=pupil,
         axis_wavelength=axis_wavelength,
         axis_field=axis_field,
+        axis_channel=axis_channel,
         weight_correlation=weight_correlation,
     )
 
