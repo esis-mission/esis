@@ -288,13 +288,18 @@ class AbstractInstrument(
             **kwargs,
         )
 
-        radius_inner = 15 * u.mm
+        radius_inner = 20 * u.mm
         az = na.linspace(0, 360, axis="az", num=101) * u.deg
         na.plt.plot(
             radius_inner * np.cos(az),
             radius_inner * np.sin(az),
             color="tab:cyan",
             label="inner C.A.",
+        )
+
+        na.plt.dimension(
+            na.Cartesian2dVectorArray(-radius_inner, 0 * u.mm),
+            na.Cartesian2dVectorArray(+radius_inner, 0 * u.mm),
         )
 
         if footprint:
@@ -312,7 +317,7 @@ class AbstractInstrument(
 
             rays = primary.transformation.inverse(rays)
 
-            for i in na.ndindex(shape):
+            for n, i in enumerate(na.ndindex(shape)):
 
                 position_i = rays.position[i]
                 where_i = where[i]
@@ -338,6 +343,9 @@ class AbstractInstrument(
                 sx = px.mean()
                 sy = py.mean()
 
+                rx = position_x.mean()
+                ry = position_y.mean()
+
                 ax.text(
                     x=sx,
                     y=sy,
@@ -345,7 +353,34 @@ class AbstractInstrument(
                     ha="center",
                     va="center",
                     color=kwargs_footprint["edgecolor"],
+                    # fontsize=8,
                 )
+
+                if n == 0:
+                    label = "test point"
+                else:
+                    label = "_test point"
+                ax.scatter(
+                    rx,
+                    ry,
+                    marker="+",
+                    color="black",
+                    label=label,
+                )
+
+                width_clear = self.primary_mirror.width_clear
+                width_border = self.primary_mirror.width_border
+
+                halfwidth_mech = width_clear / 2 + width_border
+
+                if n == 2:
+                    na.plt.dimension(
+                        na.Cartesian2dVectorArray(0 * u.mm, ry),
+                        na.Cartesian2dVectorArray(0 * u.mm, -halfwidth_mech),
+                        offset=-60 * u.mm,
+                        rotate=False,
+                        ax=ax,
+                    )
 
 
 @dataclasses.dataclass(eq=False, repr=False)
