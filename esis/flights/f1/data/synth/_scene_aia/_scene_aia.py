@@ -20,7 +20,6 @@ def scene_aia(
     axis_velocity: str = "velocity",
     num_velocity: int = 1,
     num_std: float = 3,
-    user_email: None | str = None,
     limit: None | int = None,
 ):
     r"""
@@ -56,12 +55,6 @@ def scene_aia(
         The number of velocity bins in the synthetic scene.
     num_std
         The size of the domain for each spectral line in standard deviation units.
-    user_email
-        An email address used to notify the user that their JSOC request
-        is complete.
-        This email must be registered with JSOC before using this function.
-        If :obj:`None`, the value is taken from the ``JSOC_EMAIL``
-        environment variable.
     limit
         The maximum number of files to download per wavelength.
     """
@@ -111,7 +104,6 @@ def scene_aia(
         axis_velocity=axis_velocity,
         num_velocity=num_velocity,
         num_std=num_std,
-        user_email=user_email,
         limit=limit,
     )
 
