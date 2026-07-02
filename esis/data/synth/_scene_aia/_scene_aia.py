@@ -107,6 +107,8 @@ def scene_aia(
     delta_lambda = np.diff(wavelength, axis=axis_velocity)
     outputs = outputs * gaussian / delta_lambda
 
+    outputs = np.maximum(outputs, 0)
+
     return na.FunctionArray(
         inputs=na.TemporalSpectralPositionalVectorArray(
             time=obs.inputs.time,
