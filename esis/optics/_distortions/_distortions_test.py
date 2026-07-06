@@ -290,6 +290,67 @@ def test_distortion_residual():
     assert isinstance(residual_pickled, esis.optics.DistortionResidual)
 
 
+def test_kernel_gaussian():
+    kernel = esis.optics._distortions._distortions._kernel_gaussian(
+        sigma=1.0,
+        axis=("x", "y"),
+    )
+    assert set(na.shape(kernel)) == {"x", "y"}
+    assert np.isclose(kernel.ndarray.sum(), 1)
+    assert np.all(kernel.ndarray >= 0)
+
+    # the kernel support must widen with sigma
+    kernel_wide = esis.optics._distortions._distortions._kernel_gaussian(
+        sigma=3.0,
+        axis=("x", "y"),
+    )
+    assert na.shape(kernel_wide)["x"] > na.shape(kernel)["x"]
+
+
+def test_distortion_residual_sigma_psf():
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )[dict(channel=0)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+
+    scene = _scene()
+
+    observation = instrument.system.image(
+        scene=scene,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        noise=False,
+    ).outputs
+
+    residual = esis.optics.DistortionResidual(
+        instrument=instrument,
+        parameters=parameters,
+        scene=scene,
+        observation=observation,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        smoothing=None,
+        sigma_psf=1.0,
+    )
+
+    x = na.pack(parameters).ndarray
+    result = residual(x)
+
+    assert isinstance(result, np.ndarray)
+    assert result.ndim == 1
+    assert np.all(np.isfinite(result))
+    assert np.array_equal(result, residual(x))
+
+    # the point-spread function must actually change the modeled image
+    residual_sharp = dataclasses.replace(residual, sigma_psf=None)
+    assert not np.array_equal(result, residual_sharp(x))
+
+    # the residual must survive pickling to support parallel optimization
+    residual_pickled = pickle.loads(pickle.dumps(residual))
+    assert isinstance(residual_pickled, esis.optics.DistortionResidual)
+
+
 def test_fit_distortion_lsq(tmp_path: pathlib.Path):
     instrument = esis.flights.f1.optics.design(
         grid=_grid_coarse,
@@ -353,6 +414,7 @@ def test_fit_distortion_series():
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         smoothing=1,
+        sigma_psf=1.0,
         kwargs_optimizer=dict(max_nfev=12),
     )
 
