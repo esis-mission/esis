@@ -313,9 +313,12 @@ class DistortionResidual(
       Note that this mutates the global :mod:`numpy` random state as a side
       effect; it is intended for serial use.
     * **Smoothing.** The images are sparse, so a sub-pixel shift can leave the
-      residual unchanged until a feature crosses a pixel boundary. Smoothing
-      both images with a :attr:`smoothing`-wide box filter widens the features
-      so that small parameter changes produce a readable gradient.
+      residual unchanged until a feature crosses a pixel boundary. Convolving
+      the modeled image with a :attr:`sigma_psf`-wide Gaussian point-spread
+      function widens the features so that small parameter changes produce a
+      readable gradient, while also modeling the blur that the real optics
+      imprint on the observation. A :attr:`smoothing`-wide box filter applied
+      to both images is retained as a purely numerical alternative.
     """
 
     instrument: esis.optics.abc.AbstractInstrument
@@ -373,6 +376,18 @@ class DistortionResidual(
     smoothing.
     """
 
+    sigma_psf: None | float = None
+    """
+    The standard deviation, in detector pixels, of a Gaussian point-spread
+    function convolved with the modeled image only.
+
+    The observation already carries the blur of the real optics, so applying
+    the point-spread function to the modeled image makes the two directly
+    comparable while also letting a sparsely-sampled raytraced image produce
+    a smooth, differentiable residual. A value of :obj:`None` disables the
+    convolution.
+    """
+
     seed: int = 0
     """
     The seed used to freeze the imaging model's random ray jitter, so that the
@@ -426,6 +441,10 @@ class DistortionResidual(
 
         axis_image = tuple(set(na.shape(observation)) - {self.axis_channel})
 
+        if self.sigma_psf is not None:
+            kernel = _kernel_gaussian(self.sigma_psf, axis_image)
+            image = na.convolve(image, kernel, axis=axis_image)
+
         model = _standardize(self._smooth(image, axis_image), axis_image)
         data = _standardize(self._smooth(observation, axis_image), axis_image)
 
@@ -456,6 +475,30 @@ class DistortionResidual(
                 na.value(residual_distance).ndarray.reshape(-1),
             ]
         )
+
+
+def _kernel_gaussian(
+    sigma: float,
+    axis: tuple[str, ...],
+) -> na.ScalarArray:
+    """
+    Build a normalized Gaussian convolution kernel.
+
+    Parameters
+    ----------
+    sigma
+        The standard deviation of the Gaussian in pixels.
+    axis
+        The logical axes of the kernel, one per dimension.
+    """
+    radius = max(2, int(np.ceil(3 * sigma)))
+    x = np.arange(-radius, radius + 1)
+    profile = np.exp(-np.square(x / sigma) / 2)
+    kernel = profile
+    for _ in range(len(axis) - 1):
+        kernel = np.multiply.outer(kernel, profile)
+    kernel = kernel / kernel.sum()
+    return na.ScalarArray(ndarray=kernel, axes=axis)
 
 
 def _standardize(
@@ -685,6 +728,7 @@ def fit_distortion_lsq(
     weight_correlation: float = 1000,
     weight_distance: float = 1.0,
     smoothing: None | int | Sequence[None | int] = 1,
+    sigma_psf: None | float = None,
     seed: int = 0,
     directory: None | pathlib.Path = None,
     kwargs_optimizer: None | dict[str, Any] = None,
@@ -736,6 +780,10 @@ def fit_distortion_lsq(
         comparing. If a sequence is given, the fit is run once per element,
         warm-starting each stage from the previous, which implements a
         coarse-to-fine schedule (for example ``[8, 4, 2, 1]``).
+    sigma_psf
+        The standard deviation, in detector pixels, of a Gaussian point-spread
+        function convolved with the modeled image only.
+        See :attr:`DistortionResidual.sigma_psf`.
     seed
         The seed used to make each evaluation deterministic.
         See :attr:`DistortionResidual.seed`.
@@ -792,6 +840,7 @@ def fit_distortion_lsq(
             weight_correlation=weight_correlation,
             weight_distance=weight_distance,
             smoothing=s,
+            sigma_psf=sigma_psf,
             seed=seed,
         )
 
@@ -834,6 +883,7 @@ def fit_distortion_series(
     weight_correlation: float = 1000,
     weight_distance: float = 1.0,
     smoothing: None | int | Sequence[None | int] = 1,
+    sigma_psf: None | float = None,
     seed: int = 0,
     directory: None | pathlib.Path = None,
     kwargs_optimizer: None | dict[str, Any] = None,
@@ -879,6 +929,10 @@ def fit_distortion_series(
     smoothing
         The smoothing schedule passed to :func:`fit_distortion_lsq` for each
         frame.
+    sigma_psf
+        The standard deviation, in detector pixels, of a Gaussian point-spread
+        function convolved with the modeled image only.
+        See :attr:`DistortionResidual.sigma_psf`.
     seed
         The seed used to make each evaluation deterministic.
     directory
@@ -912,6 +966,7 @@ def fit_distortion_series(
             weight_correlation=weight_correlation,
             weight_distance=weight_distance,
             smoothing=smoothing,
+            sigma_psf=sigma_psf,
             seed=seed,
             directory=directory_frame,
             kwargs_optimizer=kwargs_optimizer,
