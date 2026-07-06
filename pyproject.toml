@@ -19,10 +19,10 @@ dependencies = [
     "matplotlib",
     "astropy~=7.2",
     "joblib",
-    "named-arrays~=1.6",
-    "optika~=1.1",
+    "named-arrays~=2.0",
+    "optika~=2.0,>=2.0.1",
     "msfc-ccd~=1.0",
-    "solar-dynamics-observatory~=0.2",
+    "solar-dynamics-observatory~=1.0",
 ]
 dynamic = ["version"]
 
