@@ -666,23 +666,28 @@ def distortion_fit(
     model.primary_mirror.sag.focal_length = -1000 * u.mm + primary_displacement
     model.primary_mirror.translation.z = -primary_displacement
 
+    # Per-channel pointing re-polished 2026-07-07 against the time=15 frame
+    # with the deterministic PSF-smoothed correlation (401-pixel scene,
+    # per-channel peaks read from coherent pointing scans), correcting
+    # constant per-channel misregistrations of up to ~2.5 detector pixels
+    # left by the original stochastic 201-pixel optimization.
     model.pitch = (
         na.ScalarArray(
-            np.array([-2.024e01, -2.096e01, -1.973e01, -2.119e01]),
+            np.array([-19.7717, -21.25244, -22.08457, -21.68604]),
             axes=axis_channel,
         )
         * u.arcsec
     )
     model.yaw = (
         na.ScalarArray(
-            np.array([-1.832e01, -1.675e01, -1.604e01, -1.498e01]),
+            np.array([-20.13878, -16.59384, -16.49289, -15.38459]),
             axes=axis_channel,
         )
         * u.arcsec
     )
     model.roll = (
         na.ScalarArray(
-            np.array([-8.681e-01, -3.391e-01, -3.378e-01, -1.109e00]),
+            np.array([-0.82038, -0.3028, -0.24703, -1.06117]),
             axes=axis_channel,
         )
         * u.deg
