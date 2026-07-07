@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import astropy.units as u
 import named_arrays as na
 import esis
 
@@ -42,6 +43,30 @@ def test_distortion_fit(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+
+
+def test_distortion_fit_time():
+    reference = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+    result = esis.flights.f1.optics.distortion_fit(
+        num_distribution=0,
+        axis_time="time",
+    )
+    assert isinstance(result, esis.optics.abc.AbstractInstrument)
+
+    num_time = 30
+    assert na.shape(result.pitch) == dict(channel=4, time=num_time)
+    assert na.shape(result.yaw) == dict(channel=4, time=num_time)
+    assert na.shape(result.roll) == dict(channel=4, time=num_time)
+
+    # the pointing must be indexable per frame, and the yaw drift crosses the
+    # time=15 reference from positive to negative during the flight
+    frame = result[dict(time=15)]
+    offset_yaw = frame.yaw - reference.yaw
+    assert np.all(np.abs(offset_yaw) < 1 * u.arcsec)
+    offset_first = result[dict(time=0)].yaw - reference.yaw
+    offset_last = result[dict(time=~0)].yaw - reference.yaw
+    assert np.all(offset_first > 1 * u.arcsec)
+    assert np.all(offset_last < -1 * u.arcsec)
 
 
 def test_distortion_fit_bounds():

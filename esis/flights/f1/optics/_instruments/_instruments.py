@@ -495,6 +495,7 @@ def distortion_fit(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
     num_distribution: int = 11,
+    axis_time: None | str = None,
 ) -> esis.optics.Instrument:
     """
     Apply the best-fit distortion parameters to the ESIS-I :func:`design`.
@@ -505,6 +506,20 @@ def distortion_fit(
     2019-09-30T18:08:41.642 UTC). The values are per-channel and were produced
     by the ``ESISI_distortion_optimization_20260213_151715`` run.
 
+    If `axis_time` is given, the instrument pointing additionally carries the
+    fitted per-frame payload pointing along that axis, one element per frame
+    of :func:`esis.flights.f1.data.level_1`. During the flight the payload
+    pointing drifted by several arcseconds (dominated by yaw, which sweeps
+    monotonically from :math:`+3.3''` at the first frame to :math:`-4.4''` at
+    the last); the optics are otherwise held fixed at the reference fit. The
+    offsets are common to all four channels (a rigid-payload model) and were
+    measured independently for every frame on 2026-07-06 by scanning the
+    correlation between the imaged AIA scene and each Level-1 frame over a
+    common pitch/yaw/roll offset and refining each axis with a parabola fit
+    (a :math:`401^2` scene, a 1-pixel-deviation Gaussian point-spread
+    function applied to the modeled image, and two coarse-to-fine rounds per
+    frame).
+
     Parameters
     ----------
     grid
@@ -514,6 +529,10 @@ def distortion_fit(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    axis_time
+        The name of the logical axis corresponding to changing time.
+        If :obj:`None`, the pointing is that of the ``time=15`` reference fit;
+        otherwise the pitch, yaw, and roll gain one element per Level-1 frame.
 
     Examples
     --------
@@ -669,7 +688,121 @@ def distortion_fit(
         * u.deg
     )
 
+    if axis_time is not None:
+        model.pitch = model.pitch + (
+            na.ScalarArray(np.array(_pointing_pitch), axes=axis_time) * u.arcsec
+        )
+        model.yaw = model.yaw + (
+            na.ScalarArray(np.array(_pointing_yaw), axes=axis_time) * u.arcsec
+        )
+        model.roll = model.roll + (
+            na.ScalarArray(np.array(_pointing_roll), axes=axis_time) * u.deg
+        )
+
     return model
+
+
+# The per-frame payload pointing offsets relative to the time=15 reference
+# fit, one element per frame of esis.flights.f1.data.level_1(), measured
+# 2026-07-06 by per-frame coherent pitch/yaw/roll merit scans (see the
+# distortion_fit docstring). The time=15 element is not exactly zero because
+# the scans resolve a small residual left by the reference optimization.
+_pointing_pitch = [
+    0.4828,
+    0.1686,
+    -0.0380,
+    -0.2212,
+    -0.2910,
+    -0.3101,
+    -0.5559,
+    -0.5051,
+    -0.6729,
+    -0.6187,
+    -0.5820,
+    -0.7577,
+    -1.0172,
+    -0.4708,
+    -0.6748,
+    -0.5897,
+    -0.5931,
+    -0.4847,
+    -0.6316,
+    -0.4703,
+    -0.4896,
+    -0.7231,
+    -0.6583,
+    -0.7228,
+    -0.7632,
+    -0.7187,
+    -0.8210,
+    -0.6078,
+    -0.7405,
+    -0.8298,
+]
+_pointing_yaw = [
+    3.2567,
+    3.1173,
+    2.6926,
+    2.6337,
+    2.4275,
+    2.1155,
+    2.0500,
+    1.7531,
+    1.2601,
+    1.1477,
+    0.9562,
+    0.7066,
+    0.4708,
+    0.1550,
+    0.1088,
+    -0.4648,
+    -0.6756,
+    -0.8767,
+    -1.2601,
+    -1.4596,
+    -1.5887,
+    -2.1339,
+    -2.2737,
+    -2.7586,
+    -2.9325,
+    -3.0596,
+    -3.5607,
+    -3.8231,
+    -4.1757,
+    -4.3976,
+]
+_pointing_roll = [
+    0.03419,
+    0.03504,
+    0.02336,
+    0.06547,
+    0.05774,
+    0.01318,
+    0.02193,
+    0.05350,
+    0.01698,
+    0.03213,
+    0.04945,
+    0.01141,
+    0.01807,
+    0.04574,
+    0.07460,
+    -0.00012,
+    0.05823,
+    0.00823,
+    0.01996,
+    0.06666,
+    0.05136,
+    0.04666,
+    0.08520,
+    0.00853,
+    0.04196,
+    0.01282,
+    -0.00121,
+    0.04016,
+    0.06854,
+    0.09812,
+]
 
 
 def distortion_fit_bounds(
