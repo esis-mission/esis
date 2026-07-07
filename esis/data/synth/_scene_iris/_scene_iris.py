@@ -126,14 +126,15 @@ def scene_iris(
         where_upper = +velocity_max < velocity_centers
 
         index_lower = np.nanargmax(-velocity_max < velocity_centers)[axis_velocity]
+        index_lower = index_lower.ndarray
 
         if where_upper.any():
-            index_upper = np.nanargmax(where_upper)[axis_velocity]
+            index_upper = np.nanargmax(where_upper)[axis_velocity].ndarray
         else:
             index_upper = None
 
         crop_wavelength = {
-            scene.axis_wavelength: slice(index_lower.ndarray, index_upper.ndarray)
+            scene.axis_wavelength: slice(index_lower, index_upper)
         }
 
         scene = scene[crop_wavelength]
