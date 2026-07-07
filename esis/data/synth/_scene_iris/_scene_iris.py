@@ -107,7 +107,6 @@ def scene_iris(
         )
 
     if background_removal is not None:
-
         if background_removal == "trim_mean":
             bg = na.mean_trimmed(
                 a=scene.outputs[np.isfinite(scene.outputs)],
@@ -120,7 +119,6 @@ def scene_iris(
         scene.outputs = scene.outputs - bg
 
     if velocity_max is not None:
-
         velocity_centers = scene.inputs.velocity.cell_centers(axis_velocity)
 
         where_upper = +velocity_max < velocity_centers
@@ -133,9 +131,7 @@ def scene_iris(
         else:
             index_upper = None
 
-        crop_wavelength = {
-            scene.axis_wavelength: slice(index_lower, index_upper)
-        }
+        crop_wavelength = {scene.axis_wavelength: slice(index_lower, index_upper)}
 
         scene = scene[crop_wavelength]
 
