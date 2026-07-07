@@ -12,13 +12,12 @@ from esis.flights.f1.spectrum import O_V
     argvalues=[
         100 * u.km / u.s,
         10000 * u.km / u.s,
-    ]
+    ],
 )
 def test_scene_iris(
     background_removal: str,
     velocity_max: None | u.Quantity,
 ):
-
     axis_time = "time"
     axis_x = "detector_x"
     axis_y = "detector_y"
