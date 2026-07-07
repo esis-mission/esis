@@ -96,7 +96,7 @@ def scene_iris(
 
         scene = esis.flights.f1.data.synth.scene_iris("2014-07-04 11:40")
 
-        scene.show()
+        scene.show();
     """
     return esis.data.synth.scene_iris(
         time_start=time_start,

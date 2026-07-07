@@ -114,7 +114,7 @@ def scene_iris(
                 q=0.49,
             )
 
-        else:
+        else:  # pragma: nocover
             raise ValueError(f"{background_removal=} not recognized.")
 
         scene.outputs = scene.outputs - bg

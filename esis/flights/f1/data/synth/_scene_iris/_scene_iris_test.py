@@ -6,7 +6,18 @@ import esis
 from esis.flights.f1.spectrum import O_V
 
 
-def test_scene_iris():
+@pytest.mark.parametrize("background_removal", [None, "trim_mean"])
+@pytest.mark.parametrize(
+    argnames="velocity_max",
+    argvalues=[
+        100 * u.km / u.s,
+        10000 * u.km / u.s,
+    ]
+)
+def test_scene_iris(
+    background_removal: str,
+    velocity_max: None | u.Quantity,
+):
 
     axis_time = "time"
     axis_x = "detector_x"
@@ -22,8 +33,10 @@ def test_scene_iris():
             axis_detector_y=axis_y,
             axis_velocity=axis_velocity,
             limit=1,
+            velocity_max=velocity_max,
+            background_removal=background_removal,
         )
-    except OSError as e:
+    except OSError as e:  # pragma: nocover
         pytest.skip(f"IRIS archive is unreachable, skipping live-network test: {e}")
 
     assert result.outputs.unit.is_equivalent(u.erg / u.cm**2 / u.sr / u.AA / u.s)
