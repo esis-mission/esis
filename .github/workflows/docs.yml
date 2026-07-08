@@ -46,7 +46,7 @@ jobs:
           JSOC_EMAIL: "roytsmart@gmail.com"
         run: |
           cd ./docs
-          make html -j auto
+          make -j auto html
 
       - name: Upload build artifact
         uses: actions/upload-pages-artifact@v3
