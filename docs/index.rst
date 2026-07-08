@@ -108,6 +108,7 @@ Flight 2 (Planned 2027)
     :maxdepth: 2
 
     reports/f2/design
+    reports/f2/grating
 
 |
 
