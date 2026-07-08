@@ -139,13 +139,6 @@ def scene_iris(
         position=scene.inputs.position,
     )
 
-    radiance_avg = scene.integrate(
-        component="wavelength",
-        axis=axis_velocity,
-    ).outputs.mean()
-
-    scene.outputs = scene.outputs * radiance / radiance_avg
-
     if velocity_max is not None:
         velocity_centers = scene.inputs.velocity.cell_centers(axis_velocity)
 
@@ -162,5 +155,12 @@ def scene_iris(
         crop_wavelength = {scene.axis_wavelength: slice(index_lower, index_upper)}
 
         scene = scene[crop_wavelength]
+
+    radiance_avg = scene.integrate(
+        component="wavelength",
+        axis=axis_velocity,
+    ).outputs.mean()
+
+    scene.outputs = scene.outputs * radiance / radiance_avg
 
     return scene
