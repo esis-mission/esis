@@ -118,32 +118,15 @@ def scene_iris(
 
         scene.outputs = scene.outputs - bg
 
-    if velocity_max is not None:
-        velocity_centers = scene.inputs.velocity.cell_centers(axis_velocity)
-
-        where_upper = +velocity_max < velocity_centers
-
-        index_lower = np.nanargmax(-velocity_max < velocity_centers)[axis_velocity]
-        index_lower = index_lower.ndarray
-
-        if where_upper.any():
-            index_upper = np.nanargmax(where_upper)[axis_velocity].ndarray
-        else:
-            index_upper = None
-
-        crop_wavelength = {scene.axis_wavelength: slice(index_lower, index_upper)}
-
-        scene = scene[crop_wavelength]
-
     scene.outputs = np.nan_to_num(scene.outputs)
 
     scene.outputs[scene.outputs < dn_min] = dn_zero
 
-    spectrum = scene.mean((axis_time, axis_detector_x, axis_detector_y))
+    axis_txy = (axis_time, axis_detector_x, axis_detector_y)
 
     fwhm_avg = na.pdf.fwhm(
-        x=spectrum.inputs.wavelength,
-        f=spectrum.outputs,
+        x=scene.inputs.wavelength.mean(axis_time),
+        f=scene.outputs.mean(axis_txy),
         axis=axis_velocity,
     )
 
@@ -155,6 +138,23 @@ def scene_iris(
         time=scene.inputs.time,
         position=scene.inputs.position,
     )
+
+    if velocity_max is not None:
+        velocity_centers = scene.inputs.velocity.cell_centers(axis_velocity)
+
+        where_upper = velocity_centers > velocity_max
+        where_lower = -velocity_max < velocity_centers
+
+        index_lower = np.nanargmax(where_lower)[axis_velocity].ndarray
+
+        if where_upper.any():
+            index_upper = np.nanargmax(where_upper)[axis_velocity].ndarray
+        else:
+            index_upper = None
+
+        crop_wavelength = {scene.axis_wavelength: slice(index_lower, index_upper)}
+
+        scene = scene[crop_wavelength]
 
     radiance_avg = scene.integrate(
         component="wavelength",
