@@ -54,8 +54,15 @@ jobs:
         env:
           JSOC_EMAIL: "roytsmart@gmail.com"
         run: |
+          ( while true; do free -m | sed -n '2p;3p'; sleep 10; done ) &
+          MEMLOG=$!
+          python -c "import esis; esis.flights.f1.data.level_0()"
+          echo "--- level_0 done ---"
           python -c "import esis; esis.flights.f1.data.level_1()"
+          echo "--- level_1 done ---"
           python -c "import esis; esis.flights.f1.data.synth.scene_aia()"
+          echo "--- scene_aia done ---"
+          kill $MEMLOG || true
 
       - name: Build with Sphinx
         env:
