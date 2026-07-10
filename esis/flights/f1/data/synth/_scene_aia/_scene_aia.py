@@ -10,6 +10,7 @@ __all__ = [
 ]
 
 
+@esis.memory.cache
 def scene_aia(
     time_start: None | astropy.time.Time = None,
     time_stop: None | astropy.time.Time = None,
@@ -24,6 +25,9 @@ def scene_aia(
 ):
     r"""
     Load a synthetic solar scene composed of AIA images captured during the flight.
+
+    The result is cached to disk, so the JSOC queries are only performed on
+    the first call.
 
     This function plugs the spectral line properties in
     :mod:`esis.flights.f1.spectrum` into :func:`esis.data.synth.scene_aia`
@@ -91,32 +95,33 @@ def scene_aia(
     radiance_esis = na.stack(radiance_esis, axis_wavelength)
     width_esis = na.stack(width_esis, axis_wavelength)
 
-    result = esis.data.synth.scene_aia(
-        time_start=time_start,
-        time_stop=time_stop,
-        wavelength_aia=wavelength_aia,
-        wavelength_new=wavelength_esis,
-        radiance=radiance_esis,
-        width_doppler=width_esis,
-        axis_time=axis_time,
-        axis_detector_x=axis_detector_x,
-        axis_detector_y=axis_detector_y,
-        axis_velocity=axis_velocity,
-        num_velocity=num_velocity,
-        num_std=num_std,
-        limit=limit,
-    )
+    # One spectral line at a time, cropped to the central third of the AIA
+    # frame (the part covering the ESIS field of view) before the radiometric
+    # arithmetic: building all three lines from full AIA frames at once peaks
+    # at ~70 GiB, which exhausts the documentation build; chunked and cropped
+    # it stays under ~25 GiB, and the kept pixels are identical.
+    num_wavelength = wavelength_aia.shape[axis_wavelength]
+    results = [
+        esis.data.synth.scene_aia(
+            time_start=time_start,
+            time_stop=time_stop,
+            wavelength_aia=wavelength_aia[{axis_wavelength: slice(i, i + 1)}],
+            wavelength_new=wavelength_esis[{axis_wavelength: slice(i, i + 1)}],
+            radiance=radiance_esis[{axis_wavelength: slice(i, i + 1)}],
+            width_doppler=width_esis[{axis_wavelength: slice(i, i + 1)}],
+            axis_time=axis_time,
+            axis_detector_x=axis_detector_x,
+            axis_detector_y=axis_detector_y,
+            axis_velocity=axis_velocity,
+            num_velocity=num_velocity,
+            num_std=num_std,
+            limit=limit,
+            crop={
+                axis_detector_x: (1 / 3, 2 / 3),
+                axis_detector_y: (1 / 3, 2 / 3),
+            },
+        )
+        for i in range(num_wavelength)
+    ]
 
-    shape = result.outputs.shape
-
-    num_x = shape[axis_detector_x]
-    num_y = shape[axis_detector_y]
-
-    crop = {
-        axis_detector_x: slice(num_x // 3, 2 * num_x // 3),
-        axis_detector_y: slice(num_y // 3, 2 * num_y // 3),
-    }
-
-    result = result[crop]
-
-    return result
+    return na.concatenate(results, axis=axis_wavelength)

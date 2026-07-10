@@ -1,0 +1,58 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: frame, datatype: int64}
+# - {name: pitch, unit: arcsec, datatype: float64}
+# - {name: yaw, unit: arcsec, datatype: float64}
+# - {name: roll, unit: deg, datatype: float64}
+# meta: !!omap
+# - {description: 'Fitted per-frame payload pointing offsets of the ESIS-I flight, relative to the time=15 reference fit, one row per
+#     frame of esis.flights.f1.data.level_1(). The offsets are common to all four channels (a rigid-payload model).'}
+# - {provenance: 'Measured 2026-07-07 by per-frame coherent pitch/yaw/roll scans of the PSF-smoothed correlation (401-pixel scene, sigma_psf=1
+#     px, coarse +/-10 arcsec then fine +/-1 arcsec rounds refined with a parabola), against the re-polished per-channel reference. Mean
+#     smoothed correlation over the flight: 0.569.'}
+# - __serialized_columns__:
+#     pitch:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id001 !astropy.units.Unit {unit: arcsec}
+#       value: !astropy.table.SerializedColumn {name: pitch}
+#     roll:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: deg}
+#       value: !astropy.table.SerializedColumn {name: roll}
+#     yaw:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: yaw}
+# schema: astropy-2.0
+frame pitch yaw roll
+0 0.9805 3.6928 -0.00451
+1 0.7607 3.6224 -0.05431
+2 0.4168 3.2995 0.00271
+3 0.3388 3.2085 0.02175
+4 0.3081 2.9156 -0.03299
+5 0.2087 2.6023 -0.02115
+6 0.0614 2.425 -0.0075
+7 0.0413 2.171 -0.03146
+8 0.0284 1.9898 -0.00485
+9 0.1326 1.6427 -0.00274
+10 0.055 1.4558 -0.04148
+11 -0.0571 1.0418 -0.02061
+12 -0.3421 0.9022 -0.04902
+13 -0.1918 0.5417 -0.02972
+14 -0.1614 0.3938 -0.08825
+15 0.0705 -0.0053 0.01418
+16 0.1508 -0.1843 -0.03381
+17 -0.0703 -0.4411 -0.06777
+18 0.032 -0.8831 -0.0166
+19 -0.0064 -0.9857 -0.03867
+20 0.0028 -1.1723 0.01496
+21 0.0424 -1.7005 -0.01852
+22 0.0603 -1.9098 -0.01871
+23 -0.0489 -2.0489 -0.03029
+24 -0.0206 -2.6097 -0.03952
+25 -0.1942 -2.7764 -0.05201
+26 -0.2018 -3.1531 -0.02006
+27 -0.0822 -3.4944 -0.05063
+28 -0.0822 -3.732 -0.01753
+29 -0.0402 -4.0488 -0.01305
