@@ -1343,8 +1343,17 @@ def fit_distortion_series(
 
     if workers > 1:
         import concurrent.futures
+        import multiprocessing
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+        # fork (the Linux default) is unsafe once numpy/numba thread pools
+        # exist in the parent, and it copies the parent's full memory into
+        # every worker; spawn starts clean interpreters on every platform
+        context = multiprocessing.get_context("spawn")
+
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=workers,
+            mp_context=context,
+        ) as pool:
             futures = [
                 pool.submit(_fit_frame_scan, kwargs_frame(i, scene, observation))
                 for i, (scene, observation) in enumerate(frames)

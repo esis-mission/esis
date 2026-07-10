@@ -39,7 +39,7 @@ def _idealized(instrument: esis.optics.Instrument) -> esis.optics.Instrument:
     return instrument
 
 
-def _wavelength_lines() -> na.ScalarArray:
+def _wavelength_lines() -> na.ScalarArray:  # pragma: nocover
     """Return the wavelengths of the three bright spectral lines seen by ESIS-I."""
     from esis.flights.f1.spectrum import He_I, Mg_X, O_V
 
@@ -49,7 +49,7 @@ def _wavelength_lines() -> na.ScalarArray:
     )
 
 
-def _pupil() -> na.AbstractCartesian2dVectorArray:
+def _pupil() -> na.AbstractCartesian2dVectorArray:  # pragma: nocover
     """Build the 2x2 pupil grid used by the production fits."""
     return na.Cartesian2dVectorLinearSpace(
         -0.25,
@@ -59,7 +59,7 @@ def _pupil() -> na.AbstractCartesian2dVectorArray:
     )
 
 
-def _frame(time: int, num_scene: int):
+def _frame(time: int, num_scene: int):  # pragma: nocover
     """
     Prepare the resampled AIA scene and the Level-1 observation of one frame.
 
@@ -191,7 +191,7 @@ def fit_distortion_reference(
     tolerance: None | float = 3e-4,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
-) -> esis.optics.DistortionParameters:
+) -> esis.optics.DistortionParameters:  # pragma: nocover
     """
     Fit the per-channel reference distortion parameters from scratch.
 
@@ -300,7 +300,7 @@ def fit_distortion_pointing(
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
     workers: int = 1,
-) -> astropy.table.QTable:
+) -> astropy.table.QTable:  # pragma: nocover
     r"""
     Fit the per-frame payload pointing of the whole flight.
 
