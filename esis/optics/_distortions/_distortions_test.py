@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import pathlib
 import pickle
@@ -102,6 +103,19 @@ class TestDistortionParameters(
         c = esis.optics.DistortionParameters.from_file(path, axis="chan")
         assert set(na.shape(c)) <= {"chan"}
 
+    def test_to_file_error(
+        self,
+        a: esis.optics.DistortionParameters,
+        tmp_path: pathlib.Path,
+    ):
+        # parameters with more than one logical axis have no table form
+        a = copy.deepcopy(a)
+        a.pitch = a.pitch + (
+            na.ScalarArray(np.zeros((2, 2)), axes=("alpha", "beta")) * u.arcsec
+        )
+        with pytest.raises(ValueError):
+            a.to_file(tmp_path / "parameters.ecsv")
+
 
 def _scene() -> na.FunctionArray:
     return na.FunctionArray(
@@ -141,7 +155,7 @@ def test_distortion_objective():
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs
+    ).outputs.sum("wavelength")
 
     objective = esis.optics.DistortionObjective(
         instrument=instrument,
@@ -257,7 +271,7 @@ def test_distortion_residual():
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs
+    ).outputs.sum("wavelength")
 
     residual = esis.optics.DistortionResidual(
         instrument=instrument,
@@ -316,7 +330,7 @@ def test_distortion_residual_sigma_psf():
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs
+    ).outputs.sum("wavelength")
 
     residual = esis.optics.DistortionResidual(
         instrument=instrument,
@@ -377,7 +391,7 @@ def test_fit_distortion_scan(tmp_path: pathlib.Path):
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs
+    ).outputs.sum("wavelength")
 
     grids = [
         {
@@ -402,17 +416,31 @@ def test_fit_distortion_scan(tmp_path: pathlib.Path):
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         sigma_psf=1.0,
+        tolerance=1.0,
         directory=tmp_path / "scan",
     )
 
     assert isinstance(result, esis.optics.DistortionParameters)
 
     # the fitted offsets must stay within the scanned ranges
-    assert np.abs(result.pitch - parameters.pitch) <= 24 * u.arcsec
-    assert np.abs(result.yaw - parameters.yaw) <= 24 * u.arcsec
+    # (two passes of the final round are possible before convergence)
+    assert np.abs(result.pitch - parameters.pitch) <= 28 * u.arcsec
+    assert np.abs(result.yaw - parameters.yaw) <= 28 * u.arcsec
 
     assert (tmp_path / "scan" / "scan.json").exists()
     assert (tmp_path / "scan" / "scan.log").exists()
+
+    # a joint entry must pair every field with its own offset grid
+    with pytest.raises(ValueError):
+        esis.optics.fit_distortion_scan(
+            instrument=instrument,
+            scene=scene,
+            observation=observation,
+            grids=[{("pitch", "yaw"): (np.linspace(-1, 1, 3) * u.arcsec,)}],
+            parameters=parameters,
+            axis_wavelength="wavelength",
+            axis_field=("scene_x", "scene_y"),
+        )
 
 
 def test_fit_distortion_scan_channel():
@@ -436,7 +464,6 @@ def test_fit_distortion_scan_channel():
         scene=scene,
         observation=observation,
         grids=[dict(pitch=np.linspace(-20, 20, 5) * u.arcsec)],
-        parameters=parameters,
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         axis_channel="channel",
@@ -479,7 +506,7 @@ def test_fit_distortion_series(tmp_path: pathlib.Path):
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs
+    ).outputs.sum("wavelength")
 
     grids = [dict(pitch=np.linspace(-10, 10, 5) * u.arcsec)]
 
@@ -512,7 +539,6 @@ def test_fit_distortion_series_parallel():
         grid=_grid_coarse,
         num_distribution=0,
     )[dict(channel=0)]
-    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
 
     scene = _scene()
     observation = instrument.system.image(
@@ -527,7 +553,6 @@ def test_fit_distortion_series_parallel():
         scenes=[scene, scene],
         observations=[observation, observation],
         grids=[dict(pitch=np.linspace(-10, 10, 3) * u.arcsec)],
-        parameters=parameters,
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         sigma_psf=1.0,
