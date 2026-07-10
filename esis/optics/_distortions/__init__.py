@@ -4,7 +4,7 @@ from ._distortions import (
     DistortionResidual,
     ConvergenceLogger,
     fit_distortion,
-    fit_distortion_lsq,
+    fit_distortion_scan,
     fit_distortion_series,
 )
 
@@ -14,6 +14,6 @@ __all__ = [
     "DistortionResidual",
     "ConvergenceLogger",
     "fit_distortion",
-    "fit_distortion_lsq",
+    "fit_distortion_scan",
     "fit_distortion_series",
 ]

@@ -3,6 +3,7 @@ from typing import Any, Sequence
 import copy
 import dataclasses
 import datetime
+import json
 import pathlib
 import time
 import numpy as np
@@ -19,7 +20,7 @@ __all__ = [
     "DistortionResidual",
     "ConvergenceLogger",
     "fit_distortion",
-    "fit_distortion_lsq",
+    "fit_distortion_scan",
     "fit_distortion_series",
 ]
 
@@ -165,6 +166,101 @@ class DistortionParameters(
         result.roll = self.roll
 
         return result
+
+    def to_file(
+        self,
+        path: str | pathlib.Path,
+        metadata: None | dict[str, Any] = None,
+    ) -> None:
+        """
+        Save these parameters as a plain-text ECSV table.
+
+        The fields become the columns of the table (with their units), and
+        the elements along the (single) logical axis of the parameters become
+        its rows, so that fit results can be committed to version control and
+        reviewed as text. Scalar fields are broadcast along the axis.
+
+        Parameters
+        ----------
+        path
+            The path of the file to write.
+        metadata
+            Additional provenance recorded in the table header, for example
+            the date and configuration of the fit that produced the
+            parameters.
+
+        Raises
+        ------
+        ValueError
+            If the parameters have more than one logical axis.
+
+        See Also
+        --------
+        from_file : The inverse of this method.
+        """
+        import astropy.table
+
+        shape = na.shape(self)
+        if len(shape) > 1:
+            raise ValueError(
+                f"only parameters with at most one axis can be saved, " f"got {shape=}"
+            )
+        axis = next(iter(shape), None)
+        num = shape.get(axis, 1)
+
+        columns = {}
+        for field in dataclasses.fields(self):
+            value = na.as_named_array(getattr(self, field.name))
+            unit = na.unit(value)
+            data = na.value(value).ndarray
+            if unit is not None:
+                data = data * unit
+            columns[field.name] = np.broadcast_to(data, (num,), subok=True)
+
+        table = astropy.table.QTable(columns)
+        table.meta["axis"] = axis
+        if metadata is not None:
+            table.meta.update(metadata)
+
+        table.write(path, format="ascii.ecsv", overwrite=True)
+
+    @classmethod
+    def from_file(
+        cls,
+        path: str | pathlib.Path,
+        axis: None | str = None,
+    ) -> DistortionParameters:
+        """
+        Load parameters saved by :meth:`to_file`.
+
+        The logical axis of the parameters is recovered from the ``axis``
+        entry of the table header.
+
+        Parameters
+        ----------
+        path
+            The path of the file to read.
+        axis
+            The name to use for the logical axis of the parameters,
+            overriding the name recorded in the file.
+        """
+        import astropy.table
+
+        table = astropy.table.QTable.read(path, format="ascii.ecsv")
+        if axis is None:
+            axis = table.meta["axis"]
+
+        fields = {}
+        for field in dataclasses.fields(cls):
+            column = table[field.name]
+            if axis is None:
+                fields[field.name] = column[0]
+            else:
+                fields[field.name] = (
+                    na.ScalarArray(np.asarray(column.value), axes=axis) * column.unit
+                )
+
+        return cls(**fields)
 
 
 @dataclasses.dataclass(repr=False)
@@ -319,6 +415,16 @@ class DistortionResidual(
       readable gradient, while also modeling the blur that the real optics
       imprint on the observation. A :attr:`smoothing`-wide box filter applied
       to both images is retained as a purely numerical alternative.
+
+    Notes
+    -----
+    In practice, :func:`scipy.optimize.least_squares` was found to
+    under-converge on this residual for realistic scenes even with the
+    features above: the smoothed correlation surface remains locally flat
+    enough that the optimizer terminates after moving a small fraction of the
+    distance to the true peak. :func:`fit_distortion_scan`, which reads the
+    shape of the merit basin directly instead of differentiating it, is the
+    recommended driver.
     """
 
     instrument: esis.optics.abc.AbstractInstrument
@@ -399,14 +505,7 @@ class DistortionResidual(
         image: na.AbstractScalar,
         axis_image: tuple[str, ...],
     ) -> na.AbstractScalar:
-        if self.smoothing is None or self.smoothing <= 1:
-            return image
-        size = int(self.smoothing)
-        kernel = na.ScalarArray(
-            ndarray=np.ones(len(axis_image) * (size,)) / size ** len(axis_image),
-            axes=axis_image,
-        )
-        return na.convolve(image, kernel, axis=axis_image)
+        return _smooth_box(image, self.smoothing, axis_image)
 
     def __call__(self, x: np.ndarray) -> np.ndarray:
         """
@@ -545,6 +644,140 @@ def _correlation(
         If :obj:`None`, the correlation is computed over every axis.
     """
     return (_standardize(a, axis) * _standardize(b, axis)).mean(axis)
+
+
+def _smooth_box(
+    a: na.AbstractScalar,
+    size: None | int,
+    axis: tuple[str, ...],
+) -> na.AbstractScalar:
+    r"""
+    Smooth an array with a normalized box filter.
+
+    Parameters
+    ----------
+    a
+        The array to smooth.
+    size
+        The width of the box in pixels. A value of :obj:`None` or
+        :math:`\leq 1` disables smoothing.
+    axis
+        The logical axes along which to smooth.
+    """
+    if size is None or size <= 1:
+        return a
+    size = int(size)
+    kernel = na.ScalarArray(
+        ndarray=np.ones(len(axis) * (size,)) / size ** len(axis),
+        axes=axis,
+    )
+    return na.convolve(a, kernel, axis=axis)
+
+
+def _peak_parabola(
+    x: np.ndarray,
+    y: np.ndarray,
+) -> float:
+    """
+    Locate the peak of a sampled curve with a parabola refinement.
+
+    A parabola is fit through the best sample and its two neighbors, and the
+    abscissa of its vertex is returned, clipped to the sampled interval.
+    If the parabola is not concave, the abscissa of the best sample is
+    returned instead.
+
+    Parameters
+    ----------
+    x
+        The sample positions.
+    y
+        The sampled curve values.
+    """
+    i = int(np.argmax(y))
+    i = min(max(i, 1), len(x) - 2)
+    c = np.polyfit(x[i - 1 : i + 2], y[i - 1 : i + 2], 2)
+    if c[0] >= 0:
+        return float(x[int(np.argmax(y))])
+    return float(np.clip(-c[1] / (2 * c[0]), x.min(), x.max()))
+
+
+def _correlation_model(
+    instrument: esis.optics.abc.AbstractInstrument,
+    parameters: DistortionParameters,
+    scene: na.FunctionArray,
+    observation: na.AbstractScalar,
+    pupil: None | na.AbstractCartesian2dVectorArray,
+    axis_wavelength: None | str,
+    axis_field: None | tuple[str, str],
+    axis_channel: None | str,
+    smoothing: None | int,
+    sigma_psf: None | float,
+    seed: int,
+) -> na.AbstractScalar:
+    """
+    Compute the correlation between the modeled image and the observation.
+
+    Applies `parameters` to `instrument`, images `scene` deterministically,
+    optionally convolves the modeled image with a Gaussian point-spread
+    function, and computes the Pearson correlation against `observation`
+    (per channel, if `axis_channel` is given).
+
+    Parameters
+    ----------
+    instrument
+        The instrument model being fit to the observation.
+    parameters
+        The distortion parameters applied to the instrument.
+    scene
+        The spectral radiance of the scene imaged through the instrument.
+    observation
+        The observed image that the modeled image is compared against.
+    pupil
+        The vertices of the pupil grid used to image the scene.
+    axis_wavelength
+        The logical axis of the scene corresponding to changing wavelength.
+    axis_field
+        The logical axes of the scene corresponding to changing field position.
+    axis_channel
+        The logical axis of the observation corresponding to changing camera
+        channel.
+    smoothing
+        The width, in detector pixels, of a box filter applied to both images.
+    sigma_psf
+        The standard deviation, in detector pixels, of a Gaussian point-spread
+        function convolved with the modeled image only.
+    seed
+        The seed used to freeze the imaging model's random ray jitter.
+    """
+    instrument = parameters.to_instrument(instrument)
+
+    # freeze the per-cell ray jitter so the correlation is deterministic
+    np.random.seed(seed)
+    image = instrument.system.image(
+        scene=scene,
+        pupil=pupil,
+        axis_wavelength=axis_wavelength,
+        axis_field=axis_field,
+        noise=False,
+    )
+
+    image = na.value(image.outputs)
+    observation = na.value(observation)
+
+    axis_extra = tuple(set(na.shape(image)) - set(na.shape(observation)))
+    if axis_extra:
+        image = image.sum(axis=axis_extra)
+
+    axis_image = tuple(set(na.shape(observation)) - {axis_channel})
+
+    if sigma_psf is not None:
+        kernel = _kernel_gaussian(sigma_psf, axis_image)
+        image = na.convolve(image, kernel, axis=axis_image)
+
+    image = _smooth_box(image, smoothing, axis_image)
+    observation = _smooth_box(observation, smoothing, axis_image)
+
+    return _correlation(image, observation, axis_image)
 
 
 def fit_distortion(
@@ -700,48 +933,46 @@ def fit_distortion(
     return result_parameters
 
 
-def _shift(
-    parameters: DistortionParameters,
-    delta: DistortionParameters,
-    sign: float,
-) -> DistortionParameters:
-    """Offset every field of `parameters` by `sign * delta`."""
-    return DistortionParameters(
-        **{
-            field.name: getattr(parameters, field.name)
-            + sign * getattr(delta, field.name)
-            for field in dataclasses.fields(parameters)
-        }
-    )
-
-
-def fit_distortion_lsq(
+def fit_distortion_scan(
     instrument: esis.optics.abc.AbstractInstrument,
     scene: na.FunctionArray,
     observation: na.AbstractScalar,
-    bounds: tuple[DistortionParameters, DistortionParameters],
+    grids: Sequence[dict[str, u.Quantity]],
     parameters: None | DistortionParameters = None,
     pupil: None | na.AbstractCartesian2dVectorArray = None,
     axis_wavelength: None | str = None,
     axis_field: None | tuple[str, str] = None,
     axis_channel: None | str = None,
-    weight_correlation: float = 1000,
-    weight_distance: float = 1.0,
-    smoothing: None | int | Sequence[None | int] = 1,
-    sigma_psf: None | float = None,
+    smoothing: None | int = None,
+    sigma_psf: None | float = 1.0,
     seed: int = 0,
+    tolerance: None | float = None,
+    num_repeat: int = 8,
     directory: None | pathlib.Path = None,
-    kwargs_optimizer: None | dict[str, Any] = None,
 ) -> DistortionParameters:
-    """
-    Polish the distortion parameters of an instrument with least squares.
+    r"""
+    Fit the distortion parameters of an instrument by scanning the merit.
 
-    Wraps :func:`scipy.optimize.least_squares` around a
-    :class:`DistortionResidual`. Unlike :func:`fit_distortion`, this is a local,
-    derivative-based optimizer, so it requires a good starting point (for
-    example the result of :func:`fit_distortion` or
-    :func:`esis.flights.f1.optics.distortion_fit`), but it converges in far
-    fewer evaluations.
+    A derivative-free coordinate search: for each round in `grids`, every
+    listed parameter is scanned along the given offsets while the others are
+    held at their current best, and the parameter is moved to the peak of the
+    sampled correlation curve, refined with a three-point parabola. Rounds
+    are typically coarse-to-fine, so early rounds capture the solution and
+    later rounds polish it.
+
+    If `axis_channel` is given, the correlation of each channel is recorded
+    separately during every scan, and each channel's peak is read off its own
+    curve. Because a channel's correlation depends only on that channel's
+    parameters, one scan pass fits all channels simultaneously, and the
+    fitted parameters gain an `axis_channel` axis.
+
+    This is the production fitting engine: unlike
+    :func:`scipy.optimize.least_squares` driving a
+    :class:`DistortionResidual`, which was found to under-converge on the
+    locally-flat correlation surface of realistic scenes, the scans read the
+    shape of the merit basin directly and are robust as long as the true
+    solution lies within the coarsest scan range (measured to be at least
+    :math:`\pm 10''` in pointing for the ESIS-I flight data).
 
     Parameters
     ----------
@@ -754,12 +985,14 @@ def fit_distortion_lsq(
         The observed image that the modeled images are compared against.
         Any axes of the modeled image which are not present in this array
         are summed over before comparing.
-    bounds
-        The lower and upper bounds of the fit, expressed in the same units
-        as `parameters`.
+    grids
+        The scan schedule: a sequence of rounds, each a mapping from a field
+        name of :class:`DistortionParameters` to a one-dimensional
+        :class:`~astropy.units.Quantity` of offsets (relative to the current
+        best) to scan, for example
+        ``[dict(pitch=np.linspace(-10, 10, 21) * u.arcsec)]``.
     parameters
-        The initial guess of the fit, which also defines the units and
-        structure of the parameter vector seen by the optimizer.
+        The starting point of the fit.
         If :obj:`None`, the current parameters of `instrument` are used.
     pupil
         The vertices of the pupil grid used to image the scene.
@@ -769,17 +1002,11 @@ def fit_distortion_lsq(
         The logical axes of the scene corresponding to changing field position.
     axis_channel
         The logical axis of the observation corresponding to changing camera
-        channel. See :attr:`DistortionResidual.axis_channel`.
-    weight_correlation
-        The weight of the correlation residual relative to the off-target
-        penalty.
-    weight_distance
-        The weight of the off-target penalty residual.
+        channel. If given, each channel's peak is read from its own
+        correlation curve.
     smoothing
-        The width, in detector pixels, of the box filter applied before
-        comparing. If a sequence is given, the fit is run once per element,
-        warm-starting each stage from the previous, which implements a
-        coarse-to-fine schedule (for example ``[8, 4, 2, 1]``).
+        The width, in detector pixels, of a box filter applied to both images
+        before comparing.
     sigma_psf
         The standard deviation, in detector pixels, of a Gaussian point-spread
         function convolved with the modeled image only.
@@ -787,115 +1014,199 @@ def fit_distortion_lsq(
     seed
         The seed used to make each evaluation deterministic.
         See :attr:`DistortionResidual.seed`.
+    tolerance
+        If given, the last round of `grids` is repeated until the mean
+        correlation improves by less than this amount, at most `num_repeat`
+        extra rounds.
+    num_repeat
+        The maximum number of extra polish rounds appended when `tolerance`
+        is given.
     directory
-        A directory where a summary of each stage is logged.
-        If :obj:`None`, the fit is not logged.
-    kwargs_optimizer
-        Additional keyword arguments passed to
-        :func:`scipy.optimize.least_squares`, for example
-        ``dict(max_nfev=200, diff_step=0.01)``.
+        A directory where the scan curves and convergence history are written
+        as ``scan.json`` and ``scan.log``. If :obj:`None`, the fit is not
+        logged.
+
+    Examples
+    --------
+    Fit the per-frame payload pointing of the ESIS flight-1 model to a
+    Level-1 frame.
+
+    .. code-block:: python
+
+        import numpy as np
+        import astropy.units as u
+        import esis
+
+        obs = esis.flights.f1.data.level_1()[dict(time=0)]
+        scene = ...  # an AIA scene resampled to the frame's timestamp
+
+        instrument = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+
+        fitted = esis.optics.fit_distortion_scan(
+            instrument=instrument,
+            scene=scene,
+            observation=obs.outputs.value,
+            grids=[
+                dict(
+                    pitch=np.linspace(-10, 10, 21) * u.arcsec,
+                    yaw=np.linspace(-10, 10, 21) * u.arcsec,
+                    roll=np.linspace(-0.4, 0.4, 11) * u.deg,
+                ),
+                dict(
+                    pitch=np.linspace(-1, 1, 11) * u.arcsec,
+                    yaw=np.linspace(-1, 1, 11) * u.arcsec,
+                    roll=np.linspace(-0.05, 0.05, 11) * u.deg,
+                ),
+            ],
+            axis_wavelength="velocity",
+            axis_field=("detector_x", "detector_y"),
+            sigma_psf=1.0,
+        )
     """
     if parameters is None:
         parameters = DistortionParameters.from_instrument(instrument)
 
-    if kwargs_optimizer is None:
-        kwargs_optimizer = dict()
-
-    if smoothing is None or np.isscalar(smoothing):
-        smoothing = [smoothing]
-
-    lower, upper = bounds
-    lb = na.pack(lower).ndarray
-    ub = na.pack(upper).ndarray
-
-    # least_squares requires strictly increasing bounds, whereas the DE driver
-    # tolerates lb == ub for a fixed parameter; nudge any degenerate dimension
-    # apart by a negligible amount so that such a parameter stays effectively
-    # fixed rather than raising.
-    ub = np.where(ub <= lb, lb + 1e-8 * np.maximum(1.0, np.abs(lb)), ub)
-
-    x = np.clip(na.pack(parameters).ndarray, lb, ub)
+    parameters = copy.deepcopy(parameters)
 
     path_log = None
     if directory is not None:
         directory = pathlib.Path(directory)
         directory.mkdir(parents=True, exist_ok=True)
-        path_log = directory / "lsq_output.log"
-        path_log.write_text(
-            f"--- least-squares fit start: {datetime.datetime.now()} ---\n"
-        )
+        path_log = directory / "scan.log"
+        path_log.write_text(f"--- scan fit start: {datetime.datetime.now()} ---\n")
 
-    time_start = time.perf_counter()
+    def log(message: str) -> None:
+        if path_log is not None:
+            with path_log.open("a") as f:
+                f.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S} | {message}\n")
 
-    for s in smoothing:
-        objective = DistortionResidual(
+    def evaluate(p: DistortionParameters) -> na.AbstractScalar:
+        return _correlation_model(
             instrument=instrument,
-            parameters=parameters,
+            parameters=p,
             scene=scene,
             observation=observation,
             pupil=pupil,
             axis_wavelength=axis_wavelength,
             axis_field=axis_field,
             axis_channel=axis_channel,
-            weight_correlation=weight_correlation,
-            weight_distance=weight_distance,
-            smoothing=s,
+            smoothing=smoothing,
             sigma_psf=sigma_psf,
             seed=seed,
         )
 
-        result = scipy.optimize.least_squares(
-            objective,
-            x0=x,
-            bounds=(lb, ub),
-            **kwargs_optimizer,
+    def merit(corr: na.AbstractScalar) -> float:
+        if axis_channel is not None and axis_channel in na.shape(corr):
+            corr = corr.mean(axis_channel)
+        return float(na.value(corr).ndarray)
+
+    time_start = time.perf_counter()
+    nfev = 0
+    summary_rounds = []
+
+    corr = evaluate(parameters)
+    nfev += 1
+    merit_current = merit(corr)
+    log(f"start | correlation {merit_current:.6f}")
+
+    schedule = list(grids)
+    if tolerance is not None and len(schedule) > 0:
+        schedule = schedule + [schedule[-1]] * num_repeat
+
+    for index, grids_round in enumerate(schedule):
+        curves = {}
+        for field, offsets in grids_round.items():
+            offsets = u.Quantity(offsets)
+            values = []
+            for offset in offsets:
+                trial = copy.copy(parameters)
+                setattr(trial, field, getattr(parameters, field) + offset)
+                values.append(evaluate(trial))
+                nfev += 1
+
+            # one correlation curve per channel, or a single coherent curve
+            values = np.stack(
+                [np.atleast_1d(na.value(v).ndarray) for v in values],
+            )
+            peak = [
+                _peak_parabola(offsets.value, values[:, i])
+                for i in range(values.shape[~0])
+            ]
+            if axis_channel is not None and len(peak) > 1:
+                delta = na.ScalarArray(np.array(peak), axes=axis_channel)
+            else:
+                delta = peak[0]
+            delta = delta * offsets.unit
+            setattr(parameters, field, getattr(parameters, field) + delta)
+
+            curves[field] = dict(
+                offsets=[float(x) for x in offsets.value],
+                unit=str(offsets.unit),
+                values=values.tolist(),
+                peak=[float(p) for p in peak],
+            )
+            log(f"round {index} | {field} | peak {np.round(peak, 6)}")
+
+        corr = evaluate(parameters)
+        nfev += 1
+        gain = merit(corr) - merit_current
+        merit_current = merit(corr)
+        log(
+            f"round {index} | correlation {merit_current:.6f} "
+            f"({gain:+.6f}) | nfev {nfev}"
         )
-        x = result.x
 
-        if path_log is not None:
-            with path_log.open("a") as f:
-                f.write(
-                    f"smoothing={s} | cost={result.cost:.8e} | "
-                    f"optimality={result.optimality:.3e} | nfev={result.nfev}\n"
-                )
+        summary_rounds.append(
+            dict(
+                index=index,
+                correlation=[float(x) for x in np.atleast_1d(na.value(corr).ndarray)],
+                gain=gain,
+                curves=curves,
+            )
+        )
 
-    result_parameters = na.unpack(x, parameters)
+        if directory is not None:
+            summary = dict(
+                rounds=summary_rounds,
+                nfev=nfev,
+                seconds=time.perf_counter() - time_start,
+            )
+            with (directory / "scan.json").open("w") as f:
+                json.dump(summary, f, indent=2)
 
-    if path_log is not None:
-        elapsed = time.perf_counter() - time_start
-        with path_log.open("a") as f:
-            f.write(f"{result_parameters}\n")
-            f.write(f"elapsed time: {datetime.timedelta(seconds=elapsed)}\n")
+        if tolerance is not None and index >= len(grids) and gain < tolerance:
+            log(f"converged | round gain {gain:+.6f} < {tolerance}")
+            break
 
-    return result_parameters
+    return parameters
 
 
 def fit_distortion_series(
     instrument: esis.optics.abc.AbstractInstrument,
     scenes: Sequence[na.FunctionArray],
     observations: Sequence[na.AbstractScalar],
-    delta: DistortionParameters,
+    grids: Sequence[dict[str, u.Quantity]],
     parameters: None | DistortionParameters = None,
     pupil: None | na.AbstractCartesian2dVectorArray = None,
     axis_wavelength: None | str = None,
     axis_field: None | tuple[str, str] = None,
     axis_channel: None | str = None,
-    weight_correlation: float = 1000,
-    weight_distance: float = 1.0,
-    smoothing: None | int | Sequence[None | int] = 1,
-    sigma_psf: None | float = None,
+    smoothing: None | int = None,
+    sigma_psf: None | float = 1.0,
     seed: int = 0,
+    tolerance: None | float = None,
+    num_repeat: int = 8,
     directory: None | pathlib.Path = None,
-    kwargs_optimizer: None | dict[str, Any] = None,
+    workers: int = 1,
 ) -> list[DistortionParameters]:
     """
-    Fit a time series of frames, warm-starting each from the previous.
+    Fit a time series of frames with :func:`fit_distortion_scan`.
 
-    Each frame is polished with :func:`fit_distortion_lsq` using bounds of
-    ``± delta`` around the previous frame's result, exploiting the fact that
-    the instrument distortion changes only slowly from frame to frame. The
-    first frame is seeded from `parameters` (for example the best fit of a
-    reference frame).
+    Every frame is fit independently, starting from the same `parameters`
+    (for example the best fit of a reference frame) rather than warm-starting
+    from the previous frame: independent fits cannot accumulate drift from
+    one bad frame, make the per-frame results directly comparable, and
+    parallelize perfectly.
 
     Parameters
     ----------
@@ -905,12 +1216,11 @@ def fit_distortion_series(
         The per-frame scenes, one for each observation.
     observations
         The per-frame observed images, in time order.
-    delta
-        The half-width of the bounds placed around each frame's starting
-        point, expressed in the same units as `parameters`.
+    grids
+        The scan schedule applied to every frame.
+        See :func:`fit_distortion_scan`.
     parameters
-        The starting point for the first frame, which also defines the units
-        and structure of the parameter vector. If :obj:`None`, the current
+        The starting point shared by every frame. If :obj:`None`, the current
         parameters of `instrument` are used.
     pupil
         The vertices of the pupil grid used to image the scenes.
@@ -920,62 +1230,76 @@ def fit_distortion_series(
         The logical axes of the scenes corresponding to changing field position.
     axis_channel
         The logical axis of the observations corresponding to changing camera
-        channel. See :attr:`DistortionResidual.axis_channel`.
-    weight_correlation
-        The weight of the correlation residual relative to the off-target
-        penalty.
-    weight_distance
-        The weight of the off-target penalty residual.
+        channel. See :func:`fit_distortion_scan`.
     smoothing
-        The smoothing schedule passed to :func:`fit_distortion_lsq` for each
-        frame.
+        The width, in detector pixels, of a box filter applied to both images
+        before comparing.
     sigma_psf
         The standard deviation, in detector pixels, of a Gaussian point-spread
         function convolved with the modeled image only.
         See :attr:`DistortionResidual.sigma_psf`.
     seed
         The seed used to make each evaluation deterministic.
+    tolerance
+        If given, the last round of `grids` is repeated for each frame until
+        the mean correlation improves by less than this amount.
+        See :func:`fit_distortion_scan`.
+    num_repeat
+        The maximum number of extra polish rounds appended when `tolerance`
+        is given.
     directory
         A directory under which each frame's fit is logged in a ``frame_NNN``
         subdirectory. If :obj:`None`, the fits are not logged.
-    kwargs_optimizer
-        Additional keyword arguments passed to
-        :func:`scipy.optimize.least_squares`.
+    workers
+        The number of processes used to fit frames concurrently.
+        A value of 1 fits the frames serially in the current process.
     """
     if parameters is None:
         parameters = DistortionParameters.from_instrument(instrument)
 
-    results = []
-    current = parameters
-
-    for i, (scene, observation) in enumerate(zip(scenes, observations)):
+    def kwargs_frame(i: int, scene, observation) -> dict[str, Any]:
         directory_frame = None
         if directory is not None:
             directory_frame = pathlib.Path(directory) / f"frame_{i:03d}"
-
-        fitted = fit_distortion_lsq(
+        return dict(
             instrument=instrument,
             scene=scene,
             observation=observation,
-            bounds=(_shift(current, delta, -1), _shift(current, delta, +1)),
-            parameters=current,
+            grids=grids,
+            parameters=parameters,
             pupil=pupil,
             axis_wavelength=axis_wavelength,
             axis_field=axis_field,
             axis_channel=axis_channel,
-            weight_correlation=weight_correlation,
-            weight_distance=weight_distance,
             smoothing=smoothing,
             sigma_psf=sigma_psf,
             seed=seed,
+            tolerance=tolerance,
+            num_repeat=num_repeat,
             directory=directory_frame,
-            kwargs_optimizer=kwargs_optimizer,
         )
 
-        results.append(fitted)
-        current = fitted
+    frames = list(zip(scenes, observations))
 
-    return results
+    if workers > 1:
+        import concurrent.futures
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+            futures = [
+                pool.submit(_fit_frame_scan, kwargs_frame(i, scene, observation))
+                for i, (scene, observation) in enumerate(frames)
+            ]
+            return [future.result() for future in futures]
+
+    return [
+        _fit_frame_scan(kwargs_frame(i, scene, observation))
+        for i, (scene, observation) in enumerate(frames)
+    ]
+
+
+def _fit_frame_scan(kwargs: dict[str, Any]) -> DistortionParameters:
+    """Fit a single frame; a picklable target for the process pool."""
+    return fit_distortion_scan(**kwargs)
 
 
 @dataclasses.dataclass(repr=False)

@@ -86,6 +86,22 @@ class TestDistortionParameters(
         for field in dataclasses.fields(a):
             assert _allclose(getattr(b, field.name), getattr(a, field.name))
 
+    def test_file_roundtrip(
+        self,
+        a: esis.optics.DistortionParameters,
+        tmp_path: pathlib.Path,
+    ):
+        path = tmp_path / "parameters.ecsv"
+        a.to_file(path, metadata=dict(description="round-trip test"))
+
+        b = esis.optics.DistortionParameters.from_file(path)
+        for field in dataclasses.fields(a):
+            assert _allclose(getattr(b, field.name), getattr(a, field.name))
+
+        # the axis of the parameters can be renamed on load
+        c = esis.optics.DistortionParameters.from_file(path, axis="chan")
+        assert set(na.shape(c)) <= {"chan"}
+
 
 def _scene() -> na.FunctionArray:
     return na.FunctionArray(
@@ -109,27 +125,6 @@ def _scene() -> na.FunctionArray:
             shape_random=dict(scene_x=5, scene_y=5),
         ),
     )
-
-
-def _delta() -> "esis.optics.DistortionParameters":
-    """Return a small half-width used to build strict polish bounds."""
-    return esis.optics.DistortionParameters(
-        yaw_grating=1 * u.arcmin,
-        pitch_grating=1 * u.arcmin,
-        roll_grating=0.1 * u.deg,
-        roll_field_stop=0.1 * u.deg,
-        spacing_rulings=1e-4 * u.um,
-        displacement_primary=1 * u.mm,
-        pitch=5 * u.arcsec,
-        yaw=5 * u.arcsec,
-        roll=0.1 * u.deg,
-    )
-
-
-def _polish_bounds(parameters):
-    """Build strict ``± _delta`` bounds around `parameters`, as for a polish."""
-    shift = esis.optics._distortions._distortions._shift
-    return shift(parameters, _delta(), -1), shift(parameters, _delta(), +1)
 
 
 def test_distortion_objective():
@@ -351,13 +346,29 @@ def test_distortion_residual_sigma_psf():
     assert isinstance(residual_pickled, esis.optics.DistortionResidual)
 
 
-def test_fit_distortion_lsq(tmp_path: pathlib.Path):
+def test_peak_parabola():
+    peak_parabola = esis.optics._distortions._distortions._peak_parabola
+
+    # the vertex of an exact parabola is recovered even between samples
+    x = np.linspace(-2, 2, 5)
+    y = -np.square(x - 0.3)
+    assert np.isclose(peak_parabola(x, y), 0.3)
+
+    # a peak at the edge of the scan does not extrapolate past the samples
+    y = x
+    assert peak_parabola(x, y) <= x.max()
+
+    # a convex curve falls back to the best sample
+    y = np.square(x - 0.3)
+    assert peak_parabola(x, y) == x.min()
+
+
+def test_fit_distortion_scan(tmp_path: pathlib.Path):
     instrument = esis.flights.f1.optics.design(
         grid=_grid_coarse,
         num_distribution=0,
     )[dict(channel=0)]
     parameters = esis.optics.DistortionParameters.from_instrument(instrument)
-    bounds = _polish_bounds(parameters)
 
     scene = _scene()
 
@@ -368,29 +379,116 @@ def test_fit_distortion_lsq(tmp_path: pathlib.Path):
         noise=False,
     ).outputs
 
-    result = esis.optics.fit_distortion_lsq(
+    grids = [
+        dict(
+            pitch=np.linspace(-20, 20, 5) * u.arcsec,
+            yaw=np.linspace(-20, 20, 5) * u.arcsec,
+        ),
+        dict(
+            pitch=np.linspace(-4, 4, 5) * u.arcsec,
+        ),
+    ]
+
+    result = esis.optics.fit_distortion_scan(
         instrument=instrument,
         scene=scene,
         observation=observation,
-        bounds=bounds,
+        grids=grids,
         parameters=parameters,
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
-        smoothing=[2, 1],
-        directory=tmp_path / "lsq",
-        kwargs_optimizer=dict(max_nfev=12),
+        sigma_psf=1.0,
+        directory=tmp_path / "scan",
     )
 
     assert isinstance(result, esis.optics.DistortionParameters)
 
-    x = na.pack(result).ndarray
-    assert np.all(na.pack(bounds[0]).ndarray <= x)
-    assert np.all(x <= na.pack(bounds[1]).ndarray)
+    # the fitted offsets must stay within the scanned ranges
+    assert np.abs(result.pitch - parameters.pitch) <= 24 * u.arcsec
+    assert np.abs(result.yaw - parameters.yaw) <= 20 * u.arcsec
 
-    assert (tmp_path / "lsq" / "lsq_output.log").exists()
+    assert (tmp_path / "scan" / "scan.json").exists()
+    assert (tmp_path / "scan" / "scan.log").exists()
 
 
-def test_fit_distortion_series():
+def test_fit_distortion_scan_channel():
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+
+    scene = _scene()
+
+    observation = instrument.system.image(
+        scene=scene,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        noise=False,
+    ).outputs
+
+    result = esis.optics.fit_distortion_scan(
+        instrument=instrument,
+        scene=scene,
+        observation=observation,
+        grids=[dict(pitch=np.linspace(-20, 20, 5) * u.arcsec)],
+        parameters=parameters,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        axis_channel="channel",
+        sigma_psf=1.0,
+    )
+
+    assert isinstance(result, esis.optics.DistortionParameters)
+
+    # each channel's peak is read off its own curve, so the fitted pointing
+    # gains a channel axis even though the start was a scalar
+    num_channel = na.shape(observation)["channel"]
+    assert na.shape(result.pitch) == dict(channel=num_channel)
+
+
+def test_fit_distortion_series(tmp_path: pathlib.Path):
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )[dict(channel=0)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+
+    scene = _scene()
+    observation = instrument.system.image(
+        scene=scene,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        noise=False,
+    ).outputs
+
+    grids = [dict(pitch=np.linspace(-10, 10, 5) * u.arcsec)]
+
+    results = esis.optics.fit_distortion_series(
+        instrument=instrument,
+        scenes=[scene, scene],
+        observations=[observation, observation],
+        grids=grids,
+        parameters=parameters,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        sigma_psf=1.0,
+        directory=tmp_path / "series",
+    )
+
+    assert isinstance(results, list)
+    assert len(results) == 2
+    for result in results:
+        assert isinstance(result, esis.optics.DistortionParameters)
+
+    # identical frames fit from an identical start give identical results
+    assert _allclose(results[0].pitch, results[1].pitch)
+
+    assert (tmp_path / "series" / "frame_000" / "scan.json").exists()
+    assert (tmp_path / "series" / "frame_001" / "scan.json").exists()
+
+
+def test_fit_distortion_series_parallel():
     instrument = esis.flights.f1.optics.design(
         grid=_grid_coarse,
         num_distribution=0,
@@ -409,16 +507,14 @@ def test_fit_distortion_series():
         instrument=instrument,
         scenes=[scene, scene],
         observations=[observation, observation],
-        delta=_delta(),
+        grids=[dict(pitch=np.linspace(-10, 10, 3) * u.arcsec)],
         parameters=parameters,
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
-        smoothing=1,
         sigma_psf=1.0,
-        kwargs_optimizer=dict(max_nfev=12),
+        workers=2,
     )
 
-    assert isinstance(results, list)
     assert len(results) == 2
     for result in results:
         assert isinstance(result, esis.optics.DistortionParameters)
