@@ -12,6 +12,10 @@ from ._instruments import (
     distortion_fit,
     distortion_fit_bounds,
 )
+from ._fits import (
+    fit_distortion_reference,
+    fit_distortion_pointing,
+)
 
 __all__ = [
     "requirements",
@@ -24,4 +28,6 @@ __all__ = [
     "as_built",
     "distortion_fit",
     "distortion_fit_bounds",
+    "fit_distortion_reference",
+    "fit_distortion_pointing",
 ]

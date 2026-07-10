@@ -944,6 +944,7 @@ def fit_distortion_scan(
     axis_wavelength: None | str = None,
     axis_field: None | tuple[str, str] = None,
     axis_channel: None | str = None,
+    coherent: bool = False,
     smoothing: None | int = None,
     sigma_psf: None | float = 1.0,
     seed: int = 0,
@@ -1009,8 +1010,13 @@ def fit_distortion_scan(
         The logical axes of the scene corresponding to changing field position.
     axis_channel
         The logical axis of the observation corresponding to changing camera
-        channel. If given, each channel's peak is read from its own
-        correlation curve.
+        channel. If given, each channel is standardized independently and
+        each channel's peak is read from its own correlation curve.
+    coherent
+        If :obj:`True`, the per-channel correlation curves are averaged
+        before locating the peak, so that every channel receives the same
+        offset (a rigid-payload model). Requires `axis_channel`, which
+        controls the per-channel standardization of the merit.
     smoothing
         The width, in detector pixels, of a box filter applied to both images
         before comparing.
@@ -1155,11 +1161,15 @@ def fit_distortion_scan(
             num_curve = values.shape[~0]
             values = values.reshape(shape_grid + (num_curve,))
 
+            values_read = values
+            if coherent:
+                values_read = values.mean(axis=~0, keepdims=True)
+
             # locate the joint maximum of each curve, then refine every field
             # with a parabola along its own axis through the maximum
             peak = {field: [] for field in fields}
-            for i in range(num_curve):
-                v = values[..., i]
+            for i in range(values_read.shape[~0]):
+                v = values_read[..., i]
                 index_max = np.unravel_index(int(np.argmax(v)), v.shape)
                 for a, field in enumerate(fields):
                     section = v[
@@ -1171,7 +1181,7 @@ def fit_distortion_scan(
                     peak[field].append(_peak_parabola(offsets[a].value, section))
 
             for a, field in enumerate(fields):
-                if axis_channel is not None and num_curve > 1:
+                if axis_channel is not None and len(peak[field]) > 1:
                     delta = na.ScalarArray(np.array(peak[field]), axes=axis_channel)
                 else:
                     delta = peak[field][0]
@@ -1236,6 +1246,7 @@ def fit_distortion_series(
     axis_wavelength: None | str = None,
     axis_field: None | tuple[str, str] = None,
     axis_channel: None | str = None,
+    coherent: bool = False,
     smoothing: None | int = None,
     sigma_psf: None | float = 1.0,
     seed: int = 0,
@@ -1276,6 +1287,9 @@ def fit_distortion_series(
     axis_channel
         The logical axis of the observations corresponding to changing camera
         channel. See :func:`fit_distortion_scan`.
+    coherent
+        If :obj:`True`, every channel receives the same offset (a
+        rigid-payload model). See :func:`fit_distortion_scan`.
     smoothing
         The width, in detector pixels, of a box filter applied to both images
         before comparing.
@@ -1316,6 +1330,7 @@ def fit_distortion_series(
             axis_wavelength=axis_wavelength,
             axis_field=axis_field,
             axis_channel=axis_channel,
+            coherent=coherent,
             smoothing=smoothing,
             sigma_psf=sigma_psf,
             seed=seed,

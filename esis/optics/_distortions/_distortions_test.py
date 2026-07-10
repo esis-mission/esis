@@ -450,6 +450,21 @@ def test_fit_distortion_scan_channel():
     num_channel = na.shape(observation)["channel"]
     assert na.shape(result.pitch) == dict(channel=num_channel)
 
+    # a coherent fit applies one shared offset, so the pointing stays scalar
+    result_coherent = esis.optics.fit_distortion_scan(
+        instrument=instrument,
+        scene=scene,
+        observation=observation,
+        grids=[dict(pitch=np.linspace(-20, 20, 5) * u.arcsec)],
+        parameters=parameters,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        axis_channel="channel",
+        coherent=True,
+        sigma_psf=1.0,
+    )
+    assert na.shape(result_coherent.pitch) == dict()
+
 
 def test_fit_distortion_series(tmp_path: pathlib.Path):
     instrument = esis.flights.f1.optics.design(
