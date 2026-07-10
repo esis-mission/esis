@@ -1,5 +1,7 @@
+import pathlib
 import numpy as np
 import astropy.units as u
+import astropy.table
 import named_arrays as na
 import optika
 import esis
@@ -7,6 +9,8 @@ from esis.flights.f1.spectrum import He_I, Mg_X, O_V
 from .. import primaries
 from .. import gratings
 from .. import filters
+
+_directory_data = pathlib.Path(__file__).parent / "_data"
 
 __all__ = [
     "design_full",
@@ -503,11 +507,12 @@ def distortion_fit(
     """
     Apply the best-fit distortion parameters to the ESIS-I :func:`design`.
 
-    The parameters are hard-coded from the best distortion fit of the ESIS-I
-    flight data, optimized against the ``time=15`` frame of the 2019-09-30
-    flight (:func:`esis.flights.f1.data.level_1`, with a start time of
-    2019-09-30T18:08:41.642 UTC). The values are per-channel and were produced
-    by the ``ESISI_distortion_optimization_20260213_151715`` run.
+    The per-channel parameters are loaded from
+    ``_data/distortion_reference.ecsv``, the best distortion fit of the
+    ESIS-I flight data, optimized against the ``time=15`` frame of the
+    2019-09-30 flight (:func:`esis.flights.f1.data.level_1`, with a start
+    time of 2019-09-30T18:08:41.642 UTC). The provenance of the fit is
+    recorded in the file header.
 
     If `axis_time` is given, the instrument pointing additionally carries the
     fitted per-frame payload pointing along that axis, one element per frame
@@ -515,13 +520,9 @@ def distortion_fit(
     pointing drifted by several arcseconds (dominated by yaw, which sweeps
     monotonically from :math:`+3.3''` at the first frame to :math:`-4.4''` at
     the last); the optics are otherwise held fixed at the reference fit. The
-    offsets are common to all four channels (a rigid-payload model) and were
-    measured independently for every frame on 2026-07-06 by scanning the
-    correlation between the imaged AIA scene and each Level-1 frame over a
-    common pitch/yaw/roll offset and refining each axis with a parabola fit
-    (a :math:`401^2` scene, a 1-pixel-deviation Gaussian point-spread
-    function applied to the modeled image, and two coarse-to-fine rounds per
-    frame).
+    offsets are common to all four channels (a rigid-payload model) and are
+    loaded from ``_data/distortion_pointing.ecsv``, which records the
+    provenance of the per-frame fits in its header.
 
     Parameters
     ----------
@@ -621,197 +622,31 @@ def distortion_fit(
         axes="wavelength",
     )
 
-    model.grating.yaw = (
-        na.ScalarArray(
-            np.array([-2.693e02, -2.681e02, -2.687e02, -2.680e02]),
-            axes=axis_channel,
-        )
-        * u.arcmin
+    parameters = esis.optics.DistortionParameters.from_file(
+        path=_directory_data / "distortion_reference.ecsv",
+        axis=axis_channel,
     )
-    model.grating.pitch = (
-        na.ScalarArray(
-            np.array([3.704e00, 1.522e00, 1.316e00, 5.705e00]),
-            axes=axis_channel,
-        )
-        * u.arcmin
-    )
-    model.grating.roll = (
-        na.ScalarArray(
-            np.array([1.027e00, 2.393e-01, 3.678e-01, 1.020e00]),
-            axes=axis_channel,
-        )
-        * u.deg
-    )
-    model.field_stop.roll = (
-        na.ScalarArray(
-            np.array([-2.066e-01, -2.891e-01, -5.264e-01, 1.182e00]),
-            axes=axis_channel,
-        )
-        * u.deg
-    )
-    model.grating.rulings.spacing.coefficients[0] = (
-        na.ScalarArray(
-            np.array([3.854e-01, 3.859e-01, 3.855e-01, 3.863e-01]),
-            axes=axis_channel,
-        )
-        * u.um
-    )
-
-    # The fitted primary-mirror displacement relative to its -1000 mm nominal
-    # focal length; this hard reference is what the fit is measured from.
-    primary_displacement = (
-        na.ScalarArray(
-            np.array([-5.649e00, -2.207e-02, -2.795e00, -1.616e00]),
-            axes=axis_channel,
-        )
-        * u.mm
-    )
-    model.primary_mirror.sag.focal_length = -1000 * u.mm + primary_displacement
-    model.primary_mirror.translation.z = -primary_displacement
-
-    # Per-channel pointing re-polished 2026-07-07 against the time=15 frame
-    # with the deterministic PSF-smoothed correlation (401-pixel scene,
-    # per-channel peaks read from coherent pointing scans), correcting
-    # constant per-channel misregistrations of up to ~2.5 detector pixels
-    # left by the original stochastic 201-pixel optimization.
-    model.pitch = (
-        na.ScalarArray(
-            np.array([-19.7717, -21.25244, -22.08457, -21.68604]),
-            axes=axis_channel,
-        )
-        * u.arcsec
-    )
-    model.yaw = (
-        na.ScalarArray(
-            np.array([-20.13878, -16.59384, -16.49289, -15.38459]),
-            axes=axis_channel,
-        )
-        * u.arcsec
-    )
-    model.roll = (
-        na.ScalarArray(
-            np.array([-0.82038, -0.3028, -0.24703, -1.06117]),
-            axes=axis_channel,
-        )
-        * u.deg
-    )
+    model = parameters.to_instrument(model)
 
     if axis_time is not None:
-        model.pitch = model.pitch + (
-            na.ScalarArray(np.array(_pointing_pitch), axes=axis_time) * u.arcsec
+        pointing = astropy.table.QTable.read(
+            _directory_data / "distortion_pointing.ecsv",
+            format="ascii.ecsv",
         )
-        model.yaw = model.yaw + (
-            na.ScalarArray(np.array(_pointing_yaw), axes=axis_time) * u.arcsec
+        model.pitch = model.pitch + na.ScalarArray(
+            u.Quantity(pointing["pitch"]),
+            axes=axis_time,
         )
-        model.roll = model.roll + (
-            na.ScalarArray(np.array(_pointing_roll), axes=axis_time) * u.deg
+        model.yaw = model.yaw + na.ScalarArray(
+            u.Quantity(pointing["yaw"]),
+            axes=axis_time,
+        )
+        model.roll = model.roll + na.ScalarArray(
+            u.Quantity(pointing["roll"]),
+            axes=axis_time,
         )
 
     return model
-
-
-# The per-frame payload pointing offsets relative to the time=15 reference
-# fit, one element per frame of esis.flights.f1.data.level_1(), measured
-# 2026-07-07 by per-frame coherent pitch/yaw/roll merit scans against the
-# re-polished per-channel reference (see the distortion_fit docstring).
-# The time=15 elements are consistent with zero, confirming the reference
-# and the time series agree.
-_pointing_pitch = [
-    0.9805,
-    0.7607,
-    0.4168,
-    0.3388,
-    0.3081,
-    0.2087,
-    0.0614,
-    0.0413,
-    0.0284,
-    0.1326,
-    0.0550,
-    -0.0571,
-    -0.3421,
-    -0.1918,
-    -0.1614,
-    0.0705,
-    0.1508,
-    -0.0703,
-    0.0320,
-    -0.0064,
-    0.0028,
-    0.0424,
-    0.0603,
-    -0.0489,
-    -0.0206,
-    -0.1942,
-    -0.2018,
-    -0.0822,
-    -0.0822,
-    -0.0402,
-]
-_pointing_yaw = [
-    3.6928,
-    3.6224,
-    3.2995,
-    3.2085,
-    2.9156,
-    2.6023,
-    2.4250,
-    2.1710,
-    1.9898,
-    1.6427,
-    1.4558,
-    1.0418,
-    0.9022,
-    0.5417,
-    0.3938,
-    -0.0053,
-    -0.1843,
-    -0.4411,
-    -0.8831,
-    -0.9857,
-    -1.1723,
-    -1.7005,
-    -1.9098,
-    -2.0489,
-    -2.6097,
-    -2.7764,
-    -3.1531,
-    -3.4944,
-    -3.7320,
-    -4.0488,
-]
-_pointing_roll = [
-    -0.00451,
-    -0.05431,
-    0.00271,
-    0.02175,
-    -0.03299,
-    -0.02115,
-    -0.00750,
-    -0.03146,
-    -0.00485,
-    -0.00274,
-    -0.04148,
-    -0.02061,
-    -0.04902,
-    -0.02972,
-    -0.08825,
-    0.01418,
-    -0.03381,
-    -0.06777,
-    -0.01660,
-    -0.03867,
-    0.01496,
-    -0.01852,
-    -0.01871,
-    -0.03029,
-    -0.03952,
-    -0.05201,
-    -0.02006,
-    -0.05063,
-    -0.01753,
-    -0.01305,
-]
 
 
 def distortion_fit_bounds(
