@@ -41,6 +41,22 @@ jobs:
           sudo apt-get install graphviz pandoc
           pip install -e .[doc]
 
+      - name: Cache flight data
+        uses: actions/cache@v4
+        with:
+          path: ~/.esis/cache
+          key: esis-flight-data-${{ hashFiles('esis/_caching.py') }}
+
+      - name: Warm the flight-data cache
+        # the Level-1 pipeline peaks at tens of GiB; paying that cost here, in
+        # a clean process, keeps the peak out of the Sphinx build, and the
+        # cache above makes it a no-op on subsequent runs
+        env:
+          JSOC_EMAIL: "roytsmart@gmail.com"
+        run: |
+          python -c "import esis; esis.flights.f1.data.level_1()"
+          python -c "import esis; esis.flights.f1.data.synth.scene_aia()"
+
       - name: Build with Sphinx
         env:
           JSOC_EMAIL: "roytsmart@gmail.com"
