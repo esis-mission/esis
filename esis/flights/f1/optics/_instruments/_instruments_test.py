@@ -61,6 +61,21 @@ def test_distortion_fit(num_distribution: int):
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
 
+    # spot-check the loaded reference against the values fit on 2026-07-07,
+    # guarding the data file and its loader against silent drift
+    assert np.allclose(
+        result.pitch.ndarray.to(u.arcsec).value,
+        [-19.7717, -21.25244, -22.08457, -21.68604],
+    )
+    assert np.allclose(
+        result.grating.rulings.spacing.coefficients[0].ndarray.to(u.um).value,
+        [0.3854, 0.3859, 0.3855, 0.3863],
+    )
+    assert np.allclose(
+        result.primary_mirror.translation.z.ndarray.to(u.mm).value,
+        [5.649, 0.02207, 2.795, 1.616],
+    )
+
 
 def test_distortion_fit_time():
     reference = esis.flights.f1.optics.distortion_fit(num_distribution=0)
