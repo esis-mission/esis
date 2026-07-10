@@ -36,6 +36,23 @@ def test_as_built(num_distribution: int):
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
 
+    design = esis.flights.f1.optics.design(num_distribution=0)
+    assert np.all(
+        np.sign(na.value(result.grating.sag.radius).ndarray)
+        == np.sign(na.value(design.grating.sag.radius))
+    )
+
+
+def test_as_built_focus():
+    """The as-built model must actually focus (guards the sag sign convention)."""
+    result = esis.flights.f1.optics.as_built(num_distribution=0)
+    rays = result.system.rayfunction_default.outputs
+    axis_pupil = ("pupil_x", "pupil_y")
+    spread = rays.position - rays.position.mean(axis=axis_pupil)
+    r2 = (spread.x**2 + spread.y**2).mean(axis=axis_pupil)
+    rms = np.sqrt(np.mean(na.nominal(r2).ndarray))
+    assert rms < 1 * u.mm
+
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
 def test_distortion_fit(num_distribution: int):
