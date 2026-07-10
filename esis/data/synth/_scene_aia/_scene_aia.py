@@ -25,6 +25,7 @@ def scene_aia(
     num_velocity: int = 1,
     num_std: float = 3,
     limit: None | int = None,
+    crop: None | dict[str, tuple[float, float]] = None,
 ):
     r"""
     Create a synthetic solar scene composed of AIA images.
@@ -66,6 +67,14 @@ def scene_aia(
         The size of the domain for each spectral line in standard deviation units.
     limit
         The maximum number of files to download per wavelength.
+    crop
+        A mapping from detector axis to the fractional ``(start, stop)`` of
+        the AIA frame to keep, for example
+        ``{"detector_x": (1 / 3, 2 / 3)}``. The crop is applied before the
+        radiometric arithmetic (but after the normalization is computed from
+        the full frame, so the kept pixels are identical to cropping the
+        result), which reduces the peak memory of this function by the crop
+        area ratio.
 
     See Also
     --------
@@ -98,12 +107,22 @@ def scene_aia(
     )
     axis_detector_xy = axis_detector_x, axis_detector_y
 
-    crop = {
+    crop_normalization = {
         axis_detector_x: slice(1024, 1024 + 2048),
         axis_detector_y: slice(1024, 1024 + 2048),
     }
+    normalization = obs.outputs[crop_normalization].mean(axis_detector_xy)
 
-    outputs = radiance * obs.outputs / obs.outputs[crop].mean(axis_detector_xy)
+    if crop is not None:
+        shape = obs.outputs.shape
+        obs = obs[
+            {
+                axis: slice(int(start * shape[axis]), int(stop * shape[axis]))
+                for axis, (start, stop) in crop.items()
+            }
+        ]
+
+    outputs = radiance * obs.outputs / normalization
     delta_lambda = np.diff(wavelength, axis=axis_velocity)
     outputs = outputs * gaussian / delta_lambda
 
