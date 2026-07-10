@@ -3,6 +3,7 @@ from typing import Any, Sequence
 import copy
 import dataclasses
 import datetime
+import itertools
 import json
 import pathlib
 import time
@@ -991,6 +992,12 @@ def fit_distortion_scan(
         :class:`~astropy.units.Quantity` of offsets (relative to the current
         best) to scan, for example
         ``[dict(pitch=np.linspace(-10, 10, 21) * u.arcsec)]``.
+        Strongly-coupled fields can be scanned jointly by using a tuple of
+        field names as the key and a matching tuple of offset grids as the
+        value, for example ``{("pitch_grating", "pitch"): (grid_a, grid_b)}``,
+        which scans the full outer product and reads the joint peak —
+        independent scans of such pairs converge to a compensating local
+        optimum instead of the true solution.
     parameters
         The starting point of the fit.
         If :obj:`None`, the current parameters of `instrument` are used.
@@ -1025,6 +1032,12 @@ def fit_distortion_scan(
         A directory where the scan curves and convergence history are written
         as ``scan.json`` and ``scan.log``. If :obj:`None`, the fit is not
         logged.
+
+    Raises
+    ------
+    ValueError
+        If a joint entry of `grids` has a different number of fields and
+        offset grids.
 
     Examples
     --------
@@ -1115,12 +1128,23 @@ def fit_distortion_scan(
 
     for index, grids_round in enumerate(schedule):
         curves = {}
-        for field, offsets in grids_round.items():
-            offsets = u.Quantity(offsets)
+        for key, offsets in grids_round.items():
+            fields = key if isinstance(key, tuple) else (key,)
+            if not isinstance(offsets, tuple):
+                offsets = (offsets,)
+            offsets = tuple(u.Quantity(o) for o in offsets)
+            if len(fields) != len(offsets):
+                raise ValueError(
+                    f"the number of fields {fields} does not match the "
+                    f"number of offset grids for round {index}"
+                )
+
+            shape_grid = tuple(len(o) for o in offsets)
             values = []
-            for offset in offsets:
+            for deltas in itertools.product(*offsets):
                 trial = copy.copy(parameters)
-                setattr(trial, field, getattr(parameters, field) + offset)
+                for field, delta in zip(fields, deltas):
+                    setattr(trial, field, getattr(trial, field) + delta)
                 values.append(evaluate(trial))
                 nfev += 1
 
@@ -1128,24 +1152,45 @@ def fit_distortion_scan(
             values = np.stack(
                 [np.atleast_1d(na.value(v).ndarray) for v in values],
             )
-            peak = [
-                _peak_parabola(offsets.value, values[:, i])
-                for i in range(values.shape[~0])
-            ]
-            if axis_channel is not None and len(peak) > 1:
-                delta = na.ScalarArray(np.array(peak), axes=axis_channel)
-            else:
-                delta = peak[0]
-            delta = delta * offsets.unit
-            setattr(parameters, field, getattr(parameters, field) + delta)
+            num_curve = values.shape[~0]
+            values = values.reshape(shape_grid + (num_curve,))
 
-            curves[field] = dict(
-                offsets=[float(x) for x in offsets.value],
-                unit=str(offsets.unit),
+            # locate the joint maximum of each curve, then refine every field
+            # with a parabola along its own axis through the maximum
+            peak = {field: [] for field in fields}
+            for i in range(num_curve):
+                v = values[..., i]
+                index_max = np.unravel_index(int(np.argmax(v)), v.shape)
+                for a, field in enumerate(fields):
+                    section = v[
+                        tuple(
+                            slice(None) if b == a else index_max[b]
+                            for b in range(len(fields))
+                        )
+                    ]
+                    peak[field].append(_peak_parabola(offsets[a].value, section))
+
+            for a, field in enumerate(fields):
+                if axis_channel is not None and num_curve > 1:
+                    delta = na.ScalarArray(np.array(peak[field]), axes=axis_channel)
+                else:
+                    delta = peak[field][0]
+                setattr(
+                    parameters,
+                    field,
+                    getattr(parameters, field) + delta * offsets[a].unit,
+                )
+
+            name = " x ".join(fields)
+            curves[name] = dict(
+                fields=list(fields),
+                offsets=[[float(x) for x in o.value] for o in offsets],
+                unit=[str(o.unit) for o in offsets],
                 values=values.tolist(),
-                peak=[float(p) for p in peak],
+                peak={f: [float(p) for p in peak[f]] for f in fields},
             )
-            log(f"round {index} | {field} | peak {np.round(peak, 6)}")
+            peak_round = {f: np.round(peak[f], 6) for f in fields}
+            log(f"round {index} | {name} | peak {peak_round}")
 
         corr = evaluate(parameters)
         nfev += 1

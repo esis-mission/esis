@@ -380,12 +380,16 @@ def test_fit_distortion_scan(tmp_path: pathlib.Path):
     ).outputs
 
     grids = [
-        dict(
-            pitch=np.linspace(-20, 20, 5) * u.arcsec,
-            yaw=np.linspace(-20, 20, 5) * u.arcsec,
-        ),
+        {
+            # a joint 2-D scan of a strongly-coupled pair
+            ("pitch", "yaw"): (
+                np.linspace(-20, 20, 3) * u.arcsec,
+                np.linspace(-20, 20, 3) * u.arcsec,
+            ),
+        },
         dict(
             pitch=np.linspace(-4, 4, 5) * u.arcsec,
+            yaw=np.linspace(-4, 4, 5) * u.arcsec,
         ),
     ]
 
@@ -405,7 +409,7 @@ def test_fit_distortion_scan(tmp_path: pathlib.Path):
 
     # the fitted offsets must stay within the scanned ranges
     assert np.abs(result.pitch - parameters.pitch) <= 24 * u.arcsec
-    assert np.abs(result.yaw - parameters.yaw) <= 20 * u.arcsec
+    assert np.abs(result.yaw - parameters.yaw) <= 24 * u.arcsec
 
     assert (tmp_path / "scan" / "scan.json").exists()
     assert (tmp_path / "scan" / "scan.log").exists()
