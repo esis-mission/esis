@@ -53,6 +53,7 @@ class Camera(
             axis_pixel=na.Cartesian2dVectorArray("detector_x", "detector_y"),
             num_pixel=self.sensor.num_pixel_active,
             timedelta_exposure=self.timedelta_exposure,
+            read_noise=self.sensor.readout_noise,
             material=self.sensor.material,
             aperture_mechanical=optika.apertures.RectangularAperture(
                 half_width=self.sensor.width_package / 2,
