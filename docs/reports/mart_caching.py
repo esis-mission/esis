@@ -406,8 +406,14 @@ def _coalesce_packed(packed: tuple) -> tuple:
     for indices, values in packed_lists:
         indices_input = indices[:, 0].astype(np.int64)
         indices_output = indices[:, 1].astype(np.int64)
-        bound = np.int64(indices_output.max()) + 1 if values.shape[0] else 1
-        key = indices_input * bound + indices_output
+        # key relative to the index minima: the builders can emit negative
+        # (wraparound) indices for descending grids
+        base_input = np.int64(indices_input.min()) if values.shape[0] else np.int64(0)
+        base_output = np.int64(indices_output.min()) if values.shape[0] else np.int64(0)
+        span = (
+            np.int64(indices_output.max()) - base_output + 1 if values.shape[0] else 1
+        )
+        key = (indices_input - base_input) * span + (indices_output - base_output)
         order = np.argsort(key, kind="stable")
         key = key[order]
         values_sorted = np.asarray(values, dtype=np.float64)[order]
@@ -419,8 +425,8 @@ def _coalesce_packed(packed: tuple) -> tuple:
         key_unique = key[starts]
         sums = np.add.reduceat(values_sorted, starts) if key.shape[0] else values_sorted
         merged = np.empty((key_unique.shape[0], 2), dtype=np.int64)
-        merged[:, 0] = key_unique // bound
-        merged[:, 1] = key_unique % bound
+        merged[:, 0] = key_unique // span + base_input
+        merged[:, 1] = key_unique % span + base_output
         result.append((merged, sums))
         _release_working_set(indices)
         _release_working_set(values)
