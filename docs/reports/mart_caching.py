@@ -180,7 +180,12 @@ def _pack_weights(
     """
     array, shape_input, shape_output = weights
     flat = array.ndarray.reshape(-1)
-    packed = [_triples_to_arrays(triples) for triples in flat]
+    packed = []
+    for k in range(flat.size):
+        packed.append(_triples_to_arrays(flat[k]))
+        # free each element's typed list as it is packed, so the peak memory
+        # is one full copy plus the growing arrays instead of two full copies
+        flat[k] = None
     return packed, array.ndarray.shape, array.axes, shape_input, shape_output
 
 
