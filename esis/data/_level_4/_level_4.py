@@ -55,6 +55,9 @@ class Level_4(
     factor_norm: None | na.AbstractScalarArray = None
     """The channel-normalization factor applied to each image."""
 
+    where_shadow: None | na.AbstractScalarArray = None
+    """The mask of shaded detector pixels excluded from the inversion."""
+
     axis_time: str = dataclasses.field(default="time", kw_only=True)
     """The name of the logical axis corresponding to changing time."""
 
@@ -81,6 +84,7 @@ class Level_4(
         num_velocity: None | int = None,
         pitch_scene: None | u.Quantity = None,
         factor_fov: float = 1.25,
+        where_shadow: None | bool | na.AbstractScalarArray = True,
         degree: int = 2,
         index_time_reference: int = 0,
         index_channel_reference: int = 0,
@@ -157,6 +161,20 @@ class Level_4(
             The factor by which the scene grid is padded beyond the extent of
             the default raytrace grid, so the corners of the octagonal field
             stop are not truncated.
+        where_shadow
+            A boolean mask of detector pixels shaded by the misaligned
+            frame-transfer storage-region mask, :obj:`True` where shaded.
+            If :obj:`True` (the default), the mask is measured from the data
+            using :meth:`~esis.data.Level_1.where_shadow`; if :obj:`None` or
+            :obj:`False`, no pixels are masked.
+            Shaded pixels are removed from the forward and transpose weights,
+            so the model can place no flux on them and they contribute
+            nothing to the multiplicative correction, and their data is
+            zeroed so they cannot bias the channel normalization or the
+            :math:`\chi^2`.
+            Without this mask the near-zero shaded pixels sit inside the
+            model's He I footprint and MART carves non-physical dark lanes
+            across the He I maps to satisfy them.
         degree
             The degree of the polynomial distortion and vignetting models
             fitted by the linearization.
@@ -297,7 +315,38 @@ class Level_4(
             code=code,
         )
 
+        if where_shadow is True:
+            where_shadow = a.where_shadow()
+        if where_shadow is False:
+            where_shadow = None
+
+        if where_shadow is not None:
+            shape_detector = {
+                axis_channel: a.shape[axis_channel],
+                a.axis_x: a.shape[a.axis_x],
+                a.axis_y: a.shape[a.axis_y],
+            }
+            keep = (~where_shadow).broadcast_to(shape_detector)
+            src = [keep.axes.index(ax) for ax in shape_detector]
+            keep_flat = np.moveaxis(keep.ndarray, src, range(3)).reshape(
+                shape_detector[axis_channel], -1
+            )
+            instrument_mart.weights = _filter_weights_shadow(
+                weights=instrument_mart.weights,
+                keep_flat=keep_flat,
+                axis_channel=axis_channel,
+                index_detector=1,
+            )
+            instrument_mart.weights_transpose = _filter_weights_shadow(
+                weights=instrument_mart.weights_transpose,
+                keep_flat=keep_flat,
+                axis_channel=axis_channel,
+                index_detector=0,
+            )
+
         electrons = np.maximum(a.outputs, 0)
+        if where_shadow is not None:
+            electrons = electrons * ~where_shadow
         mean_channel = electrons.mean((a.axis_x, a.axis_y))
         mean_reference = mean_channel[{axis_channel: index_channel_reference}]
         factor_norm = mean_reference / mean_channel
@@ -382,6 +431,7 @@ class Level_4(
             mean_chi_squared=na.stack(chi_squared, axis=axis_time),
             num_iteration=na.ScalarArray(np.array(iterations), axes=(axis_time,)),
             factor_norm=factor_norm,
+            where_shadow=where_shadow,
             axis_time=axis_time,
             axis_wavelength=axis_wavelength,
             axis_x=axis_x,
@@ -698,6 +748,59 @@ class Level_4(
         result = IPython.display.HTML(result)
         plt.close(animation._fig)
         return result
+
+
+def _filter_weights_shadow(
+    weights: tuple,
+    keep_flat: np.ndarray,
+    axis_channel: str,
+    index_detector: int,
+) -> tuple:
+    """
+    Remove weight triples that reference shaded detector pixels.
+
+    Each element of the weights table is a ``(indices_input, indices_output,
+    values)`` triple; the triples whose detector index falls on a shaded
+    pixel are deleted outright, so the forward model can place no flux on
+    those pixels and the backprojection never reads them.
+
+    Parameters
+    ----------
+    weights
+        The ``(table, shape_input, shape_output)`` weights tuple, where the
+        table is an array of triples over the channel and wavelength axes.
+    keep_flat
+        A boolean array of shape ``(num_channel, num_detector_pixel)``,
+        :obj:`True` for the detector pixels to keep, with the detector axes
+        flattened in the same C order as the weight indices.
+    axis_channel
+        The name of the logical axis of the table corresponding to changing
+        channel.
+    index_detector
+        The member of each triple holding detector indices: ``1`` (the
+        output indices) for the forward weights, ``0`` (the input indices)
+        for the transpose weights.
+    """
+    table, shape_input, shape_output = weights
+
+    axes = table.axes
+    index_channel = axes.index(axis_channel)
+    view = np.moveaxis(table.ndarray, index_channel, 0)
+
+    result = np.empty_like(view)
+    for c in range(view.shape[0]):
+        keep_c = keep_flat[c]
+        for j in range(view.shape[1]):
+            idx_input, idx_output, values = view[c, j]
+            keep = keep_c[(idx_input, idx_output)[index_detector]]
+            result[c, j] = (
+                np.ascontiguousarray(idx_input[keep]),
+                np.ascontiguousarray(idx_output[keep]),
+                np.ascontiguousarray(values[keep]),
+            )
+    result = np.moveaxis(result, 0, index_channel)
+
+    return na.ScalarArray(result, axes=axes), shape_input, shape_output
 
 
 def _plate_scale(

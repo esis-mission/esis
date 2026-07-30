@@ -77,6 +77,12 @@ class TestLevel_4:
         a = _level_4()
         assert np.all(a.factor_norm > 0)
 
+    def test_where_shadow(self):
+        a = _level_4()
+        assert a.where_shadow is not None
+        assert a.where_shadow.dtype == bool
+        assert np.any(a.where_shadow)
+
     def test_window(self):
         a = _level_4()
         num = a.num_velocity + 1
