@@ -3,13 +3,14 @@ import numpy as np
 import named_arrays as na
 import optika
 import esis
-from ... import wavelength_Ne_VII, wavelength_Si_XII
+from ... import wavelength_Ne_VII, wavelength_Si_XII, wavelength_HeNe
 
 __all__ = [
     "design_proposed",
     "design_guess",
     "design_single",
     "design",
+    "design_visible",
 ]
 
 
@@ -535,5 +536,96 @@ def design(
     result.camera.channel = old.camera.channel
 
     result.roll = old.roll
+
+    return result
+
+
+def design_visible(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    r"""
+    Load a visible-light version of the ESIS-II design.
+
+    This is a model of the visible-light alignment gratings.
+    Since the flight rulings are too fine to be tested with visible light,
+    each science grating is paired with a visible-light alignment grating
+    whose ruling spacing is scaled so that a HeNe laser reproduces the
+    flight geometry.
+
+    This model starts with :func:`~esis.flights.f2.optics.design` and
+    multiplies every coefficient of the grating ruling spacing polynomial
+    by the ratio
+
+    .. math::
+
+        \frac{d_\text{vis}(y)}{d(y)}
+            = \frac{\lambda_\text{HeNe}}{\lambda_c},
+
+    where :math:`\lambda_\text{HeNe} = 632.8` nm is the wavelength of a
+    HeNe laser and :math:`\lambda_c` is the center of the EUV passband.
+    From the grating equation, preserving :math:`\lambda / d(y)` at every
+    point on the face of the grating means that a HeNe laser diffracted
+    into first order by the alignment grating follows the same path
+    through the instrument as :math:`\lambda_c` diffracted by the science
+    grating.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+
+    Examples
+    --------
+    Plot the rays traveling through the visible-light optical system,
+    as viewed from the side.
+
+    .. jupyter-execute::
+
+        import matplotlib.pyplot as plt
+        import astropy.visualization
+        import named_arrays as na
+        import esis
+
+        # Load the visible-light instrument into memory
+        instrument = esis.flights.f2.optics.design_visible(num_distribution=0)
+
+        # Lower the number of field and pupil samples
+        # for clearer plotting
+        instrument.field.num = 3
+        instrument.pupil.num = 3
+
+        with astropy.visualization.quantity_support():
+            fig, ax = plt.subplots(constrained_layout=True)
+            instrument.system.plot(
+                components=("z", "x"),
+                color="black",
+                kwargs_rays=dict(
+                    color="tab:red",
+                ),
+            );
+    """
+    result = design(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+
+    wavelength_center = (wavelength_Ne_VII + wavelength_Si_XII) / 2
+
+    ratio = (wavelength_HeNe / wavelength_center).to(u.dimensionless_unscaled)
+
+    coefficients = result.grating.rulings.spacing.coefficients
+    for power in coefficients:
+        coefficients[power] = ratio * coefficients[power]
+
+    if grid is None or grid.wavelength is None:
+        result.wavelength = wavelength_HeNe
 
     return result
