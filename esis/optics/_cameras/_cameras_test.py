@@ -18,3 +18,4 @@ class TestCameras(
         a: esis.optics.abc.AbstractPrimaryMirror,
     ):
         assert isinstance(a.surface, optika.surfaces.AbstractSurface)
+        assert a.surface.read_noise == a.sensor.readout_noise

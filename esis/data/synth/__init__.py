@@ -1,7 +1,9 @@
 """Tools for creating synthetic solar scenes for ESIS analysis."""
 
 from ._scene_aia import scene_aia
+from ._scene_iris import scene_iris
 
 __all__ = [
     "scene_aia",
+    "scene_iris",
 ]

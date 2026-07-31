@@ -156,7 +156,7 @@ def test_distortion_objective():
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs.sum("wavelength")
+    ).outputs
 
     objective = esis.optics.DistortionObjective(
         instrument=instrument,
@@ -272,7 +272,7 @@ def test_distortion_residual():
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs.sum("wavelength")
+    ).outputs
 
     residual = esis.optics.DistortionResidual(
         instrument=instrument,
@@ -331,7 +331,7 @@ def test_distortion_residual_sigma_psf():
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs.sum("wavelength")
+    ).outputs
 
     residual = esis.optics.DistortionResidual(
         instrument=instrument,
@@ -392,7 +392,7 @@ def test_fit_distortion_scan(tmp_path: pathlib.Path):
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs.sum("wavelength")
+    ).outputs
 
     grids = [
         {
@@ -507,7 +507,7 @@ def test_fit_distortion_series(tmp_path: pathlib.Path):
         axis_wavelength="wavelength",
         axis_field=("scene_x", "scene_y"),
         noise=False,
-    ).outputs.sum("wavelength")
+    ).outputs
 
     grids = [dict(pitch=np.linspace(-10, 10, 5) * u.arcsec)]
 
