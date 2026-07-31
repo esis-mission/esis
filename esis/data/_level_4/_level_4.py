@@ -749,6 +749,115 @@ class Level_4(
         plt.close(animation._fig)
         return result
 
+    def locate_event(
+        self,
+        index_line: None | int = None,
+        center: None | u.Quantity = None,
+        radius: u.Quantity = 330 * u.arcsec,
+        sigma: float = 2,
+    ) -> u.Quantity:
+        """
+        Locate the strongest compact Doppler event in the reconstruction.
+
+        The event is found as the maximum over time of the smoothed product
+        of the line intensity and the magnitude of the intensity-weighted
+        mean Doppler velocity, restricted to the interior of the field of
+        view; see :func:`esis.data._level_4._movies.locate_event`.
+
+        Parameters
+        ----------
+        index_line
+            The index of the spectral line to search along
+            :attr:`axis_line`.
+            If :obj:`None`, the last line (O V 630 for the baseline
+            product).
+        center
+            The center of the field of view.
+            If :obj:`None`, the center of the scene grid.
+        radius
+            The radius around `center` to search; the default excludes the
+            region outside the octagonal field stop of ESIS-I.
+        sigma
+            The width of the Gaussian smoothing, in scene cells.
+        """
+        from . import _movies
+
+        return _movies.locate_event(
+            self,
+            index_line=index_line,
+            center=center,
+            radius=radius,
+            sigma=sigma,
+        )
+
+    def animate_event(
+        self,
+        position: u.Quantity,
+        halfwidth: u.Quantity = 40 * u.arcsec,
+        context: None | dict[str, na.FunctionArray] = None,
+        cmaps_context: None | dict[str, str] = None,
+        labels: None | list[str] = None,
+        limit_velocity: u.Quantity = 80 * u.km / u.s,
+        percentile_max: float = 99.5,
+        percentile_alpha: float = 99,
+        correct_transmission: bool = True,
+        interval: int = 200,
+    ) -> matplotlib.animation.FuncAnimation:
+        """
+        Animate an event: intensity and Doppler maps of every line.
+
+        The figure has one column per spectral line and three rows: the
+        total intensity of each line, the Doppler map of each line, and —
+        if `context` is given — co-temporal context images (e.g. AIA
+        channels), each shown at the frame nearest in time to the current
+        Level-4 frame; see :func:`esis.data._level_4._movies.animate_event`.
+
+        Parameters
+        ----------
+        position
+            The center of the event, in scene coordinates.
+        halfwidth
+            The half-width of the field of view of the movie.
+        context
+            A mapping from label to a context-image function of
+            ``(time, x, y)``, on the same coordinate frame as the scene,
+            whose time, horizontal, and vertical coordinates are
+            one-dimensional vertex arrays along their own logical axes.
+        cmaps_context
+            An optional mapping from context label to colormap name.
+        labels
+            The label of each spectral line.
+            If :obj:`None`, the rest wavelength of each line is used.
+        limit_velocity
+            The Doppler velocity mapped to the ends of the colormap.
+        percentile_max
+            The percentile of the in-frame intensity mapped to the top of
+            the intensity colormap.
+        percentile_alpha
+            The percentile of the in-frame intensity mapped to fully opaque
+            in the Doppler maps.
+        correct_transmission
+            Whether to divide the intensity by the relative atmospheric
+            transmission of each frame.
+        interval
+            The delay between frames in milliseconds.
+        """
+        from . import _movies
+
+        return _movies.animate_event(
+            self,
+            position=position,
+            halfwidth=halfwidth,
+            context=context,
+            cmaps_context=cmaps_context,
+            labels=labels,
+            limit_velocity=limit_velocity,
+            percentile_max=percentile_max,
+            percentile_alpha=percentile_alpha,
+            correct_transmission=correct_transmission,
+            interval=interval,
+        )
+
 
 def _filter_weights_shadow(
     weights: tuple,
