@@ -4,6 +4,7 @@ import pathlib
 import pickle
 import types
 import numpy as np
+import scipy.optimize
 import pytest
 import astropy.units as u
 import named_arrays as na
@@ -580,3 +581,47 @@ def test_convergence_logger(tmp_path: pathlib.Path):
     assert len(logger.path_data.read_text().splitlines()) == 3
     assert logger.path_log.exists()
     assert logger.path_plot.exists()
+
+
+def test_fit_distortion_defaults(monkeypatch: pytest.MonkeyPatch):
+    """
+    Exercise the default `parameters` and `kwargs_optimizer` of the driver.
+
+    The optimizer is replaced with a stub that returns the initial guess, so
+    only the argument plumbing of :func:`esis.optics.fit_distortion` runs:
+    with `parameters` unset the initial guess comes from the instrument, and
+    with `kwargs_optimizer` unset the optimizer receives no extra arguments.
+    """
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )[dict(channel=0)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    bounds = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+
+    scene = _scene()
+
+    observation = instrument.system.image(
+        scene=scene,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        noise=False,
+    ).outputs
+
+    def _stub(func, bounds, x0, callback=None, **kwargs):
+        assert not kwargs
+        return scipy.optimize.OptimizeResult(x=x0)
+
+    monkeypatch.setattr(scipy.optimize, "differential_evolution", _stub)
+
+    result = esis.optics.fit_distortion(
+        instrument=instrument,
+        scene=scene,
+        observation=observation,
+        bounds=bounds,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+    )
+
+    assert isinstance(result, esis.optics.DistortionParameters)
+    assert np.allclose(na.pack(result).ndarray, na.pack(parameters).ndarray)
