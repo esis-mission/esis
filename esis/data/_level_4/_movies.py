@@ -148,8 +148,7 @@ def animate_event(
     num_time = a.shape[a.axis_time]
 
     if labels is None:
-        wavelength = a.wavelength_center.ndarray.to_value(u.AA)
-        labels = [f"{w:.0f} Å" for w in wavelength]
+        labels = [a.label(i) for i in range(num_line)]
 
     x0 = position[0].to_value(u.arcsec)
     y0 = position[1].to_value(u.arcsec)
@@ -179,6 +178,7 @@ def animate_event(
     velocity = a.velocity_mean
     if correct_transmission:
         intensity = intensity / a._transmission
+    unit_intensity = na.unit(intensity)
 
     intensity_frames = [
         [
@@ -309,6 +309,9 @@ def animate_event(
         result[..., 3] = np.clip(np.nan_to_num(alpha), 0, 1)
         return result
 
+    label_unit = (
+        f"({unit_intensity:latex_inline})" if unit_intensity is not None else ""
+    )
     for i in range(num_line):
         ax = fig.add_subplot(gs[0, i * span_line : (i + 1) * span_line])
         images_intensity.append(
@@ -323,6 +326,16 @@ def animate_event(
         ax.set_title(labels[i], fontsize=9)
         ax.set_xticks([])
         ax.set_yticks([])
+        colorbar = fig.colorbar(
+            images_intensity[i],
+            ax=ax,
+            location="bottom",
+            fraction=0.06,
+            pad=0.03,
+        )
+        colorbar.ax.tick_params(labelsize=6)
+        if i == 0:
+            colorbar.set_label(f"intensity {label_unit}", fontsize=7)
 
         ax = fig.add_subplot(gs[1, i * span_line : (i + 1) * span_line])
         images_doppler.append(ax.imshow(rgba(i, 0), extent=extent, origin="lower"))

@@ -43,6 +43,24 @@ def _lines() -> tuple[na.AbstractScalarArray, na.AbstractScalarArray]:
     return wavelength_center, width_doppler
 
 
+def _line_labels() -> list[str]:
+    """
+    Gather the display label of each baseline line, annotating blends.
+
+    The Mg X 610 window also contains the O IV 609.83 line (roughly 30% of
+    the blend), which is 20 km/s from Mg X 609.79 and has no window of its
+    own.
+    """
+    return [
+        "He I 584",
+        "O III 600",
+        "O IV 608",
+        "Mg X 610 + O IV",
+        "Mg X 625",
+        "O V 630",
+    ]
+
+
 def _grid_velocity(
     pitch_velocity: None | u.Quantity,
     limit_velocity: u.Quantity,
@@ -312,6 +330,7 @@ def level_4_parallel(
         ),
         instrument=reference.instrument,
         wavelength_center=reference.wavelength_center,
+        label_line=_line_labels(),
         num_velocity=reference.num_velocity,
         mean_chi_squared=na.stack(
             [frame.mean_chi_squared[index] for frame in frames],

@@ -43,6 +43,12 @@ class Level_4(
     wavelength_center: None | na.AbstractScalarArray = None
     """The rest wavelength of each reconstructed spectral line."""
 
+    label_line: None | list[str] = None
+    """
+    A human-readable label for each reconstructed spectral line,
+    including any blended lines sharing its window.
+    """
+
     num_velocity: None | int = None
     """The number of velocity bins in the Doppler window of each line."""
 
@@ -79,6 +85,7 @@ class Level_4(
         a: Level_1,
         wavelength_center: na.AbstractScalarArray,
         width_doppler: na.AbstractScalarArray,
+        label_line: None | list[str] = None,
         instrument: None | esis.optics.Instrument = None,
         limit_velocity: u.Quantity = 200 * u.km / u.s,
         num_velocity: None | int = None,
@@ -141,6 +148,9 @@ class Level_4(
         width_doppler
             The Doppler width of each spectral line, arranged along
             `axis_line`, used as the width of the Gaussian initial guess.
+        label_line
+            A human-readable label for each spectral line, including any
+            blended lines sharing its window.
         instrument
             A model of the ESIS instrument to invert with.
             If :obj:`None` (the default), the instrument associated with `a`
@@ -427,6 +437,7 @@ class Level_4(
             outputs=na.stack(solutions, axis=axis_time),
             instrument=instrument,
             wavelength_center=wavelength_center,
+            label_line=label_line,
             num_velocity=num_velocity,
             mean_chi_squared=na.stack(chi_squared, axis=axis_time),
             num_iteration=na.ScalarArray(np.array(iterations), axes=(axis_time,)),
@@ -443,6 +454,22 @@ class Level_4(
     def num_line(self) -> int:
         """The number of reconstructed spectral lines."""
         return self.wavelength_center.shape[self.axis_line]
+
+    def label(self, index_line: int) -> str:
+        """
+        Look up the label of the given line.
+
+        Falls back to the rest wavelength if :attr:`label_line` is not set.
+
+        Parameters
+        ----------
+        index_line
+            The index of the spectral line along :attr:`axis_line`.
+        """
+        if self.label_line is not None:
+            return self.label_line[index_line]
+        wavelength = self.wavelength_center[{self.axis_line: index_line}]
+        return f"{wavelength.ndarray.to_value(u.AA):.0f} Å"
 
     def window(self, index_line: int) -> dict[str, slice]:
         """
@@ -576,6 +603,8 @@ class Level_4(
         y = self.inputs.position.y.ndarray.to_value(u.arcsec)
         extent = (x[0], x[~0], y[0], y[~0])
 
+        ax.set_title(self.label(index_line))
+
         frames = [
             self._index_xy(intensity[{self.axis_time: t}])
             for t in range(self.shape[self.axis_time])
@@ -666,6 +695,8 @@ class Level_4(
         x = self.inputs.position.x.ndarray.to_value(u.arcsec)
         y = self.inputs.position.y.ndarray.to_value(u.arcsec)
         extent = (x[0], x[~0], y[0], y[~0])
+
+        ax.set_title(self.label(index_line))
 
         limit = limit_velocity.to_value(u.km / u.s)
         norm = matplotlib.colors.Normalize(vmin=-limit, vmax=limit)
