@@ -292,6 +292,7 @@ def animate_event(
     span_line = ncols_grid // num_line
     images_intensity = []
     images_doppler = []
+    axes_doppler = []
 
     def rgba(i: int, t: int) -> np.ndarray:
         """
@@ -339,6 +340,7 @@ def animate_event(
 
         ax = fig.add_subplot(gs[1, i * span_line : (i + 1) * span_line])
         images_doppler.append(ax.imshow(rgba(i, 0), extent=extent, origin="lower"))
+        axes_doppler.append(ax)
         ax.set_xticks([])
         ax.set_yticks([])
 
@@ -365,9 +367,9 @@ def animate_event(
     title = fig.suptitle(str(time_esis[0]), fontsize=10)
     fig.colorbar(
         matplotlib.cm.ScalarMappable(norm=norm_velocity, cmap=cmap_velocity),
-        ax=fig.axes,
+        ax=axes_doppler,
         label="mean Doppler velocity (km/s)",
-        shrink=0.6,
+        shrink=0.9,
     )
 
     def update(t: int) -> tuple:

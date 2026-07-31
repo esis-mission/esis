@@ -68,3 +68,7 @@ def test_animate_event():
         context=_context(),
     )
     assert isinstance(result, matplotlib.animation.FuncAnimation)
+
+    # actually draw a frame: layout problems (e.g. colorbar parenting under
+    # constrained_layout) only surface when the canvas renders
+    result._fig.canvas.draw()
