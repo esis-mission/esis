@@ -4,6 +4,7 @@ import named_arrays as na
 import optika
 import esis
 from ... import wavelength_Ne_VII, wavelength_Si_XII, wavelength_HeNe
+from .. import materials
 
 __all__ = [
     "design_proposed",
@@ -114,6 +115,9 @@ def design_proposed(
     dz = z_filter - result.filter.translation.z
     result.filter.translation.z += dz
     result.camera.sensor.translation.z += dz
+
+    result.primary_mirror.material = materials.multilayer_AlSc()
+    result.grating.material = materials.multilayer_AlSc()
 
     return result
 
@@ -288,6 +292,9 @@ def design_guess(
         axis_channel=axis_channel,
         num_distribution=num_distribution,
     )
+
+    result.primary_mirror.material = materials.multilayer_AlSc()
+    result.grating.material = materials.multilayer_AlSc()
 
     w1 = wavelength_Ne_VII
     w2 = wavelength_Si_XII

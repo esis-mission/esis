@@ -184,7 +184,7 @@ def multilayer_SiSc() -> optika.materials.MultilayerMirror:
                         ),
                     ),
                 ],
-                num_periods=10,
+                num_periods=5,
             ),
         ],
         substrate=optika.materials.Layer(
