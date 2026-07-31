@@ -47,7 +47,7 @@ def sbatch(
     command: str,
     directory: pathlib.Path,
     partition: str = "unsafe",
-    mem: str = "1200G",
+    mem: str = "500G",
     cpus: int = 64,
     hours: int = 8,
     array: None | str = None,
