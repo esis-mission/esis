@@ -14,7 +14,7 @@ if not hasattr(ctis.instruments, "OptikaInstrument"):  # pragma: nocover
 def test_level_4():
     result = esis.flights.f1.data.level_4(
         pitch_scene=16 * u.arcsec,
-        num_velocity=2,
+        pitch_velocity=200 * u.km / u.s,
         num_iteration=2,
     )
     assert isinstance(result, esis.data.Level_4)
