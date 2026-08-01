@@ -62,6 +62,13 @@ def scene_aia(
     limit
         The maximum number of files to download per wavelength.
     """
+    # joblib invalidates the cache only when this function's own source or
+    # arguments change, not when its callees change: bump this version token
+    # whenever esis.data.synth.scene_aia, esis.flights.f1.spectrum, or
+    # level_1() change behavior, so stale scenes are not served from
+    # ~/.esis/cache
+    _version_cache = 1  # noqa: F841
+
     l1 = level_1()
 
     if time_start is None:

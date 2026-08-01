@@ -45,7 +45,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.esis/cache
-          key: esis-flight-data-${{ hashFiles('esis/_caching.py') }}
+          # key on the sources of the cached pipeline so that editing a
+          # loader rotates the key (actions/cache never re-saves on a hit);
+          # restore-keys warm-starts from the newest previous cache, and
+          # joblib invalidates the individual stale entries inside it
+          key: esis-flight-data-${{ hashFiles('esis/_caching.py', 'esis/data/**/*.py', 'esis/flights/f1/data/**/*.py', 'esis/flights/f1/spectrum/**/*.py') }}
+          restore-keys: |
+            esis-flight-data-
 
       - name: Warm the flight-data cache
         # the Level-1 pipeline peaks at tens of GiB; paying that cost here, in

@@ -656,14 +656,22 @@ def distortion_fit_bounds(
     Compute the parameter bounds used when fitting the ESIS-I distortion.
 
     Most parameters are bounded at :math:`\pm 20\%` of the given initial
-    guess. The roll angles and the primary-mirror displacement are instead
-    given the hand-tuned absolute bounds of the
+    guess, but never narrower than an absolute floor sized to the capture
+    ranges of the :func:`fit_distortion_reference` scan schedule: the design
+    values of the instrument pitch and yaw and of the grating pitch are
+    exactly zero, and a purely relative bound around a zero guess would
+    collapse to zero width and silently freeze the parameter (equal bounds
+    are treated as fixed by :func:`scipy.optimize.differential_evolution`).
+    The roll angles and the primary-mirror displacement are instead given the
+    hand-tuned absolute bounds of the
     ``ESISI_distortion_optimization_20260213_151715`` run, the best fit of the
     ESIS-I flight data (and the source of the values in
-    :func:`distortion_fit`), since their initial guesses are zero or nearly so.
+    :func:`distortion_fit`).
 
-    The bounds are expressed in the same units as `parameters` so that
-    flattening both with :func:`named_arrays.pack` yields consistent vectors.
+    Every bound is broadcast against the shape of the corresponding parameter
+    and expressed in the same units, so that flattening the bounds and the
+    parameters with :func:`named_arrays.pack` yields vectors of the same
+    length, for scalar and per-channel parameters alike.
 
     Parameters
     ----------
@@ -687,28 +695,46 @@ def distortion_fit_bounds(
     """
     p = parameters
 
+    def relative(value, floor):
+        width = np.maximum(0.2 * np.abs(value), floor.to(na.unit(value)))
+        return value - width, value + width
+
+    def absolute(value, lower, upper):
+        zero = 0 * value
+        return zero + lower.to(na.unit(value)), zero + upper.to(na.unit(value))
+
+    yaw_grating = relative(p.yaw_grating, floor=3 * u.arcmin)
+    pitch_grating = relative(p.pitch_grating, floor=10 * u.arcmin)
+    roll_grating = absolute(p.roll_grating, -2 * u.deg, 2 * u.deg)
+    roll_field_stop = absolute(p.roll_field_stop, -4 * u.deg, 4 * u.deg)
+    spacing_rulings = relative(p.spacing_rulings, floor=2e-3 * u.um)
+    displacement_primary = absolute(p.displacement_primary, -10 * u.mm, 0 * u.mm)
+    pitch = relative(p.pitch, floor=60 * u.arcsec)
+    yaw = relative(p.yaw, floor=60 * u.arcsec)
+    roll = absolute(p.roll, -4 * u.deg, 0 * u.deg)
+
     lower = esis.optics.DistortionParameters(
-        yaw_grating=np.minimum(0.8 * p.yaw_grating, 1.2 * p.yaw_grating),
-        pitch_grating=np.minimum(0.8 * p.pitch_grating, 1.2 * p.pitch_grating),
-        roll_grating=(-2 * u.deg).to(na.unit(p.roll_grating)),
-        roll_field_stop=(-4 * u.deg).to(na.unit(p.roll_field_stop)),
-        spacing_rulings=np.minimum(0.8 * p.spacing_rulings, 1.2 * p.spacing_rulings),
-        displacement_primary=(-10 * u.mm).to(na.unit(p.displacement_primary)),
-        pitch=np.minimum(0.8 * p.pitch, 1.2 * p.pitch),
-        yaw=np.minimum(0.8 * p.yaw, 1.2 * p.yaw),
-        roll=(-4 * u.deg).to(na.unit(p.roll)),
+        yaw_grating=yaw_grating[0],
+        pitch_grating=pitch_grating[0],
+        roll_grating=roll_grating[0],
+        roll_field_stop=roll_field_stop[0],
+        spacing_rulings=spacing_rulings[0],
+        displacement_primary=displacement_primary[0],
+        pitch=pitch[0],
+        yaw=yaw[0],
+        roll=roll[0],
     )
 
     upper = esis.optics.DistortionParameters(
-        yaw_grating=np.maximum(0.8 * p.yaw_grating, 1.2 * p.yaw_grating),
-        pitch_grating=np.maximum(0.8 * p.pitch_grating, 1.2 * p.pitch_grating),
-        roll_grating=(2 * u.deg).to(na.unit(p.roll_grating)),
-        roll_field_stop=(4 * u.deg).to(na.unit(p.roll_field_stop)),
-        spacing_rulings=np.maximum(0.8 * p.spacing_rulings, 1.2 * p.spacing_rulings),
-        displacement_primary=(0 * u.mm).to(na.unit(p.displacement_primary)),
-        pitch=np.maximum(0.8 * p.pitch, 1.2 * p.pitch),
-        yaw=np.maximum(0.8 * p.yaw, 1.2 * p.yaw),
-        roll=(0 * u.deg).to(na.unit(p.roll)),
+        yaw_grating=yaw_grating[1],
+        pitch_grating=pitch_grating[1],
+        roll_grating=roll_grating[1],
+        roll_field_stop=roll_field_stop[1],
+        spacing_rulings=spacing_rulings[1],
+        displacement_primary=displacement_primary[1],
+        pitch=pitch[1],
+        yaw=yaw[1],
+        roll=roll[1],
     )
 
     return lower, upper

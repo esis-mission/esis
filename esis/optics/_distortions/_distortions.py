@@ -26,7 +26,7 @@ __all__ = [
 ]
 
 
-@dataclasses.dataclass(repr=False)
+@dataclasses.dataclass(eq=False, repr=False)
 class DistortionParameters(
     optika.mixins.Printable,
 ):
@@ -148,23 +148,26 @@ class DistortionParameters(
 
         result = copy.deepcopy(result)
 
+        # copy the parameter values too, so that the result does not alias
+        # this object's arrays (mutating one must not silently change the
+        # other)
+        p = copy.deepcopy(self)
+
         primary_mirror = result.primary_mirror
         focal_length_nominal = (
             primary_mirror.sag.focal_length + primary_mirror.translation.z
         )
 
-        result.grating.yaw = self.yaw_grating
-        result.grating.pitch = self.pitch_grating
-        result.grating.roll = self.roll_grating
-        result.field_stop.roll = self.roll_field_stop
-        result.grating.rulings.spacing.coefficients[0] = self.spacing_rulings
-        primary_mirror.sag.focal_length = (
-            focal_length_nominal + self.displacement_primary
-        )
-        primary_mirror.translation.z = -self.displacement_primary
-        result.pitch = self.pitch
-        result.yaw = self.yaw
-        result.roll = self.roll
+        result.grating.yaw = p.yaw_grating
+        result.grating.pitch = p.pitch_grating
+        result.grating.roll = p.roll_grating
+        result.field_stop.roll = p.roll_field_stop
+        result.grating.rulings.spacing.coefficients[0] = p.spacing_rulings
+        primary_mirror.sag.focal_length = focal_length_nominal + p.displacement_primary
+        primary_mirror.translation.z = -p.displacement_primary
+        result.pitch = p.pitch
+        result.yaw = p.yaw
+        result.roll = p.roll
 
         return result
 
@@ -193,7 +196,9 @@ class DistortionParameters(
         Raises
         ------
         ValueError
-            If the parameters have more than one logical axis.
+            If the parameters have more than one logical axis, or if
+            `metadata` contains the reserved key ``"axis"``, which records
+            the name of the logical axis for :meth:`from_file`.
 
         See Also
         --------
@@ -219,6 +224,11 @@ class DistortionParameters(
             columns[field.name] = np.broadcast_to(data, (num,), subok=True)
 
         table = astropy.table.QTable(columns)
+        if metadata is not None and "axis" in metadata:
+            raise ValueError(
+                f"the metadata key 'axis' is reserved for the name of the "
+                f"logical axis, got {metadata['axis']=}"
+            )
         table.meta["axis"] = axis
         if metadata is not None:
             table.meta.update(metadata)
@@ -264,7 +274,7 @@ class DistortionParameters(
         return cls(**fields)
 
 
-@dataclasses.dataclass(repr=False)
+@dataclasses.dataclass(eq=False, repr=False)
 class DistortionObjective(
     optika.mixins.Printable,
 ):
@@ -379,7 +389,7 @@ class DistortionObjective(
         return float(na.value(result).ndarray)
 
 
-@dataclasses.dataclass(repr=False)
+@dataclasses.dataclass(eq=False, repr=False)
 class DistortionResidual(
     optika.mixins.Printable,
 ):
@@ -693,7 +703,17 @@ def _peak_parabola(
         The sample positions.
     y
         The sampled curve values.
+
+    Raises
+    ------
+    ValueError
+        If fewer than 3 samples are given: a parabola through the best
+        sample and its neighbors is then underdetermined.
     """
+    if len(x) < 3:
+        raise ValueError(
+            f"at least 3 samples are required to refine a peak, got {len(x)}"
+        )
     i = int(np.argmax(y))
     i = min(max(i, 1), len(x) - 2)
     c = np.polyfit(x[i - 1 : i + 2], y[i - 1 : i + 2], 2)
@@ -752,15 +772,21 @@ def _correlation_model(
     """
     instrument = parameters.to_instrument(instrument)
 
-    # freeze the per-cell ray jitter so the correlation is deterministic
+    # freeze the per-cell ray jitter so the correlation is deterministic,
+    # then restore the caller's global RNG state so the reseed cannot leak
+    # into any Monte-Carlo work performed after the fit
+    state_random = np.random.get_state()
     np.random.seed(seed)
-    image = instrument.system.image(
-        scene=scene,
-        pupil=pupil,
-        axis_wavelength=axis_wavelength,
-        axis_field=axis_field,
-        noise=False,
-    )
+    try:
+        image = instrument.system.image(
+            scene=scene,
+            pupil=pupil,
+            axis_wavelength=axis_wavelength,
+            axis_field=axis_field,
+            noise=False,
+        )
+    finally:
+        np.random.set_state(state_random)
 
     image = na.value(image.outputs)
     observation = na.value(observation)
@@ -960,7 +986,9 @@ def fit_distortion_scan(
     held at their current best, and the parameter is moved to the peak of the
     sampled correlation curve, refined with a three-point parabola. Rounds
     are typically coarse-to-fine, so early rounds capture the solution and
-    later rounds polish it.
+    later rounds polish it. A round that degrades the correlation is
+    reverted, so the returned parameters are always the best state the scan
+    visited.
 
     If `axis_channel` is given, the correlation of each channel is recorded
     separately during every scan, and each channel's peak is read off its own
@@ -1043,7 +1071,7 @@ def fit_distortion_scan(
     ------
     ValueError
         If a joint entry of `grids` has a different number of fields and
-        offset grids.
+        offset grids, or if `coherent` is given without `axis_channel`.
 
     Examples
     --------
@@ -1082,6 +1110,12 @@ def fit_distortion_scan(
             sigma_psf=1.0,
         )
     """
+    if coherent and axis_channel is None:
+        raise ValueError(
+            "coherent=True requires axis_channel, which controls the "
+            "per-channel standardization of the merit"
+        )
+
     if parameters is None:
         parameters = DistortionParameters.from_instrument(instrument)
 
@@ -1129,10 +1163,12 @@ def fit_distortion_scan(
     log(f"start | correlation {merit_current:.6f}")
 
     schedule = list(grids)
-    if tolerance is not None and len(schedule) > 0:
+    num_round = len(schedule)
+    if tolerance is not None and num_round > 0:
         schedule = schedule + [schedule[-1]] * num_repeat
 
     for index, grids_round in enumerate(schedule):
+        parameters_before = copy.deepcopy(parameters)
         curves = {}
         for key, offsets in grids_round.items():
             fields = key if isinstance(key, tuple) else (key,)
@@ -1205,10 +1241,18 @@ def fit_distortion_scan(
         corr = evaluate(parameters)
         nfev += 1
         gain = merit(corr) - merit_current
-        merit_current = merit(corr)
+
+        # a round that degrades the merit is reverted, so the returned
+        # parameters are always the best state the scan visited
+        reverted = gain < 0
+        if reverted:
+            parameters = parameters_before
+        else:
+            merit_current = merit(corr)
+
         log(
-            f"round {index} | correlation {merit_current:.6f} "
-            f"({gain:+.6f}) | nfev {nfev}"
+            f"round {index} | correlation {merit(corr):.6f} "
+            f"({gain:+.6f}) | nfev {nfev}" + (" | reverted" if reverted else "")
         )
 
         summary_rounds.append(
@@ -1216,6 +1260,7 @@ def fit_distortion_scan(
                 index=index,
                 correlation=[float(x) for x in np.atleast_1d(na.value(corr).ndarray)],
                 gain=gain,
+                reverted=reverted,
                 curves=curves,
             )
         )
@@ -1229,7 +1274,7 @@ def fit_distortion_scan(
             with (directory / "scan.json").open("w") as f:
                 json.dump(summary, f, indent=2)
 
-        if tolerance is not None and index >= len(grids) and gain < tolerance:
+        if tolerance is not None and index >= num_round and gain < tolerance:
             log(f"converged | round gain {gain:+.6f} < {tolerance}")
             break
 
@@ -1312,7 +1357,19 @@ def fit_distortion_series(
     workers
         The number of processes used to fit frames concurrently.
         A value of 1 fits the frames serially in the current process.
+
+    Raises
+    ------
+    ValueError
+        If `scenes` and `observations` have different lengths: a silent
+        truncation would misattribute fits to frames.
     """
+    if len(scenes) != len(observations):
+        raise ValueError(
+            f"the number of scenes ({len(scenes)}) must match the number "
+            f"of observations ({len(observations)})"
+        )
+
     if parameters is None:
         parameters = DistortionParameters.from_instrument(instrument)
 
@@ -1339,7 +1396,7 @@ def fit_distortion_series(
             directory=directory_frame,
         )
 
-    frames = list(zip(scenes, observations))
+    frames = list(zip(scenes, observations, strict=True))
 
     if workers > 1:
         import concurrent.futures
@@ -1371,7 +1428,7 @@ def _fit_frame_scan(kwargs: dict[str, Any]) -> DistortionParameters:
     return fit_distortion_scan(**kwargs)
 
 
-@dataclasses.dataclass(repr=False)
+@dataclasses.dataclass(eq=False, repr=False)
 class ConvergenceLogger(
     optika.mixins.Printable,
 ):
@@ -1383,6 +1440,10 @@ class ConvergenceLogger(
     the population energies are appended to a CSV file, the best parameter
     vector is appended to a text log, and a convergence plot is saved, so that
     long-running fits can be monitored and post-mortemed.
+
+    Log files left in the directory by a previous run are rotated aside
+    (suffixed with their last-modified timestamp) instead of overwritten,
+    so that rerunning a fit cannot destroy the previous run's history.
     """
 
     directory: pathlib.Path
@@ -1401,6 +1462,16 @@ class ConvergenceLogger(
         self.iteration = 0
         self.history_energy = []
         self.history_deviation = []
+        for path in (self.path_data, self.path_log, self.path_plot):
+            if path.exists():
+                mtime = datetime.datetime.fromtimestamp(path.stat().st_mtime)
+                stem = f"{path.stem}_{mtime:%Y%m%d_%H%M%S}"
+                target = path.with_name(f"{stem}{path.suffix}")
+                index = 1
+                while target.exists():
+                    target = path.with_name(f"{stem}_{index}{path.suffix}")
+                    index += 1
+                path.rename(target)
         self.path_data.write_text("iteration,energy_best,deviation_population\n")
         self.path_log.write_text(
             f"--- optimization start: {datetime.datetime.now()} ---\n"

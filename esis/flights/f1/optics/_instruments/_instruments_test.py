@@ -101,8 +101,14 @@ def test_distortion_fit_time():
     assert np.all(offset_last < -1 * u.arcsec)
 
 
-def test_distortion_fit_bounds():
-    instrument = esis.flights.f1.optics.design(num_distribution=0)
+@pytest.mark.parametrize(
+    argnames="instrument",
+    argvalues=[
+        esis.flights.f1.optics.design(num_distribution=0),
+        esis.flights.f1.optics.distortion_fit(num_distribution=0),
+    ],
+)
+def test_distortion_fit_bounds(instrument: esis.optics.abc.AbstractInstrument):
     parameters = esis.optics.DistortionParameters.from_instrument(instrument)
 
     lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
@@ -114,7 +120,14 @@ def test_distortion_fit_bounds():
     x_lower = na.pack(lower).ndarray
     x_upper = na.pack(upper).ndarray
 
+    # the packed bounds must align with the packed parameters, for scalar
+    # and per-channel parameters alike
     assert x_lower.shape == x.shape
     assert x_upper.shape == x.shape
     assert np.all(x_lower <= x)
     assert np.all(x <= x_upper)
+
+    # no bound may collapse to zero width, which would silently freeze the
+    # parameter (zero-width bounds are treated as fixed by
+    # scipy.optimize.differential_evolution)
+    assert np.all(x_lower < x_upper)

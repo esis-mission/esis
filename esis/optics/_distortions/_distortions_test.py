@@ -60,6 +60,8 @@ class TestDistortionParameters(
             assert _allclose(getattr(b, field.name), getattr(a, field.name))
 
     def test_to_instrument(self, a: esis.optics.DistortionParameters):
+        yaw_grating_before = copy.deepcopy(_instrument.grating.yaw)
+
         result = a.to_instrument(_instrument)
 
         assert result is not _instrument
@@ -80,7 +82,21 @@ class TestDistortionParameters(
         )
         assert _allclose(invariant, invariant_expected)
 
-        assert _allclose(_instrument.grating.yaw, _instrument.grating.yaw.copy())
+        # the given instrument is left unmodified
+        assert _allclose(_instrument.grating.yaw, yaw_grating_before)
+
+        # the result does not alias the parameter arrays: mutating the
+        # parameters afterwards must not change the already-built model
+        assert result.grating.yaw is not a.yaw_grating
+        assert result.pitch is not a.pitch
+        assert result.grating.rulings.spacing.coefficients[0] is not a.spacing_rulings
+
+    def test_eq(self, a: esis.optics.DistortionParameters):
+        # eq=False: the dataclass must not generate an elementwise __eq__,
+        # which raises on array-valued (per-channel) fields; like every
+        # other ESIS component, equality defers to optika.mixins.Printable
+        # and returns a plain bool
+        assert isinstance(a == copy.deepcopy(a), bool)
 
     def test_from_instrument_roundtrip(self, a: esis.optics.DistortionParameters):
         instrument = a.to_instrument(_instrument)
@@ -116,6 +132,19 @@ class TestDistortionParameters(
         )
         with pytest.raises(ValueError):
             a.to_file(tmp_path / "parameters.ecsv")
+
+    def test_to_file_axis_reserved(
+        self,
+        a: esis.optics.DistortionParameters,
+        tmp_path: pathlib.Path,
+    ):
+        # the 'axis' metadata key records the logical axis for from_file,
+        # so free-form metadata must not be able to overwrite it
+        with pytest.raises(ValueError):
+            a.to_file(
+                tmp_path / "parameters.ecsv",
+                metadata=dict(axis="fit_20260707"),
+            )
 
 
 def _scene() -> na.FunctionArray:
@@ -377,6 +406,10 @@ def test_peak_parabola():
     y = np.square(x - 0.3)
     assert peak_parabola(x, y) == x.min()
 
+    # fewer than 3 samples cannot determine a parabola
+    with pytest.raises(ValueError):
+        peak_parabola(np.array([-5.0, 5.0]), np.array([-1.0, -2.0]))
+
 
 def test_fit_distortion_scan(tmp_path: pathlib.Path):
     instrument = esis.flights.f1.optics.design(
@@ -494,6 +527,75 @@ def test_fit_distortion_scan_channel():
     assert na.shape(result_coherent.pitch) == dict()
 
 
+def _parameters_zero() -> esis.optics.DistortionParameters:
+    return esis.optics.DistortionParameters(
+        yaw_grating=0 * u.arcmin,
+        pitch_grating=0 * u.arcmin,
+        roll_grating=0 * u.deg,
+        roll_field_stop=0 * u.deg,
+        spacing_rulings=0 * u.um,
+        displacement_primary=0 * u.mm,
+        pitch=0 * u.arcsec,
+        yaw=0 * u.arcsec,
+        roll=0 * u.deg,
+    )
+
+
+def test_fit_distortion_scan_revert(monkeypatch: pytest.MonkeyPatch):
+    """A round that degrades the correlation is reverted, not kept."""
+    # scripted merits: the start evaluates to 0.5; the scan of 3 pitch
+    # offsets reads [0.1, 0.2, 0.3], moving pitch off zero; the re-evaluation
+    # of the round returns 0.4 < 0.5, so the round must be reverted
+    merits = iter([0.5, 0.1, 0.2, 0.3, 0.4])
+
+    def _scripted(**kwargs):
+        return na.ScalarArray(np.array(next(merits)))
+
+    monkeypatch.setattr(
+        esis.optics._distortions._distortions,
+        "_correlation_model",
+        _scripted,
+    )
+
+    parameters = _parameters_zero()
+
+    result = esis.optics.fit_distortion_scan(
+        instrument=None,
+        scene=None,
+        observation=None,
+        grids=[dict(pitch=np.linspace(-1, 1, 3) * u.arcsec)],
+        parameters=parameters,
+    )
+
+    assert _allclose(result.pitch, parameters.pitch)
+
+
+def test_fit_distortion_scan_coherent_requires_axis_channel():
+    # the docstring states coherent requires axis_channel: silently accepting
+    # it would compute a differently-weighted merit instead of failing
+    with pytest.raises(ValueError):
+        esis.optics.fit_distortion_scan(
+            instrument=None,
+            scene=None,
+            observation=None,
+            grids=[],
+            coherent=True,
+        )
+
+
+def test_fit_distortion_series_length_mismatch():
+    # a scenes/observations length mismatch must fail loudly instead of
+    # silently truncating to the shorter sequence
+    with pytest.raises(ValueError):
+        esis.optics.fit_distortion_series(
+            instrument=None,
+            scenes=[None, None],
+            observations=[None],
+            grids=[],
+            parameters=_parameters_zero(),
+        )
+
+
 def test_fit_distortion_series(tmp_path: pathlib.Path):
     instrument = esis.flights.f1.optics.design(
         grid=_grid_coarse,
@@ -581,6 +683,14 @@ def test_convergence_logger(tmp_path: pathlib.Path):
     assert len(logger.path_data.read_text().splitlines()) == 3
     assert logger.path_log.exists()
     assert logger.path_plot.exists()
+
+    # a second run in the same directory rotates the previous run's files
+    # aside instead of destroying them
+    logger_2 = esis.optics.ConvergenceLogger(directory=tmp_path / "run")
+    assert len(logger_2.path_data.read_text().splitlines()) == 1
+    rotated = sorted((tmp_path / "run").glob("convergence_data_*.csv"))
+    assert len(rotated) == 1
+    assert len(rotated[0].read_text().splitlines()) == 3
 
 
 def test_fit_distortion_defaults(monkeypatch: pytest.MonkeyPatch):

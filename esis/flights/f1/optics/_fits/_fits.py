@@ -174,8 +174,8 @@ def _grids_pointing() -> list[dict]:
             roll=np.linspace(-0.4, 0.4, 11) * u.deg,
         ),
         dict(
-            pitch=np.linspace(-1, 1, 11) * u.arcsec,
-            yaw=np.linspace(-1, 1, 11) * u.arcsec,
+            pitch=np.linspace(-1, 1, 21) * u.arcsec,
+            yaw=np.linspace(-1, 1, 21) * u.arcsec,
             roll=np.linspace(-0.05, 0.05, 11) * u.deg,
         ),
     ]
