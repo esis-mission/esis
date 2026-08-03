@@ -570,6 +570,126 @@ def test_fit_distortion_scan_revert(monkeypatch: pytest.MonkeyPatch):
     assert _allclose(result.pitch, parameters.pitch)
 
 
+def test_correlation_model_batch():
+    """A batched evaluation must reproduce the sequential evaluations exactly."""
+    correlation_model = esis.optics._distortions._distortions._correlation_model
+
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )[dict(channel=0)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+
+    scene = _scene()
+    observation = instrument.system.image(
+        scene=scene,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        noise=False,
+    ).outputs
+
+    offsets = np.linspace(-10, 10, 3) * u.arcsec
+
+    kwargs = dict(
+        instrument=instrument,
+        scene=scene,
+        observation=observation,
+        pupil=None,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        axis_channel=None,
+        smoothing=None,
+        sigma_psf=1.0,
+        seed=0,
+    )
+
+    trial = copy.copy(parameters)
+    trial.pitch = trial.pitch + na.ScalarArray(offsets, axes="_trial_0")
+    batched = correlation_model(parameters=trial, axis_batch=("_trial_0",), **kwargs)
+
+    # a batched evaluation is exactly repeatable
+    repeated = correlation_model(parameters=trial, axis_batch=("_trial_0",), **kwargs)
+    assert np.array_equal(na.value(batched).ndarray, na.value(repeated).ndarray)
+
+    # and matches the sequential evaluations to the level of the frozen ray
+    # jitter, whose realization depends on the shape of the batch
+    for i in range(len(offsets)):
+        single = copy.copy(parameters)
+        single.pitch = single.pitch + offsets[i]
+        sequential = correlation_model(parameters=single, **kwargs)
+
+        a = na.value(batched[dict(_trial_0=i)]).ndarray
+        b = na.value(sequential).ndarray
+        assert np.allclose(a, b, rtol=0, atol=1e-4)
+
+
+def test_fit_distortion_scan_chunked(tmp_path: pathlib.Path):
+    """Chunked and unchunked vectorized scans must give identical fits."""
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )[dict(channel=0)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+
+    scene = _scene()
+    observation = instrument.system.image(
+        scene=scene,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        noise=False,
+    ).outputs
+
+    grids = [
+        {
+            ("pitch", "yaw"): (
+                np.linspace(-10, 10, 3) * u.arcsec,
+                np.linspace(-10, 10, 3) * u.arcsec,
+            ),
+        },
+    ]
+
+    kwargs = dict(
+        instrument=instrument,
+        scene=scene,
+        observation=observation,
+        grids=grids,
+        parameters=parameters,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        sigma_psf=1.0,
+    )
+
+    import json
+
+    def curve(name: str, num_trial: None | int) -> tuple:
+        directory = tmp_path / f"{name}"
+        result = esis.optics.fit_distortion_scan(
+            **kwargs,
+            num_trial=num_trial,
+            directory=directory,
+        )
+        with (directory / "scan.json").open() as f:
+            summary = json.load(f)
+        values = summary["rounds"][0]["curves"]["pitch x yaw"]["values"]
+        return result, np.array(values)
+
+    result_full, curve_full = curve("full", num_trial=None)
+    result_repeat, curve_repeat = curve("repeat", num_trial=None)
+    result_chunked, curve_chunked = curve("chunked", num_trial=3)
+
+    # a fixed chunking is exactly repeatable, curves and fit alike
+    assert np.array_equal(curve_repeat, curve_full)
+    for field in dataclasses.fields(result_full):
+        a = getattr(result_full, field.name)
+        assert _allclose(getattr(result_repeat, field.name), a)
+
+    # different chunkings sample the same correlation surface to the level
+    # of the frozen ray jitter, whose realization depends on the shape of
+    # each batch
+    assert curve_chunked.shape == curve_full.shape
+    assert np.allclose(curve_chunked, curve_full, rtol=0, atol=1e-4)
+
+
 def test_fit_distortion_scan_coherent_requires_axis_channel():
     # the docstring states coherent requires axis_channel: silently accepting
     # it would compute a differently-weighted merit instead of failing

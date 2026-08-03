@@ -189,6 +189,7 @@ def fit_distortion_reference(
     sigma_psf: None | float = 1.0,
     seed: int = 0,
     tolerance: None | float = 3e-4,
+    num_trial: None | int = None,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
 ) -> esis.optics.DistortionParameters:  # pragma: nocover
@@ -227,6 +228,9 @@ def fit_distortion_reference(
     tolerance
         The mean-correlation gain below which the repeated polish round
         stops.
+    num_trial
+        The maximum number of trials evaluated in a single vectorized
+        raytrace. See :func:`esis.optics.fit_distortion_scan`.
     path
         If given, the fitted parameters are written to this path as an ECSV
         table, in the format of ``_data/distortion_reference.ecsv``.
@@ -268,6 +272,7 @@ def fit_distortion_reference(
         sigma_psf=sigma_psf,
         seed=seed,
         tolerance=tolerance,
+        num_trial=num_trial,
         directory=directory,
     )
 
@@ -297,6 +302,7 @@ def fit_distortion_pointing(
     grids: None | list[dict] = None,
     sigma_psf: None | float = 1.0,
     seed: int = 0,
+    num_trial: None | int = None,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
     workers: int = 1,
@@ -332,6 +338,9 @@ def fit_distortion_pointing(
         point-spread function convolved with the modeled images.
     seed
         The seed used to make each evaluation deterministic.
+    num_trial
+        The maximum number of trials evaluated in a single vectorized
+        raytrace. See :func:`esis.optics.fit_distortion_scan`.
     path
         If given, the fitted offsets are written to this path as an ECSV
         table, in the format of ``_data/distortion_pointing.ecsv``.
@@ -380,6 +389,7 @@ def fit_distortion_pointing(
         coherent=True,
         sigma_psf=sigma_psf,
         seed=seed,
+        num_trial=num_trial,
         directory=directory,
         workers=workers,
     )

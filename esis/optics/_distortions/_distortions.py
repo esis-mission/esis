@@ -734,6 +734,7 @@ def _correlation_model(
     smoothing: None | int,
     sigma_psf: None | float,
     seed: int,
+    axis_batch: tuple[str, ...] = (),
 ) -> na.AbstractScalar:
     """
     Compute the correlation between the modeled image and the observation.
@@ -769,6 +770,11 @@ def _correlation_model(
         function convolved with the modeled image only.
     seed
         The seed used to freeze the imaging model's random ray jitter.
+    axis_batch
+        Logical axes of `parameters` along which independent trials are
+        batched. These axes are preserved through the correlation instead
+        of being summed with the other model-only axes, so a single call
+        can evaluate a whole grid of trials via broadcasting.
     """
     instrument = parameters.to_instrument(instrument)
 
@@ -791,7 +797,9 @@ def _correlation_model(
     image = na.value(image.outputs)
     observation = na.value(observation)
 
-    axis_extra = tuple(set(na.shape(image)) - set(na.shape(observation)))
+    axis_extra = tuple(
+        set(na.shape(image)) - set(na.shape(observation)) - set(axis_batch)
+    )
     if axis_extra:
         image = image.sum(axis=axis_extra)
 
@@ -976,6 +984,7 @@ def fit_distortion_scan(
     seed: int = 0,
     tolerance: None | float = None,
     num_repeat: int = 8,
+    num_trial: None | int = None,
     directory: None | pathlib.Path = None,
 ) -> DistortionParameters:
     r"""
@@ -1062,6 +1071,16 @@ def fit_distortion_scan(
     num_repeat
         The maximum number of extra polish rounds appended when `tolerance`
         is given.
+    num_trial
+        The maximum number of trials evaluated in a single vectorized
+        raytrace. The offsets of every scan entry are stacked along
+        logical trial axes and the whole grid of trials is imaged in one
+        broadcast evaluation; chunking along the first offset grid caps
+        the memory used by an evaluation. If :obj:`None`, every trial of
+        an entry is evaluated in a single call. The fit is deterministic
+        for a fixed chunking, but the frozen ray jitter realization
+        depends on the shape of each batch, so different chunkings agree
+        only to the noise level of the correlation.
     directory
         A directory where the scan curves and convergence history are written
         as ``scan.json`` and ``scan.log``. If :obj:`None`, the fit is not
@@ -1133,7 +1152,10 @@ def fit_distortion_scan(
             with path_log.open("a") as f:
                 f.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S} | {message}\n")
 
-    def evaluate(p: DistortionParameters) -> na.AbstractScalar:
+    def evaluate(
+        p: DistortionParameters,
+        axis_batch: tuple[str, ...] = (),
+    ) -> na.AbstractScalar:
         return _correlation_model(
             instrument=instrument,
             parameters=p,
@@ -1146,6 +1168,7 @@ def fit_distortion_scan(
             smoothing=smoothing,
             sigma_psf=sigma_psf,
             seed=seed,
+            axis_batch=axis_batch,
         )
 
     def merit(corr: na.AbstractScalar) -> float:
@@ -1182,13 +1205,33 @@ def fit_distortion_scan(
                 )
 
             shape_grid = tuple(len(o) for o in offsets)
+
+            # stack the offsets of every field along its own logical axis so
+            # a single evaluation raytraces a whole grid of trials via
+            # broadcasting, chunking along the first offset grid to cap the
+            # memory of one evaluation
+            axes_trial = tuple(f"_trial_{a}" for a in range(len(fields)))
+
+            num_chunk = shape_grid[0]
+            if num_trial is not None:
+                num_other = int(np.prod(shape_grid[1:], dtype=int))
+                num_chunk = max(1, num_trial // num_other)
+
             values = []
-            for deltas in itertools.product(*offsets):
+            for start in range(0, shape_grid[0], num_chunk):
+                chunk = slice(start, start + num_chunk)
                 trial = copy.copy(parameters)
-                for field, delta in zip(fields, deltas):
+                for a, field in enumerate(fields):
+                    offsets_a = offsets[a][chunk] if a == 0 else offsets[a]
+                    delta = na.ScalarArray(offsets_a, axes=axes_trial[a])
                     setattr(trial, field, getattr(trial, field) + delta)
-                values.append(evaluate(trial))
-                nfev += 1
+                corr_trial = evaluate(trial, axis_batch=axes_trial)
+
+                shape_chunk = (len(offsets[0][chunk]),) + shape_grid[1:]
+                for index_trial in itertools.product(*map(range, shape_chunk)):
+                    item = {axes_trial[a]: index_trial[a] for a in range(len(fields))}
+                    values.append(corr_trial[item])
+                    nfev += 1
 
             # one correlation curve per channel, or a single coherent curve
             values = np.stack(
@@ -1297,6 +1340,7 @@ def fit_distortion_series(
     seed: int = 0,
     tolerance: None | float = None,
     num_repeat: int = 8,
+    num_trial: None | int = None,
     directory: None | pathlib.Path = None,
     workers: int = 1,
 ) -> list[DistortionParameters]:
@@ -1351,6 +1395,9 @@ def fit_distortion_series(
     num_repeat
         The maximum number of extra polish rounds appended when `tolerance`
         is given.
+    num_trial
+        The maximum number of trials evaluated in a single vectorized
+        raytrace. See :func:`fit_distortion_scan`.
     directory
         A directory under which each frame's fit is logged in a ``frame_NNN``
         subdirectory. If :obj:`None`, the fits are not logged.
@@ -1393,6 +1440,7 @@ def fit_distortion_series(
             seed=seed,
             tolerance=tolerance,
             num_repeat=num_repeat,
+            num_trial=num_trial,
             directory=directory_frame,
         )
 
