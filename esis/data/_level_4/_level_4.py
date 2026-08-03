@@ -665,7 +665,7 @@ class Level_4(
         self,
         index_line: int,
         ax: None | matplotlib.axes.Axes = None,
-        limit_velocity: u.Quantity = 80 * u.km / u.s,
+        limit_velocity: None | u.Quantity = None,
         percentile_alpha: float = 99,
         correct_transmission: bool = True,
         interval: int = 200,
@@ -687,6 +687,9 @@ class Level_4(
             If :obj:`None`, a new set of axes will be created.
         limit_velocity
             The Doppler velocity mapped to the ends of the colormap.
+            If :obj:`None` (the default), a limit measured from the
+            velocities that are actually visible; see
+            :func:`esis.data._level_4._level_4._limit_velocity`.
         percentile_alpha
             The percentile of the intensity mapped to fully opaque.
         correct_transmission
@@ -713,8 +716,6 @@ class Level_4(
 
         ax.set_title(self.label(index_line))
 
-        limit = limit_velocity.to_value(u.km / u.s)
-        norm = matplotlib.colors.Normalize(vmin=-limit, vmax=limit)
         cmap = matplotlib.colormaps["RdBu_r"]
 
         num_time = self.shape[self.axis_time]
@@ -726,6 +727,14 @@ class Level_4(
             for t in range(num_time)
         ]
         alpha_reference = np.nanpercentile(np.stack(intensity_frames), percentile_alpha)
+
+        limit = _limit_velocity(
+            limit_velocity=limit_velocity,
+            intensity_frames=intensity_frames,
+            velocity_frames=velocity_frames,
+            alpha_reference=alpha_reference,
+        )
+        norm = matplotlib.colors.Normalize(vmin=-limit, vmax=limit)
 
         def rgba(t: int) -> np.ndarray:
             """
@@ -963,6 +972,67 @@ class Level_4(
             correct_transmission=correct_transmission,
             interval=interval,
         )
+
+
+def _limit_velocity(
+    limit_velocity: None | u.Quantity,
+    intensity_frames: list[np.ndarray],
+    velocity_frames: list[np.ndarray],
+    alpha_reference: float,
+    fraction_visible: float = 0.2,
+    percentile: float = 99,
+    headroom: float = 2,
+    minimum: u.Quantity = 20 * u.km / u.s,
+) -> float:
+    """
+    Choose the Doppler velocity mapped to the ends of the colormap.
+
+    A fixed limit has to be guessed, and guessing low silently flattens
+    the fastest flows into a single saturated color while guessing high
+    wastes the colormap on an empty range.  The mean velocity is a ratio,
+    so faint pixels carry wild values that say nothing about the plasma;
+    those pixels are also nearly transparent in the map.  The limit is
+    therefore measured only over the pixels bright enough to be visible.
+
+    Parameters
+    ----------
+    limit_velocity
+        An explicit limit, returned as-is; :obj:`None` to measure one.
+    intensity_frames
+        The line intensity of each frame.
+    velocity_frames
+        The mean Doppler velocity of each frame, in km/s.
+    alpha_reference
+        The intensity mapped to fully opaque.
+    fraction_visible
+        The opacity below which a pixel is too faint to read, and so is
+        excluded from the measurement.
+    percentile
+        The percentile of the visible speeds taken as the typical fast
+        flow.
+    headroom
+        How far past that speed to carry the colormap.  Mapping the
+        percentile itself to the end saturates every feature at or above
+        it, which is exactly the structure worth looking at; a factor of
+        two keeps the common flows in the middle of the map and still
+        resolves the fast tail.
+    minimum
+        The smallest limit to return, so a quiet line still gets a
+        sensible range.
+    """
+    if limit_velocity is not None:
+        return limit_velocity.to_value(u.km / u.s)
+
+    intensity = np.stack(intensity_frames)
+    velocity = np.abs(np.stack(velocity_frames))
+    visible = (intensity / alpha_reference) > fraction_visible
+    visible &= np.isfinite(velocity)
+
+    if not visible.any():
+        return minimum.to_value(u.km / u.s)
+
+    result = headroom * np.percentile(velocity[visible], percentile)
+    return float(max(result, minimum.to_value(u.km / u.s)))
 
 
 def _filter_weights_shadow(

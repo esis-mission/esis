@@ -99,7 +99,7 @@ def animate_event(
     context: None | dict[str, na.FunctionArray] = None,
     cmaps_context: None | dict[str, str] = None,
     labels: None | list[str] = None,
-    limit_velocity: u.Quantity = 80 * u.km / u.s,
+    limit_velocity: None | u.Quantity = None,
     percentile_max: float = 99.5,
     percentile_alpha: float = 99,
     correct_transmission: bool = True,
@@ -132,6 +132,8 @@ def animate_event(
         If :obj:`None`, the rest wavelength of each line is used.
     limit_velocity
         The Doppler velocity mapped to the ends of the colormap.
+        If :obj:`None` (the default), a limit measured from the
+        velocities of the brightest line that are actually visible.
     percentile_max
         The percentile of the in-frame intensity mapped to the top of the
         intensity colormap.
@@ -206,7 +208,17 @@ def animate_event(
         for frames in intensity_frames
     ]
 
-    limit = limit_velocity.to_value(u.km / u.s)
+    # one limit across every line, so the panels stay comparable; measured
+    # from the brightest line, whose velocities are the ones worth reading
+    from ._level_4 import _limit_velocity
+
+    index_reference = int(np.argmax([np.nanmax(v) for v in vmax]))
+    limit = _limit_velocity(
+        limit_velocity=limit_velocity,
+        intensity_frames=intensity_frames[index_reference],
+        velocity_frames=velocity_frames[index_reference],
+        alpha_reference=alpha_reference[index_reference],
+    )
     norm_velocity = matplotlib.colors.Normalize(vmin=-limit, vmax=limit)
     cmap_velocity = matplotlib.colormaps["RdBu_r"]
 
