@@ -19,9 +19,10 @@ dependencies = [
     "matplotlib",
     "astropy~=7.2",
     "joblib",
-    "named-arrays~=2.0",
+    "named-arrays~=2.4",
     "optika~=2.1",
     "msfc-ccd~=1.0",
+    "ctis~=0.3",
     "solar-dynamics-observatory~=1.0",
     "interface-region-imaging-spectrograph~=1.0,>=1.0.1",
 ]
