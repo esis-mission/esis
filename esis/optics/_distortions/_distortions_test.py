@@ -477,54 +477,61 @@ def test_fit_distortion_scan(tmp_path: pathlib.Path):
         )
 
 
-def test_fit_distortion_scan_channel():
+def test_fit_distortion_scan_channel(monkeypatch: pytest.MonkeyPatch):
+    """Each channel's peak is read off its own correlation curve."""
+    # a scripted merit, peaked at a different pitch for every channel, so
+    # that the per-channel peak reading is exercised deterministically: the
+    # correlation of a scene imaged through its own instrument is flat to
+    # within the ray jitter, which makes the sign of a round's gain (and so
+    # whether the round is reverted) a coin flip
+    target = na.ScalarArray(np.array([-10.0, -5.0, 5.0, 10.0]), axes="channel")
+
+    def _scripted(parameters, **kwargs):
+        return -np.square((parameters.pitch - target * u.arcsec) / u.arcsec)
+
+    monkeypatch.setattr(
+        esis.optics._distortions._distortions,
+        "_correlation_model",
+        _scripted,
+    )
+
     instrument = esis.flights.f1.optics.design(
         grid=_grid_coarse,
         num_distribution=0,
     )
     parameters = esis.optics.DistortionParameters.from_instrument(instrument)
 
-    scene = _scene()
-
-    observation = instrument.system.image(
-        scene=scene,
-        axis_wavelength="wavelength",
-        axis_field=("scene_x", "scene_y"),
-        noise=False,
-    ).outputs
+    grids = [dict(pitch=np.linspace(-20, 20, 9) * u.arcsec)]
 
     result = esis.optics.fit_distortion_scan(
         instrument=instrument,
-        scene=scene,
-        observation=observation,
-        grids=[dict(pitch=np.linspace(-20, 20, 5) * u.arcsec)],
-        axis_wavelength="wavelength",
-        axis_field=("scene_x", "scene_y"),
+        scene=None,
+        observation=None,
+        grids=grids,
+        parameters=parameters,
         axis_channel="channel",
-        sigma_psf=1.0,
     )
 
     assert isinstance(result, esis.optics.DistortionParameters)
 
-    # each channel's peak is read off its own curve, so the fitted pointing
-    # gains a channel axis even though the start was a scalar
-    num_channel = na.shape(observation)["channel"]
-    assert na.shape(result.pitch) == dict(channel=num_channel)
+    # the fitted pointing gains a channel axis even though the start was a
+    # scalar, and every channel lands on its own peak
+    assert na.shape(result.pitch) == dict(channel=4)
+    assert np.allclose(na.value(result.pitch).ndarray, target.ndarray, atol=1e-6)
 
-    # a coherent fit applies one shared offset, so the pointing stays scalar
+    # a coherent fit averages the curves, so the pointing stays scalar and
+    # lands on the mean of the per-channel peaks
     result_coherent = esis.optics.fit_distortion_scan(
         instrument=instrument,
-        scene=scene,
-        observation=observation,
-        grids=[dict(pitch=np.linspace(-20, 20, 5) * u.arcsec)],
+        scene=None,
+        observation=None,
+        grids=grids,
         parameters=parameters,
-        axis_wavelength="wavelength",
-        axis_field=("scene_x", "scene_y"),
         axis_channel="channel",
         coherent=True,
-        sigma_psf=1.0,
     )
     assert na.shape(result_coherent.pitch) == dict()
+    assert np.isclose(float(na.value(result_coherent.pitch)), 0, atol=1e-6)
 
 
 def _parameters_zero() -> esis.optics.DistortionParameters:
@@ -688,6 +695,42 @@ def test_fit_distortion_scan_chunked(tmp_path: pathlib.Path):
     # each batch
     assert curve_chunked.shape == curve_full.shape
     assert np.allclose(curve_chunked, curve_full, rtol=0, atol=1e-4)
+
+
+def test_fit_distortion_scan_workers():
+    """Parallel and serial evaluation of the same chunking match exactly."""
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )[dict(channel=0)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+
+    scene = _scene()
+    observation = instrument.system.image(
+        scene=scene,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        noise=False,
+    ).outputs
+
+    kwargs = dict(
+        instrument=instrument,
+        scene=scene,
+        observation=observation,
+        grids=[dict(pitch=np.linspace(-10, 10, 3) * u.arcsec)],
+        parameters=parameters,
+        axis_wavelength="wavelength",
+        axis_field=("scene_x", "scene_y"),
+        sigma_psf=1.0,
+        num_trial=1,
+    )
+
+    result_serial = esis.optics.fit_distortion_scan(**kwargs)
+    result_parallel = esis.optics.fit_distortion_scan(**kwargs, workers=2)
+
+    for field in dataclasses.fields(result_serial):
+        a = getattr(result_serial, field.name)
+        assert _allclose(getattr(result_parallel, field.name), a)
 
 
 def test_fit_distortion_scan_coherent_requires_axis_channel():

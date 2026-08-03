@@ -1,10 +1,12 @@
 from __future__ import annotations
 from typing import Any, Sequence
+import concurrent.futures
 import copy
 import dataclasses
 import datetime
 import itertools
 import json
+import multiprocessing
 import pathlib
 import time
 import numpy as np
@@ -985,6 +987,7 @@ def fit_distortion_scan(
     tolerance: None | float = None,
     num_repeat: int = 8,
     num_trial: None | int = None,
+    workers: int = 1,
     directory: None | pathlib.Path = None,
 ) -> DistortionParameters:
     r"""
@@ -1081,6 +1084,14 @@ def fit_distortion_scan(
         for a fixed chunking, but the frozen ray jitter realization
         depends on the shape of each batch, so different chunkings agree
         only to the noise level of the correlation.
+    workers
+        The number of processes used to evaluate the batches of trials of
+        each scan concurrently. The raytrace is effectively
+        single-threaded, so scans dominated by evaluation time speed up
+        almost linearly with this number; combine with a small `num_trial`
+        so that every scan splits into at least `workers` batches. The
+        result is identical to a serial fit with the same chunking. A
+        value of 1 evaluates the batches serially in the current process.
     directory
         A directory where the scan curves and convergence history are written
         as ``scan.json`` and ``scan.log``. If :obj:`None`, the fit is not
@@ -1176,152 +1187,200 @@ def fit_distortion_scan(
             corr = corr.mean(axis_channel)
         return float(na.value(corr).ndarray)
 
-    time_start = time.perf_counter()
-    nfev = 0
-    summary_rounds = []
+    executor = None
+    if workers > 1:
+        # spawn starts clean interpreters on every platform, and the shared
+        # merit context is sent to each worker once by the initializer
+        # instead of with every task
+        context_spawn = multiprocessing.get_context("spawn")
+        executor = concurrent.futures.ProcessPoolExecutor(
+            max_workers=workers,
+            mp_context=context_spawn,
+            initializer=_scan_worker_init,
+            initargs=(
+                dict(
+                    instrument=instrument,
+                    scene=scene,
+                    observation=observation,
+                    pupil=pupil,
+                    axis_wavelength=axis_wavelength,
+                    axis_field=axis_field,
+                    axis_channel=axis_channel,
+                    smoothing=smoothing,
+                    sigma_psf=sigma_psf,
+                    seed=seed,
+                ),
+            ),
+        )
 
-    corr = evaluate(parameters)
-    nfev += 1
-    merit_current = merit(corr)
-    log(f"start | correlation {merit_current:.6f}")
-
-    schedule = list(grids)
-    num_round = len(schedule)
-    if tolerance is not None and num_round > 0:
-        schedule = schedule + [schedule[-1]] * num_repeat
-
-    for index, grids_round in enumerate(schedule):
-        parameters_before = copy.deepcopy(parameters)
-        curves = {}
-        for key, offsets in grids_round.items():
-            fields = key if isinstance(key, tuple) else (key,)
-            if not isinstance(offsets, tuple):
-                offsets = (offsets,)
-            offsets = tuple(u.Quantity(o) for o in offsets)
-            if len(fields) != len(offsets):
-                raise ValueError(
-                    f"the number of fields {fields} does not match the "
-                    f"number of offset grids for round {index}"
-                )
-
-            shape_grid = tuple(len(o) for o in offsets)
-
-            # stack the offsets of every field along its own logical axis so
-            # a single evaluation raytraces a whole grid of trials via
-            # broadcasting, chunking along the first offset grid to cap the
-            # memory of one evaluation
-            axes_trial = tuple(f"_trial_{a}" for a in range(len(fields)))
-
-            num_chunk = shape_grid[0]
-            if num_trial is not None:
-                num_other = int(np.prod(shape_grid[1:], dtype=int))
-                num_chunk = max(1, num_trial // num_other)
-
-            values = []
-            for start in range(0, shape_grid[0], num_chunk):
-                chunk = slice(start, start + num_chunk)
-                trial = copy.copy(parameters)
-                for a, field in enumerate(fields):
-                    offsets_a = offsets[a][chunk] if a == 0 else offsets[a]
-                    delta = na.ScalarArray(offsets_a, axes=axes_trial[a])
-                    setattr(trial, field, getattr(trial, field) + delta)
-                corr_trial = evaluate(trial, axis_batch=axes_trial)
-
-                shape_chunk = (len(offsets[0][chunk]),) + shape_grid[1:]
-                for index_trial in itertools.product(*map(range, shape_chunk)):
-                    item = {axes_trial[a]: index_trial[a] for a in range(len(fields))}
-                    values.append(corr_trial[item])
-                    nfev += 1
-
-            # one correlation curve per channel, or a single coherent curve
-            values = np.stack(
-                [np.atleast_1d(na.value(v).ndarray) for v in values],
-            )
-            num_curve = values.shape[~0]
-            values = values.reshape(shape_grid + (num_curve,))
-
-            values_read = values
-            if coherent:
-                values_read = values.mean(axis=~0, keepdims=True)
-
-            # locate the joint maximum of each curve, then refine every field
-            # with a parabola along its own axis through the maximum
-            peak = {field: [] for field in fields}
-            for i in range(values_read.shape[~0]):
-                v = values_read[..., i]
-                index_max = np.unravel_index(int(np.argmax(v)), v.shape)
-                for a, field in enumerate(fields):
-                    section = v[
-                        tuple(
-                            slice(None) if b == a else index_max[b]
-                            for b in range(len(fields))
-                        )
-                    ]
-                    peak[field].append(_peak_parabola(offsets[a].value, section))
-
-            for a, field in enumerate(fields):
-                if axis_channel is not None and len(peak[field]) > 1:
-                    delta = na.ScalarArray(np.array(peak[field]), axes=axis_channel)
-                else:
-                    delta = peak[field][0]
-                setattr(
-                    parameters,
-                    field,
-                    getattr(parameters, field) + delta * offsets[a].unit,
-                )
-
-            name = " x ".join(fields)
-            curves[name] = dict(
-                fields=list(fields),
-                offsets=[[float(x) for x in o.value] for o in offsets],
-                unit=[str(o.unit) for o in offsets],
-                values=values.tolist(),
-                peak={f: [float(p) for p in peak[f]] for f in fields},
-            )
-            peak_round = {f: np.round(peak[f], 6) for f in fields}
-            log(f"round {index} | {name} | peak {peak_round}")
+    try:
+        time_start = time.perf_counter()
+        nfev = 0
+        summary_rounds = []
 
         corr = evaluate(parameters)
         nfev += 1
-        gain = merit(corr) - merit_current
+        merit_current = merit(corr)
+        log(f"start | correlation {merit_current:.6f}")
 
-        # a round that degrades the merit is reverted, so the returned
-        # parameters are always the best state the scan visited
-        reverted = gain < 0
-        if reverted:
-            parameters = parameters_before
-        else:
-            merit_current = merit(corr)
+        schedule = list(grids)
+        num_round = len(schedule)
+        if tolerance is not None and num_round > 0:
+            schedule = schedule + [schedule[-1]] * num_repeat
 
-        log(
-            f"round {index} | correlation {merit(corr):.6f} "
-            f"({gain:+.6f}) | nfev {nfev}" + (" | reverted" if reverted else "")
-        )
+        for index, grids_round in enumerate(schedule):
+            parameters_before = copy.deepcopy(parameters)
+            curves = {}
+            for key, offsets in grids_round.items():
+                fields = key if isinstance(key, tuple) else (key,)
+                if not isinstance(offsets, tuple):
+                    offsets = (offsets,)
+                offsets = tuple(u.Quantity(o) for o in offsets)
+                if len(fields) != len(offsets):
+                    raise ValueError(
+                        f"the number of fields {fields} does not match the "
+                        f"number of offset grids for round {index}"
+                    )
 
-        summary_rounds.append(
-            dict(
-                index=index,
-                correlation=[float(x) for x in np.atleast_1d(na.value(corr).ndarray)],
-                gain=gain,
-                reverted=reverted,
-                curves=curves,
+                shape_grid = tuple(len(o) for o in offsets)
+
+                # stack the offsets of every field along its own logical axis so
+                # a single evaluation raytraces a whole grid of trials via
+                # broadcasting, chunking along the first offset grid to cap the
+                # memory of one evaluation
+                axes_trial = tuple(f"_trial_{a}" for a in range(len(fields)))
+
+                num_chunk = shape_grid[0]
+                if num_trial is not None:
+                    num_other = int(np.prod(shape_grid[1:], dtype=int))
+                    num_chunk = max(1, num_trial // num_other)
+
+                chunks = []
+                for start in range(0, shape_grid[0], num_chunk):
+                    chunk = slice(start, start + num_chunk)
+                    trial = copy.copy(parameters)
+                    for a, field in enumerate(fields):
+                        offsets_a = offsets[a][chunk] if a == 0 else offsets[a]
+                        delta = na.ScalarArray(offsets_a, axes=axes_trial[a])
+                        setattr(trial, field, getattr(trial, field) + delta)
+                    shape_chunk = (len(offsets[0][chunk]),) + shape_grid[1:]
+                    chunks.append((trial, shape_chunk))
+
+                if executor is not None:
+                    results = list(
+                        executor.map(
+                            _scan_worker_evaluate,
+                            [(trial, axes_trial) for trial, _ in chunks],
+                        )
+                    )
+                else:
+                    results = [
+                        evaluate(trial, axis_batch=axes_trial) for trial, _ in chunks
+                    ]
+
+                values = []
+                for corr_trial, (trial, shape_chunk) in zip(results, chunks):
+                    for index_trial in itertools.product(*map(range, shape_chunk)):
+                        item = {
+                            axes_trial[a]: index_trial[a] for a in range(len(fields))
+                        }
+                        values.append(corr_trial[item])
+                        nfev += 1
+
+                # one correlation curve per channel, or a single coherent curve
+                values = np.stack(
+                    [np.atleast_1d(na.value(v).ndarray) for v in values],
+                )
+                num_curve = values.shape[~0]
+                values = values.reshape(shape_grid + (num_curve,))
+
+                values_read = values
+                if coherent:
+                    values_read = values.mean(axis=~0, keepdims=True)
+
+                # locate the joint maximum of each curve, then refine every field
+                # with a parabola along its own axis through the maximum
+                peak = {field: [] for field in fields}
+                for i in range(values_read.shape[~0]):
+                    v = values_read[..., i]
+                    index_max = np.unravel_index(int(np.argmax(v)), v.shape)
+                    for a, field in enumerate(fields):
+                        section = v[
+                            tuple(
+                                slice(None) if b == a else index_max[b]
+                                for b in range(len(fields))
+                            )
+                        ]
+                        peak[field].append(_peak_parabola(offsets[a].value, section))
+
+                for a, field in enumerate(fields):
+                    if axis_channel is not None and len(peak[field]) > 1:
+                        delta = na.ScalarArray(np.array(peak[field]), axes=axis_channel)
+                    else:
+                        delta = peak[field][0]
+                    setattr(
+                        parameters,
+                        field,
+                        getattr(parameters, field) + delta * offsets[a].unit,
+                    )
+
+                name = " x ".join(fields)
+                curves[name] = dict(
+                    fields=list(fields),
+                    offsets=[[float(x) for x in o.value] for o in offsets],
+                    unit=[str(o.unit) for o in offsets],
+                    values=values.tolist(),
+                    peak={f: [float(p) for p in peak[f]] for f in fields},
+                )
+                peak_round = {f: np.round(peak[f], 6) for f in fields}
+                log(f"round {index} | {name} | peak {peak_round}")
+
+            corr = evaluate(parameters)
+            nfev += 1
+            gain = merit(corr) - merit_current
+
+            # a round that degrades the merit is reverted, so the returned
+            # parameters are always the best state the scan visited
+            reverted = gain < 0
+            if reverted:
+                parameters = parameters_before
+            else:
+                merit_current = merit(corr)
+
+            log(
+                f"round {index} | correlation {merit(corr):.6f} "
+                f"({gain:+.6f}) | nfev {nfev}" + (" | reverted" if reverted else "")
             )
-        )
 
-        if directory is not None:
-            summary = dict(
-                rounds=summary_rounds,
-                nfev=nfev,
-                seconds=time.perf_counter() - time_start,
+            summary_rounds.append(
+                dict(
+                    index=index,
+                    correlation=[
+                        float(x) for x in np.atleast_1d(na.value(corr).ndarray)
+                    ],
+                    gain=gain,
+                    reverted=reverted,
+                    curves=curves,
+                )
             )
-            with (directory / "scan.json").open("w") as f:
-                json.dump(summary, f, indent=2)
 
-        if tolerance is not None and index >= num_round and gain < tolerance:
-            log(f"converged | round gain {gain:+.6f} < {tolerance}")
-            break
+            if directory is not None:
+                summary = dict(
+                    rounds=summary_rounds,
+                    nfev=nfev,
+                    seconds=time.perf_counter() - time_start,
+                )
+                with (directory / "scan.json").open("w") as f:
+                    json.dump(summary, f, indent=2)
 
-    return parameters
+            if tolerance is not None and index >= num_round and gain < tolerance:
+                log(f"converged | round gain {gain:+.6f} < {tolerance}")
+                break
+
+        return parameters
+    finally:
+        if executor is not None:
+            executor.shutdown()
 
 
 def fit_distortion_series(
@@ -1474,6 +1533,24 @@ def fit_distortion_series(
 def _fit_frame_scan(kwargs: dict[str, Any]) -> DistortionParameters:
     """Fit a single frame; a picklable target for the process pool."""
     return fit_distortion_scan(**kwargs)
+
+
+_context_scan_worker: dict[str, Any] = {}
+
+
+def _scan_worker_init(context: dict[str, Any]) -> None:
+    """Store the shared merit context of a scan in a worker process."""
+    _context_scan_worker.update(context)
+
+
+def _scan_worker_evaluate(args: tuple) -> na.AbstractScalar:
+    """Evaluate one batch of trials against the stored merit context."""
+    trial, axes_trial = args
+    return _correlation_model(
+        parameters=trial,
+        axis_batch=axes_trial,
+        **_context_scan_worker,
+    )
 
 
 @dataclasses.dataclass(eq=False, repr=False)
