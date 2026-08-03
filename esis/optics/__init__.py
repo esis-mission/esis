@@ -15,6 +15,7 @@ from ._instruments import Instrument
 from ._distortions import (
     DistortionParameters,
     DistortionObjective,
+    ScanPolish,
     DistortionResidual,
     ConvergenceLogger,
     fit_distortion,
@@ -37,6 +38,7 @@ __all__ = [
     "Instrument",
     "DistortionParameters",
     "DistortionObjective",
+    "ScanPolish",
     "DistortionResidual",
     "ConvergenceLogger",
     "fit_distortion",

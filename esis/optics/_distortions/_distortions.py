@@ -20,6 +20,7 @@ import esis
 __all__ = [
     "DistortionParameters",
     "DistortionObjective",
+    "ScanPolish",
     "DistortionResidual",
     "ConvergenceLogger",
     "fit_distortion",
@@ -389,6 +390,177 @@ class DistortionObjective(
         result = -self.weight_correlation * correlation + distance.value
 
         return float(na.value(result).ndarray)
+
+
+@dataclasses.dataclass(eq=False, repr=False)
+class ScanPolish(
+    optika.mixins.Printable,
+):
+    r"""
+    A polish step for :func:`scipy.optimize.differential_evolution`.
+
+    Instances are callables with the ``polish_func(func, x0, **kwds)``
+    signature that :func:`scipy.optimize.differential_evolution` accepts as
+    its `polish` argument, so that the scan engine
+    (:func:`fit_distortion_scan`) refines the best member of the final
+    population instead of the default :func:`scipy.optimize.minimize` call.
+
+    This composition plays to the strengths of both: differential evolution
+    captures the correct basin of the correlation surface, which the scan
+    engine cannot do from a distant starting point, while the scan reads the
+    shape of the basin directly and so polishes far better than a
+    gradient-based method can on a surface that is locally flat and noisy.
+    Because the capture no longer has to converge, the evolution can be
+    stopped early (a modest `maxiter`, or a loose `tol`) once its population
+    has collapsed into the right basin.
+
+    Examples
+    --------
+    Fit one channel with a short evolution polished by a scan.
+
+    .. code-block:: python
+
+        import numpy as np
+        import astropy.units as u
+        import esis
+
+        polish = esis.optics.ScanPolish(
+            grids=[dict(pitch=np.linspace(-2, 2, 9) * u.arcsec)],
+            parameters=parameters,
+            instrument=instrument,
+            scene=scene,
+            observation=observation,
+        )
+
+        fitted = esis.optics.fit_distortion(
+            instrument=instrument,
+            scene=scene,
+            observation=observation,
+            bounds=bounds,
+            parameters=parameters,
+            kwargs_optimizer=dict(
+                maxiter=20,
+                workers=16,
+                updating="deferred",
+                polish=polish,
+            ),
+        )
+    """
+
+    grids: Sequence[dict[str, u.Quantity]]
+    """The scan schedule of the polish. See :func:`fit_distortion_scan`."""
+
+    parameters: DistortionParameters
+    """
+    The prototype which defines the units and structure of the flat
+    parameter vector, matching the one given to the optimizer.
+    """
+
+    instrument: esis.optics.abc.AbstractInstrument
+    """The instrument model being fit to the observation."""
+
+    scene: na.FunctionArray
+    """The spectral radiance of the scene imaged through the instrument."""
+
+    observation: na.AbstractScalar
+    """The observed image that the modeled images are compared against."""
+
+    pupil: None | na.AbstractCartesian2dVectorArray = None
+    """The vertices of the pupil grid used to image the scene."""
+
+    axis_wavelength: None | str = None
+    """The logical axis of the scene corresponding to changing wavelength."""
+
+    axis_field: None | tuple[str, str] = None
+    """The logical axes of the scene corresponding to changing field position."""
+
+    axis_channel: None | str = None
+    """The logical axis of the observation corresponding to changing channel."""
+
+    coherent: bool = False
+    """Whether every channel receives the same offset. Requires `axis_channel`."""
+
+    smoothing: None | int = None
+    """The width, in detector pixels, of a box filter applied to both images."""
+
+    sigma_psf: None | float = 1.0
+    """The standard deviation, in detector pixels, of the modeled PSF."""
+
+    seed: int = 0
+    """The seed used to make each evaluation deterministic."""
+
+    tolerance: None | float = None
+    """The gain below which the repeated polish round stops."""
+
+    num_repeat: int = 8
+    """The maximum number of extra polish rounds appended."""
+
+    num_trial: None | int = None
+    """The maximum number of trials evaluated in one vectorized raytrace."""
+
+    workers: int = 1
+    """The number of processes used to evaluate the trials of each scan."""
+
+    directory: None | pathlib.Path = None
+    """A directory where the scan of the polish is logged."""
+
+    def __call__(self, func, x0: np.ndarray, **kwargs) -> scipy.optimize.OptimizeResult:
+        """
+        Polish the given parameter vector with a scan.
+
+        Parameters
+        ----------
+        func
+            The objective being minimized. Only used to report the value of
+            the polished solution, since the scan evaluates the correlation
+            itself. When the evolution runs with `workers`, this is the
+            map-like callable wrapping the objective rather than the
+            objective, so it is called only through :func:`numpy.atleast_1d`.
+        x0
+            The flat parameter vector to polish, the best member of the
+            final population.
+        **kwargs
+            The extra arguments supplied by
+            :func:`scipy.optimize.differential_evolution`, of which
+            ``bounds`` is honored.
+        """
+        parameters = na.unpack(np.asarray(x0), self.parameters)
+
+        fitted = fit_distortion_scan(
+            instrument=self.instrument,
+            scene=self.scene,
+            observation=self.observation,
+            grids=self.grids,
+            parameters=parameters,
+            pupil=self.pupil,
+            axis_wavelength=self.axis_wavelength,
+            axis_field=self.axis_field,
+            axis_channel=self.axis_channel,
+            coherent=self.coherent,
+            smoothing=self.smoothing,
+            sigma_psf=self.sigma_psf,
+            seed=self.seed,
+            tolerance=self.tolerance,
+            num_repeat=self.num_repeat,
+            num_trial=self.num_trial,
+            workers=self.workers,
+            directory=self.directory,
+        )
+
+        x = na.pack(fitted).ndarray
+
+        # the scan is unaware of the bounds of the evolution, which it is
+        # the polish function's responsibility to honor
+        bounds = kwargs.get("bounds")
+        if bounds is not None:
+            x = np.clip(x, bounds.lb, bounds.ub)
+
+        return scipy.optimize.OptimizeResult(
+            x=x,
+            fun=float(np.atleast_1d(func(x))[0]),
+            nfev=1,
+            success=True,
+        )
 
 
 @dataclasses.dataclass(eq=False, repr=False)

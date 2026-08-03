@@ -1,6 +1,7 @@
 from ._distortions import (
     DistortionParameters,
     DistortionObjective,
+    ScanPolish,
     DistortionResidual,
     ConvergenceLogger,
     fit_distortion,
@@ -11,6 +12,7 @@ from ._distortions import (
 __all__ = [
     "DistortionParameters",
     "DistortionObjective",
+    "ScanPolish",
     "DistortionResidual",
     "ConvergenceLogger",
     "fit_distortion",

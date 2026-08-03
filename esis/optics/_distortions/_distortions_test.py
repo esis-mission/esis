@@ -577,6 +577,64 @@ def test_fit_distortion_scan_revert(monkeypatch: pytest.MonkeyPatch):
     assert _allclose(result.pitch, parameters.pitch)
 
 
+def test_scan_polish(monkeypatch: pytest.MonkeyPatch):
+    """The scan polishes the best member of a differential evolution."""
+
+    # a scripted merit peaked at a pitch of -7 arcsec, so that both stages
+    # have an unambiguous target: the evolution must land in the basin and
+    # the scan must walk the rest of the way
+    def _scripted(parameters, **kwargs):
+        merit = -np.square((parameters.pitch + 7 * u.arcsec) / u.arcsec)
+        return na.as_named_array(merit)
+
+    monkeypatch.setattr(
+        esis.optics._distortions._distortions,
+        "_correlation_model",
+        _scripted,
+    )
+
+    instrument = esis.flights.f1.optics.design(
+        grid=_grid_coarse,
+        num_distribution=0,
+    )[dict(channel=0)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    bounds = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+
+    polish = esis.optics.ScanPolish(
+        grids=[dict(pitch=np.linspace(-4, 4, 9) * u.arcsec)],
+        parameters=parameters,
+        instrument=instrument,
+        scene=None,
+        observation=None,
+    )
+
+    # the objective is minimized, so it is the negated scripted merit
+    def objective(x):
+        p = na.unpack(np.asarray(x), parameters)
+        return float(np.square(na.value((p.pitch + 7 * u.arcsec) / u.arcsec)))
+
+    lower = na.pack(bounds[0]).ndarray
+    upper = na.pack(bounds[1]).ndarray
+
+    result = scipy.optimize.differential_evolution(
+        objective,
+        bounds=scipy.optimize.Bounds(lb=lower, ub=upper),
+        x0=na.pack(parameters).ndarray,
+        maxiter=5,
+        popsize=8,
+        seed=0,
+        polish=polish,
+    )
+
+    fitted = na.unpack(result.x, parameters)
+
+    # the polished solution sits on the scripted peak, which the coarse
+    # evolution alone would not resolve, and stays inside the bounds
+    assert np.isclose(float(na.value(fitted.pitch.to(u.arcsec))), -7, atol=0.5)
+    assert np.all(lower <= result.x)
+    assert np.all(result.x <= upper)
+
+
 def test_correlation_model_batch():
     """A batched evaluation must reproduce the sequential evaluations exactly."""
     correlation_model = esis.optics._distortions._distortions._correlation_model
