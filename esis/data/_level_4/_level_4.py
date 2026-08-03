@@ -1,6 +1,7 @@
 from typing import Self
 import time as _time
 import dataclasses
+import scipy.ndimage
 import numpy as np
 import matplotlib.axes
 import matplotlib.animation
@@ -572,6 +573,69 @@ class Level_4(
         total = self.outputs.sum((self.axis_wavelength, self.axis_x, self.axis_y))
         return total / total.max()
 
+    def drift(
+        self,
+        index_line: None | int = None,
+        index_time_reference: None | int = None,
+    ) -> u.Quantity:
+        """
+        Measure how far the scene has slid across the grid in each frame.
+
+        Every frame is inverted with the weights of one reference pointing,
+        onto a grid fixed in the coordinates of the instrument.  The payload
+        pointing wanders over the flight, so a fixed solar feature slides
+        across that grid: about seven arcseconds end to end for the 2019
+        flight, which is several scene cells and is plainly visible in a
+        movie of a single event.
+
+        The offset of each frame is measured against the reference frame by
+        phase correlation of the line intensity, which needs no pointing
+        model and so cannot get its sign backwards.  Compare it with the
+        fitted pointing (:func:`esis.flights.f1.optics.distortion_fit` with
+        ``axis_time``) to check the two agree.
+
+        Parameters
+        ----------
+        index_line
+            The index of the spectral line to correlate along
+            :attr:`axis_line`.
+            If :obj:`None`, the brightest line.
+        index_time_reference
+            The frame every other frame is measured against.
+            If :obj:`None`, the middle frame.
+        """
+        intensity = self.intensity
+        if index_line is None:
+            total = [
+                np.nansum(np.asarray(intensity[{self.axis_line: i}].ndarray))
+                for i in range(self.num_line)
+            ]
+            index_line = int(np.argmax(total))
+        intensity = intensity[{self.axis_line: index_line}]
+
+        num_time = self.shape[self.axis_time]
+        if index_time_reference is None:
+            index_time_reference = num_time // 2
+
+        x = self.inputs.position.x.ndarray.to_value(u.arcsec)
+        y = self.inputs.position.y.ndarray.to_value(u.arcsec)
+        pitch = np.array([x[1] - x[0], y[1] - y[0]])
+
+        reference = self._index_xy(intensity[{self.axis_time: index_time_reference}])
+        reference = np.nan_to_num(reference)
+        spectrum_reference = np.fft.rfft2(reference - reference.mean())
+
+        result = np.zeros((num_time, 2))
+        for t in range(num_time):
+            frame = np.nan_to_num(self._index_xy(intensity[{self.axis_time: t}]))
+            spectrum = np.fft.rfft2(frame - frame.mean())
+            cross = spectrum * np.conj(spectrum_reference)
+            cross = cross / np.maximum(np.abs(cross), 1e-30)
+            correlation = np.fft.irfft2(cross, s=reference.shape)
+            result[t] = _peak_subpixel(correlation)
+
+        return result * pitch * u.arcsec
+
     def _index_xy(self, a: na.AbstractScalarArray) -> np.ndarray:
         """
         Extract the ndarray of `a` with ``(axis_x, axis_y)`` leading.
@@ -584,11 +648,47 @@ class Level_4(
         source = (a.axes.index(self.axis_x), a.axes.index(self.axis_y))
         return np.moveaxis(np.asarray(a.ndarray), source, (0, 1))
 
+    def _coregistered(
+        self,
+        frames: list[np.ndarray],
+        drift: None | u.Quantity,
+    ) -> list[np.ndarray]:
+        """
+        Undo the measured scene drift, frame by frame.
+
+        Parameters
+        ----------
+        frames
+            The maps to shift, one per exposure, with ``(x, y)`` leading.
+        drift
+            The offset of each frame in arcsec, or :obj:`None` to leave
+            the frames alone.
+        """
+        if drift is None:
+            return frames
+
+        x = self.inputs.position.x.ndarray.to_value(u.arcsec)
+        y = self.inputs.position.y.ndarray.to_value(u.arcsec)
+        pitch = np.array([x[1] - x[0], y[1] - y[0]])
+        offset = drift.to_value(u.arcsec) / pitch
+
+        return [
+            scipy.ndimage.shift(
+                frame,
+                -offset[t],
+                order=1,
+                mode="constant",
+                cval=np.nan,
+            )
+            for t, frame in enumerate(frames)
+        ]
+
     def animate_intensity(
         self,
         index_line: int,
         ax: None | matplotlib.axes.Axes = None,
         percentile_max: float = 99.5,
+        drift: None | u.Quantity = None,
         interval: int = 200,
     ) -> matplotlib.animation.FuncAnimation:
         """
@@ -604,6 +704,11 @@ class Level_4(
         percentile_max
             The percentile of the intensity mapped to the top of the
             colormap.
+        drift
+            The per-frame scene offset to undo, from :meth:`drift`.
+            If :obj:`None` (the default), the frames are shown as
+            reconstructed, and a feature fixed on the Sun will wander
+            across the field as the payload pointing does.
         interval
             The delay between frames in milliseconds.
         """
@@ -624,6 +729,7 @@ class Level_4(
             self._index_xy(intensity[{self.axis_time: t}])
             for t in range(self.shape[self.axis_time])
         ]
+        frames = self._coregistered(frames, drift)
         vmax = np.nanpercentile(np.stack(frames), percentile_max)
 
         img = ax.imshow(
@@ -668,6 +774,7 @@ class Level_4(
         limit_velocity: None | u.Quantity = None,
         percentile_alpha: float = 99,
         correct_transmission: bool = True,
+        drift: None | u.Quantity = None,
         interval: int = 200,
     ) -> matplotlib.animation.FuncAnimation:
         """
@@ -696,6 +803,8 @@ class Level_4(
             Whether to divide the intensity by the relative atmospheric
             transmission of each frame, so the opacity does not fade with
             the total signal toward the ends of the flight.
+        drift
+            The per-frame scene offset to undo, from :meth:`drift`.
         interval
             The delay between frames in milliseconds.
         """
@@ -726,6 +835,8 @@ class Level_4(
             self._index_xy(velocity[{self.axis_time: t}].to(u.km / u.s))
             for t in range(num_time)
         ]
+        intensity_frames = self._coregistered(intensity_frames, drift)
+        velocity_frames = self._coregistered(velocity_frames, drift)
         alpha_reference = np.nanpercentile(np.stack(intensity_frames), percentile_alpha)
 
         limit = _limit_velocity(
@@ -916,6 +1027,7 @@ class Level_4(
         percentile_max: float = 99.5,
         percentile_alpha: float = 99,
         correct_transmission: bool = True,
+        drift: None | u.Quantity = None,
         interval: int = 200,
     ) -> matplotlib.animation.FuncAnimation:
         """
@@ -954,6 +1066,8 @@ class Level_4(
         correct_transmission
             Whether to divide the intensity by the relative atmospheric
             transmission of each frame.
+        drift
+            The per-frame scene offset to undo, from :meth:`drift`.
         interval
             The delay between frames in milliseconds.
         """
@@ -970,8 +1084,42 @@ class Level_4(
             percentile_max=percentile_max,
             percentile_alpha=percentile_alpha,
             correct_transmission=correct_transmission,
+            drift=drift,
             interval=interval,
         )
+
+
+def _peak_subpixel(correlation: np.ndarray) -> np.ndarray:
+    """
+    Locate the peak of a cyclic correlation to sub-cell precision.
+
+    The integer peak is refined by fitting a parabola to its immediate
+    neighbours along each axis, and the result is wrapped into the
+    half-open interval centred on zero, since the correlation of a
+    periodic transform places negative offsets at the far end.
+
+    Parameters
+    ----------
+    correlation
+        The correlation image, with zero offset at the origin.
+    """
+    shape = np.array(correlation.shape)
+    peak = np.array(np.unravel_index(np.argmax(correlation), correlation.shape))
+
+    offset = peak.astype(float)
+    for axis in range(2):
+        index_low = peak.copy()
+        index_high = peak.copy()
+        index_low[axis] = (peak[axis] - 1) % shape[axis]
+        index_high[axis] = (peak[axis] + 1) % shape[axis]
+        low = correlation[tuple(index_low)]
+        middle = correlation[tuple(peak)]
+        high = correlation[tuple(index_high)]
+        denominator = low - 2 * middle + high
+        if denominator != 0:
+            offset[axis] += 0.5 * (low - high) / denominator
+
+    return np.where(offset > shape / 2, offset - shape, offset)
 
 
 def _limit_velocity(

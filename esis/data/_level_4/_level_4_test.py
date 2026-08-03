@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 import astropy.units as u
 import named_arrays as na
+import matplotlib.pyplot as plt
 import esis
 
 ctis = pytest.importorskip("ctis")
@@ -317,3 +318,42 @@ class TestLevel_4:
             a.intensity.ndarray.value,
             rtol=1e-6,
         )
+
+    def test_drift(self):
+        """A synthetic shift must be recovered with the right sign."""
+        import dataclasses
+
+        a = _level_4()
+        pitch = (
+            a.inputs.position.x.ndarray.to_value(u.arcsec)[1]
+            - a.inputs.position.x.ndarray.to_value(u.arcsec)[0]
+        )
+
+        # slide frame 0 by a known whole number of cells, leave the rest
+        outputs = np.asarray(a.outputs.ndarray.value).copy()
+        axes = a.outputs.axes
+        index_time = axes.index(a.axis_time)
+        index_x = axes.index(a.axis_x)
+        shifted = np.moveaxis(outputs, (index_time, index_x), (0, 1))
+        shifted[0] = np.roll(shifted[0], 2, axis=0)
+        outputs = np.moveaxis(shifted, (0, 1), (index_time, index_x))
+        b = dataclasses.replace(
+            a,
+            outputs=na.ScalarArray(outputs * na.unit(a.outputs), axes=axes),
+        )
+
+        drift = b.drift(index_time_reference=1)
+        offset = drift.to_value(u.arcsec) / pitch
+
+        assert np.isclose(offset[0, 0], 2, atol=0.1)
+        assert np.isclose(offset[0, 1], 0, atol=0.1)
+        assert np.allclose(offset[1], 0, atol=0.1)
+
+    def test_animate_drift_corrected(self):
+        """Passing a drift must undo it rather than double it."""
+        a = _level_4()
+        drift = a.drift()
+        assert drift.shape == (a.shape[a.axis_time], 2)
+        result = a.animate_doppler(index_line=0, drift=drift)
+        result._fig.canvas.draw()
+        plt.close(result._fig)

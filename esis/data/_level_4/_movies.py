@@ -103,6 +103,7 @@ def animate_event(
     percentile_max: float = 99.5,
     percentile_alpha: float = 99,
     correct_transmission: bool = True,
+    drift: None | u.Quantity = None,
     interval: int = 200,
 ) -> matplotlib.animation.FuncAnimation:
     """
@@ -143,6 +144,11 @@ def animate_event(
     correct_transmission
         Whether to divide the intensity by the relative atmospheric
         transmission of each frame.
+    drift
+        The per-frame scene offset to undo, from
+        :meth:`~esis.data.Level_4.drift`.  Without it a feature fixed on
+        the Sun wanders across the frame as the payload pointing does,
+        which is most obvious in a movie this tightly cropped.
     interval
         The delay between frames in milliseconds.
     """
@@ -182,22 +188,33 @@ def animate_event(
         intensity = intensity / a._transmission
     unit_intensity = na.unit(intensity)
 
-    intensity_frames = [
-        [
-            a._index_xy(intensity[{a.axis_line: i, a.axis_time: t}])[slice_x, slice_y]
-            for t in range(num_time)
-        ]
-        for i in range(num_line)
-    ]
-    velocity_frames = [
-        [
-            a._index_xy(velocity[{a.axis_line: i, a.axis_time: t}].to(u.km / u.s))[
-                slice_x, slice_y
+    def _frames(values, convert=None) -> list[list[np.ndarray]]:
+        """
+        Build the per-line, per-frame maps, co-registered then cropped.
+
+        Parameters
+        ----------
+        values
+            The quantity to extract, indexed by line and time.
+        convert
+            An optional unit to convert each frame to.
+        """
+        result = []
+        for i in range(num_line):
+            frames = [
+                a._index_xy(
+                    values[{a.axis_line: i, a.axis_time: t}]
+                    if convert is None
+                    else values[{a.axis_line: i, a.axis_time: t}].to(convert)
+                )
+                for t in range(num_time)
             ]
-            for t in range(num_time)
-        ]
-        for i in range(num_line)
-    ]
+            frames = a._coregistered(frames, drift)
+            result.append([frame[slice_x, slice_y] for frame in frames])
+        return result
+
+    intensity_frames = _frames(intensity)
+    velocity_frames = _frames(velocity, convert=u.km / u.s)
 
     vmax = [
         np.nanpercentile(np.stack(frames), percentile_max)
