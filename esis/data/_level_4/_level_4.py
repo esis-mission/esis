@@ -49,6 +49,21 @@ class Level_4(
     including any blended lines sharing its window.
     """
 
+    members_line: None | list[list[tuple[u.Quantity, float]]] = None
+    """
+    The spectral lines tied into each reconstructed window.
+
+    Each window is reconstructed as a single scene, so lines that share an
+    upper level — and therefore a fixed photon branching ratio — can be
+    tied together and solved for as one emitting ion.  This lists, for each
+    window, the rest wavelength of every line contributing to it paired
+    with its photon ratio relative to the first, whose rest wavelength is
+    the :attr:`wavelength_center` the velocity axis is measured against.
+
+    A window with a single member, ratio one, is an ordinary untied line;
+    :obj:`None` means every window is untied.
+    """
+
     num_velocity: None | int = None
     """The number of velocity bins in the Doppler window of each line."""
 
@@ -779,6 +794,66 @@ class Level_4(
         result = IPython.display.HTML(result)
         plt.close(animation._fig)
         return result
+
+    def to_fits(
+        self,
+        path,
+        overwrite: bool = False,
+        split: bool = False,
+    ) -> None:
+        """
+        Write the product to a self-describing FITS file.
+
+        Each spectral line becomes one image extension holding a
+        ``(time, velocity, y, x)`` cube with a full world coordinate
+        system — helioprojective longitude and latitude in arcseconds,
+        Doppler velocity in km/s about the rest wavelength of the line,
+        and time in seconds from a reference epoch — so the file can be
+        analyzed without this package.  The exact coordinate vertices and
+        the per-frame diagnostics are stored alongside, so
+        :meth:`from_fits` restores the product exactly;
+        see :func:`esis.data._level_4._fits.to_fits`.
+
+        Parameters
+        ----------
+        path
+            The path of the file to write, or of the directory to fill if
+            `split`.
+        overwrite
+            Whether to overwrite an existing file.
+        split
+            Whether to write one file per spectral line rather than one
+            file holding every line.  Each file is a complete single-line
+            product, so a reader interested in one line need not fetch
+            the others.
+        """
+        from . import _fits
+
+        return _fits.to_fits(self, path=path, overwrite=overwrite, split=split)
+
+    @classmethod
+    def from_fits(
+        cls,
+        path,
+        instrument: None | esis.optics.Instrument = None,
+    ) -> Self:
+        """
+        Read a product written by :meth:`to_fits`.
+
+        The optical model is not stored in the file, so :attr:`instrument`
+        is :obj:`None` unless supplied;
+        see :func:`esis.data._level_4._fits.from_fits`.
+
+        Parameters
+        ----------
+        path
+            The path of the file to read.
+        instrument
+            A model of the optical system to attach to the result.
+        """
+        from . import _fits
+
+        return _fits.from_fits(cls, path=path, instrument=instrument)
 
     def locate_event(
         self,
