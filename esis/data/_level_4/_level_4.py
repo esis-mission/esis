@@ -80,6 +80,17 @@ class Level_4(
     where_shadow: None | na.AbstractScalarArray = None
     """The mask of shaded detector pixels excluded from the inversion."""
 
+    drift_applied: None | u.Quantity = None
+    """
+    The scene offset already removed from each frame by :meth:`coregister`.
+
+    :obj:`None` means the frames are as reconstructed, on a grid fixed in
+    the coordinates of the instrument, so a feature fixed on the Sun
+    wanders across them as the payload pointing does.  Once set, the
+    frames share a common sky frame and the coordinates apply to all of
+    them rather than only to the reference frame.
+    """
+
     axis_time: str = dataclasses.field(default="time", kw_only=True)
     """The name of the logical axis corresponding to changing time."""
 
@@ -635,6 +646,85 @@ class Level_4(
             result[t] = _peak_subpixel(correlation)
 
         return result * pitch * u.arcsec
+
+    def coregister(
+        self,
+        drift: None | u.Quantity = None,
+        order: int = 1,
+        **kwargs,
+    ) -> Self:
+        """
+        Put every frame on a common sky frame.
+
+        The reconstruction lives on a grid fixed in the coordinates of the
+        instrument, so the payload's wander carries the scene across it.
+        This resamples each frame by the measured offset, after which a
+        feature fixed on the Sun stays at fixed grid coordinates and the
+        stored coordinates describe every frame rather than only the
+        reference.  The offset removed is recorded in
+        :attr:`drift_applied`.
+
+        The interpolation is linear by default: the reconstruction is
+        non-negative, and a higher-order kernel would overshoot into
+        negative values around the sharp edges of the field stop.
+
+        Parameters
+        ----------
+        drift
+            The offset of each frame, from :meth:`drift`.
+            If :obj:`None`, it is measured.
+        order
+            The order of the interpolation.
+        kwargs
+            Additional arguments for :meth:`drift`.
+
+        Raises
+        ------
+        ValueError
+            If this product has already been coregistered, since the
+            offsets would compound.
+        """
+        if self.drift_applied is not None:
+            raise ValueError("this product has already been coregistered")
+
+        if drift is None:
+            drift = self.drift(**kwargs)
+
+        x = self.inputs.position.x.ndarray.to_value(u.arcsec)
+        y = self.inputs.position.y.ndarray.to_value(u.arcsec)
+        pitch = np.array([x[1] - x[0], y[1] - y[0]])
+        offset = drift.to_value(u.arcsec) / pitch
+
+        axes = self.outputs.axes
+        order_axes = (self.axis_time, self.axis_x, self.axis_y)
+        source = [axes.index(ax) for ax in order_axes]
+        values = np.moveaxis(np.asarray(self.outputs.ndarray.value), source, (0, 1, 2))
+
+        result = np.empty_like(values)
+        for t in range(values.shape[0]):
+            if not np.any(offset[t]):
+                result[t] = values[t]
+                continue
+            for k in range(values.shape[3]):
+                # the vacated margin lies outside the field stop, which is
+                # already empty, so filling it with zero loses nothing
+                result[t, ..., k] = scipy.ndimage.shift(
+                    values[t, ..., k],
+                    -offset[t],
+                    order=order,
+                    mode="constant",
+                    cval=0,
+                )
+        result = np.moveaxis(result, (0, 1, 2), source)
+
+        return dataclasses.replace(
+            self,
+            outputs=na.ScalarArray(
+                result * na.unit(self.outputs),
+                axes=axes,
+            ),
+            drift_applied=drift,
+        )
 
     def _index_xy(self, a: na.AbstractScalarArray) -> np.ndarray:
         """

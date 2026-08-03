@@ -153,11 +153,24 @@ def to_fits(
     header["MJDREF"] = (epoch.mjd, "reference epoch of the time axis")
     header["DATE-OBS"] = (epoch.isot, "time of the first exposure")
     header["BUNIT"] = (bunit, "unit of the reconstructed radiance")
+    header["COREGIST"] = (
+        self.drift_applied is not None,
+        "frames share a sky frame, not the instrument grid",
+    )
     header.add_comment("Level-4 ESIS product: time-dependent MART inversions.")
     header.add_comment("One image extension per spectral line, each a 4-D cube")
     header.add_comment("with axes (time, velocity, latitude, longitude).")
     header.add_comment("Scene coordinates are helioprojective, registered to")
     header.add_comment("the AIA frame by the instrument distortion fit.")
+    if self.drift_applied is None:
+        header.add_comment("These frames are on the grid they were reconstructed")
+        header.add_comment("on, which is fixed to the instrument: the payload")
+        header.add_comment("pointing wanders, so a fixed solar feature moves")
+        header.add_comment("across them and the coordinates hold exactly only")
+        header.add_comment("for the reference frame.")
+    else:
+        header.add_comment("Each frame has been resampled onto a common sky")
+        header.add_comment("frame; the offset removed is in DIAGNOSTICS.")
 
     hdus = [primary]
 
@@ -584,6 +597,17 @@ def _diagnostics_hdu(
 
     _add(self.mean_chi_squared, "CHI2", "")
     _add(self.factor_norm, "FACTOR_NORM", "")
+    if self.drift_applied is not None:
+        drift = self.drift_applied.to_value(u.arcsec)
+        for index, name in enumerate(("DRIFT_X", "DRIFT_Y")):
+            columns.append(
+                astropy.io.fits.Column(
+                    name=name,
+                    format="D",
+                    unit="arcsec",
+                    array=np.asarray(drift[:, index], dtype=float),
+                )
+            )
     if self.num_iteration is not None:
         columns.append(
             astropy.io.fits.Column(
@@ -599,6 +623,8 @@ def _diagnostics_hdu(
     hdu.header["EXTNAME"] = EXTNAME_DIAGNOSTICS
     hdu.header.add_comment("Per-exposure inversion diagnostics. CHI2 and")
     hdu.header.add_comment("FACTOR_NORM have one entry per camera channel.")
+    hdu.header.add_comment("DRIFT_X and DRIFT_Y, when present, are the scene")
+    hdu.header.add_comment("offsets already removed to reach a common sky frame.")
     return hdu
 
 
@@ -707,6 +733,19 @@ def from_fits(
                 np.asarray(diagnostics["FACTOR_NORM"]),
                 axes=(axis_time, "channel"),
             )
+        drift_applied = None
+        if "DRIFT_X" in diagnostics.names:
+            drift_applied = (
+                np.stack(
+                    [
+                        np.asarray(diagnostics["DRIFT_X"]),
+                        np.asarray(diagnostics["DRIFT_Y"]),
+                    ],
+                    axis=-1,
+                )
+                * u.arcsec
+            )
+
         num_iteration = None
         if "NITER" in diagnostics.names:
             num_iteration = na.ScalarArray(
@@ -743,6 +782,7 @@ def from_fits(
             num_iteration=num_iteration,
             factor_norm=factor_norm,
             where_shadow=where_shadow,
+            drift_applied=drift_applied,
             axis_time=axis_time,
             axis_wavelength=axis_wavelength,
             axis_x=axis_x,

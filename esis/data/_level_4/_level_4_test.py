@@ -357,3 +357,57 @@ class TestLevel_4:
         result = a.animate_doppler(index_line=0, drift=drift)
         result._fig.canvas.draw()
         plt.close(result._fig)
+
+    def test_coregister(self):
+        """Coregistration must remove the drift and record what it removed."""
+        import dataclasses
+
+        a = _level_4()
+        pitch = (
+            a.inputs.position.x.ndarray.to_value(u.arcsec)[1]
+            - a.inputs.position.x.ndarray.to_value(u.arcsec)[0]
+        )
+
+        outputs = np.asarray(a.outputs.ndarray.value).copy()
+        axes = a.outputs.axes
+        shifted = np.moveaxis(
+            outputs, (axes.index(a.axis_time), axes.index(a.axis_x)), (0, 1)
+        )
+        shifted[0] = np.roll(shifted[0], 2, axis=0)
+        outputs = np.moveaxis(
+            shifted, (0, 1), (axes.index(a.axis_time), axes.index(a.axis_x))
+        )
+        b = dataclasses.replace(
+            a,
+            outputs=na.ScalarArray(outputs * na.unit(a.outputs), axes=axes),
+        )
+
+        c = b.coregister(index_time_reference=1)
+
+        assert c.drift_applied is not None
+        assert np.isclose(c.drift_applied.to_value(u.arcsec)[0, 0] / pitch, 2, atol=0.1)
+        # the residual drift of the coregistered product must be ~zero
+        residual = c.drift(index_time_reference=1).to_value(u.arcsec) / pitch
+        assert np.allclose(residual, 0, atol=0.15)
+        assert np.all(c.outputs.ndarray.value >= 0)
+
+        with pytest.raises(ValueError):
+            c.coregister()
+
+    def test_to_fits_coregistered(self, tmp_path):
+        """The applied drift must survive a round trip."""
+        import astropy.io.fits
+
+        a = _level_4().coregister()
+        path = tmp_path / "level_4_sky.fits"
+        a.to_fits(path)
+
+        with astropy.io.fits.open(path) as hdul:
+            assert hdul[0].header["COREGIST"]
+
+        b = esis.data.Level_4.from_fits(path)
+        assert b.drift_applied is not None
+        assert np.allclose(
+            b.drift_applied.to_value(u.arcsec),
+            a.drift_applied.to_value(u.arcsec),
+        )
