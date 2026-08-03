@@ -197,7 +197,12 @@ class TestLevel_4:
             # astropy normalizes celestial axes to degrees and spectral axes
             # to SI, whatever CUNIT says
             world = wcs.pixel_to_world_values(0, 0, 0, 0)
-            longitude = (world[0] * u.deg).to_value(u.arcsec)
+            # the field straddles disc centre, so half of it has negative
+            # helioprojective longitude, which wcslib reports on the
+            # [0, 360) branch; wrap it back the way sunpy's Helioprojective
+            # frame does before comparing
+            longitude = ((world[0] + 180) % 360 - 180) * u.deg
+            longitude = longitude.to_value(u.arcsec)
             latitude = (world[1] * u.deg).to_value(u.arcsec)
             velocity_world = (world[2] * u.m / u.s).to_value(u.km / u.s)
 
@@ -207,6 +212,21 @@ class TestLevel_4:
             # of the tangent projection from the linear scene grid
             assert np.isclose(longitude, (x[0] + x[1]) / 2, atol=1e-2)
             assert np.isclose(latitude, (y[0] + y[1]) / 2, atol=1e-2)
+
+            # the tangent point sits mid-field, so the reference pixel
+            # reproduces its own coordinate exactly
+            world = wcs.pixel_to_world_values(
+                hdu.header["CRPIX1"] - 1,
+                hdu.header["CRPIX2"] - 1,
+                0,
+                0,
+            )
+            longitude = ((world[0] + 180) % 360 - 180) * u.deg
+            assert np.isclose(
+                longitude.to_value(u.arcsec),
+                hdu.header["CRVAL1"],
+                atol=1e-6,
+            )
 
             velocity = a.velocity.ndarray.to_value(u.km / u.s)
             assert np.isclose(

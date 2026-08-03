@@ -132,6 +132,8 @@ def to_fits(
     y = self.inputs.position.y.ndarray.to_value(u.arcsec)
     x_center = _centers(x)
     y_center = _centers(y)
+    index_x = x_center.size // 2
+    index_y = y_center.size // 2
 
     wavelength = self.inputs.wavelength.ndarray.to_value(u.AA)
 
@@ -177,16 +179,20 @@ def to_fits(
         velocity = _window_velocity(self, i)
         velocity_center = _centers(velocity)
 
+        # put the tangent point at the middle of the field, not at a corner:
+        # the projection is most faithful there, and a reference longitude
+        # of a few hundred arcseconds off disk centre keeps the whole field
+        # on one branch of the longitude wrap
         h["CTYPE1"] = ("HPLN-TAN", "helioprojective longitude")
         h["CUNIT1"] = "arcsec"
-        h["CRPIX1"] = (1.0, "reference pixel, 1-indexed at the first cell")
-        h["CRVAL1"] = (float(x_center[0]), "coordinate of the reference pixel")
+        h["CRPIX1"] = (float(index_x + 1), "reference pixel, 1-indexed, mid-field")
+        h["CRVAL1"] = (float(x_center[index_x]), "coordinate of the reference pixel")
         h["CDELT1"] = (float(x_center[1] - x_center[0]), "scene pitch")
 
         h["CTYPE2"] = ("HPLT-TAN", "helioprojective latitude")
         h["CUNIT2"] = "arcsec"
-        h["CRPIX2"] = (1.0, "reference pixel, 1-indexed at the first cell")
-        h["CRVAL2"] = (float(y_center[0]), "coordinate of the reference pixel")
+        h["CRPIX2"] = (float(index_y + 1), "reference pixel, 1-indexed, mid-field")
+        h["CRVAL2"] = (float(y_center[index_y]), "coordinate of the reference pixel")
         h["CDELT2"] = (float(y_center[1] - y_center[0]), "scene pitch")
 
         h["CTYPE3"] = ("VOPT", "Doppler velocity, optical convention")
