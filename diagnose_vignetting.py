@@ -115,6 +115,26 @@ def main() -> None:
     print(f"\nsmoothing sigma {SIGMA} sky px; ratios against channel "
           f"{anchor_index}\n", flush=True)
 
+    # Dispersion puts the two lines on different parts of the detector, so
+    # each loses a different piece of the sky grid off its edges. Comparing
+    # the lines over their own usable regions would compare different parts
+    # of the field, which is exactly the confound the wavelength test is
+    # supposed to avoid, so every statistic is computed over the region
+    # usable at both lines in every channel.
+    common = None
+    for name in coalign.LINES:
+        for c in range(num_channel):
+            finite = np.isfinite(observed[name][c]) & (observed[name][c] > 0)
+            common = finite if common is None else (common & finite)
+    common = scipy.ndimage.binary_erosion(
+        common,
+        structure=np.ones((3, 3), dtype=bool),
+        iterations=int(3 * SIGMA),
+        border_value=0,
+    )
+    print(f"region usable at both lines in all channels: "
+          f"{100 * common.mean():.1f}% of the sky grid\n", flush=True)
+
     for name in coalign.LINES:
         print(f"=== {name} ===", flush=True)
         anchor = observed[name][anchor_index]
@@ -143,14 +163,8 @@ def main() -> None:
             # spreads that contamination a further few sigma inward, so the
             # valid region is eroded well past it and a floor is placed under
             # the denominator.
-            interior = scipy.ndimage.binary_erosion(
-                valid,
-                structure=np.ones((3, 3), dtype=bool),
-                iterations=int(3 * SIGMA),
-                border_value=0,
-            )
-            floor = 0.2 * np.median(a_s[interior]) if interior.any() else np.inf
-            good = interior & (w_s > 0.99) & (a_s > floor)
+            floor = 0.2 * np.median(a_s[common]) if common.any() else np.inf
+            good = common & (w_s > 0.99) & (a_s > floor)
             if good.sum() < 100:
                 print(f"  channel {c}: interior too small to measure", flush=True)
                 continue
