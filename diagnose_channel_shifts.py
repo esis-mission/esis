@@ -113,15 +113,16 @@ def main() -> None:
     # a regular sky grid spanning the field of view of the instrument
     field = system.rayfunction_default.inputs.field
     sky = na.Cartesian2dVectorLinearSpace(
-        start=field.min(),
-        stop=field.max(),
+        start=na.Cartesian2dVectorArray(x=field.x.min(), y=field.y.min()),
+        stop=na.Cartesian2dVectorArray(x=field.x.max(), y=field.y.max()),
         axis=na.Cartesian2dVectorArray("sky_x", "sky_y"),
         num=NUM_SKY,
     )
 
     num_channel = na.shape(image)["channel"]
-    shape_pixel = na.shape(image)
-    print(f"image shape {shape_pixel}", flush=True)
+    print(f"image shape {na.shape(image)}", flush=True)
+    print(f"sky span x {field.x.min():.3f} .. {field.x.max():.3f}, "
+          f"y {field.y.min():.3f} .. {field.y.max():.3f}", flush=True)
 
     for name, wavelength_rest in LINES.items():
         print(f"\n=== {name} ({wavelength_rest}) ===", flush=True)
@@ -131,25 +132,17 @@ def main() -> None:
             position=sky,
         )
         sensor = distortion.distort(coordinates).position
-
-        # sample the Level-1 image at the mapped sensor coordinates
-        x = na.value(sensor.x).ndarray
-        y = na.value(sensor.y).ndarray
-        data = na.value(image).ndarray
-
-        # the sensor coordinates carry a channel axis; broadcast the sample
-        # indices against it
-        shape = na.shape(sensor.x)
-        axes = list(shape)
-        print(f"  sensor coords axes {axes}", flush=True)
+        print(f"  sensor coordinate axes {list(na.shape(sensor.x))}", flush=True)
 
         sky_images = []
         for c in range(num_channel):
-            index = {ax: c for ax in axes if ax == "channel"}
-            xc = na.value(sensor.x)[index].ndarray if index else x
-            yc = na.value(sensor.y)[index].ndarray if index else y
-            frame = data[c] if data.ndim == 3 else data
+            index = dict(channel=c)
+            xc = na.value(sensor.x[index]).ndarray
+            yc = na.value(sensor.y[index]).ndarray
+            frame = na.value(image[index]).ndarray
 
+            # the sensor axes of the sampled coordinates must be ordered the
+            # same way as the detector axes of the frame
             ix = np.rint(xc).astype(int)
             iy = np.rint(yc).astype(int)
             inside = (
@@ -158,8 +151,9 @@ def main() -> None:
             sampled = np.zeros(ix.shape, dtype=float)
             sampled[inside] = frame[ix[inside], iy[inside]]
             sky_images.append(sampled)
+            signal = sampled[inside].mean() if inside.any() else np.nan
             print(f"  channel {c}: {inside.mean():.1%} of the sky grid on the "
-                  f"detector, mean signal {sampled[inside].mean():.1f}", flush=True)
+                  f"detector, mean signal {signal:.1f}", flush=True)
 
         anchor = sky_images[ANCHOR]
         n = NUM_SKY // NUM_TILE
