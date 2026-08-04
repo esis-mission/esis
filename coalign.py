@@ -24,6 +24,27 @@ LINES = {
 }
 
 
+def highpass(a: np.ndarray, sigma: float = 8.0) -> np.ndarray:
+    """
+    Remove the large-scale intensity structure of an image.
+
+    Vignetting and effective-area differences between the channels appear
+    as smooth multiplicative gradients, which a correlation would happily
+    lock onto instead of the solar structure that actually carries the
+    alignment. Subtracting a smoothed copy leaves the structure.
+
+    Parameters
+    ----------
+    a
+        The image to filter.
+    sigma
+        The standard deviation, in pixels, of the smoothing kernel.
+    """
+    import scipy.ndimage
+
+    return a - scipy.ndimage.gaussian_filter(a, sigma=sigma, mode="nearest")
+
+
 def shift_fft(a: np.ndarray, b: np.ndarray) -> tuple[float, float]:
     """
     Locate the shift of `b` relative to `a` by phase correlation.
@@ -38,6 +59,8 @@ def shift_fft(a: np.ndarray, b: np.ndarray) -> tuple[float, float]:
     b
         The tile whose shift relative to `a` is measured.
     """
+    a = highpass(a)
+    b = highpass(b)
     a = a - a.mean()
     b = b - b.mean()
     if not (np.any(a) and np.any(b)):
@@ -151,7 +174,8 @@ def project(
 def measure_shifts(
     sky_images: list[np.ndarray],
     num_tile: int,
-    fraction_valid: float = 0.5,
+    fraction_valid: float = 0.95,
+    include_anchor: bool = False,
 ) -> dict[int, list[tuple]]:
     """
     Measure the tile-by-tile shift of every channel against the anchor.
@@ -164,14 +188,19 @@ def measure_shifts(
         The number of tiles along each axis of the sky grid.
     fraction_valid
         The fraction of a tile which must be on the detector in both
-        channels for its shift to be measured.
+        channels for its shift to be measured. Partially valid tiles are
+        padded with zeros, whose edges the correlation mistakes for
+        structure, so the threshold is deliberately strict.
+    include_anchor
+        If :obj:`True`, the anchor is also measured against itself, which
+        must return zero and so calibrates the noise floor of the method.
     """
     anchor = sky_images[ANCHOR]
     num = anchor.shape[0] // num_tile
 
     result = {}
     for c, sky_image in enumerate(sky_images):
-        if c == ANCHOR:
+        if c == ANCHOR and not include_anchor:
             continue
         rows = []
         for i in range(num_tile):

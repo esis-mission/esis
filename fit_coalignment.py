@@ -29,7 +29,7 @@ import coalign
 TIME = int(os.environ.get("ESIS_TIME", "15"))
 DEGREE = int(os.environ.get("ESIS_DEGREE", "2"))
 NUM_SKY = int(os.environ.get("ESIS_NUM_SKY", "512"))
-NUM_TILE = int(os.environ.get("ESIS_NUM_TILE", "8"))
+NUM_TILE = int(os.environ.get("ESIS_NUM_TILE", "6"))
 
 
 def main() -> None:
@@ -74,9 +74,23 @@ def main() -> None:
             wavelength=wavelength_rest,
             num_channel=num_channel,
         )
-        measurements[name] = coalign.measure_shifts(sky_images, NUM_TILE)
+        measurements[name] = coalign.measure_shifts(
+            sky_images,
+            NUM_TILE,
+            include_anchor=True,
+        )
         counts = {c: len(r) for c, r in measurements[name].items()}
         print(f"  {name}: measurable tiles {counts}", flush=True)
+
+        # the anchor against itself must return zero: whatever it returns
+        # instead is the noise floor of the measurement, and no fitted
+        # coefficient smaller than it means anything
+        null = measurements[name].pop(coalign.ANCHOR)
+        if null:
+            nx = np.array([r[2] for r in null])
+            ny = np.array([r[3] for r in null])
+            print(f"  {name}: null test |dx| max {np.abs(nx).max():.3f}, "
+                  f"|dy| max {np.abs(ny).max():.3f} px", flush=True)
 
     # the dispersion, from where the two lines land on the detector
     centers = {}
@@ -127,18 +141,29 @@ def main() -> None:
         full = coalign.design_matrix(cx, cy, dw)
 
         def solve(matrix):
-            bx, *_ = np.linalg.lstsq(matrix, dx, rcond=None)
-            by, *_ = np.linalg.lstsq(matrix, dy, rcond=None)
-            rx = dx - matrix @ bx
-            ry = dy - matrix @ by
-            return bx, by, rx.std(), ry.std()
+            # a tile whose correlation locked onto the wrong peak is an
+            # outlier of several pixels, which least squares would chase, so
+            # the fit is iterated with sigma clipping
+            keep = np.ones(len(dx), dtype=bool)
+            for _ in range(3):
+                bx, *_ = np.linalg.lstsq(matrix[keep], dx[keep], rcond=None)
+                by, *_ = np.linalg.lstsq(matrix[keep], dy[keep], rcond=None)
+                rx = dx - matrix @ bx
+                ry = dy - matrix @ by
+                scale_x = max(rx[keep].std(), 1e-6)
+                scale_y = max(ry[keep].std(), 1e-6)
+                keep_new = (np.abs(rx) < 3 * scale_x) & (np.abs(ry) < 3 * scale_y)
+                if keep_new.sum() < matrix.shape[1] + 2 or (keep_new == keep).all():
+                    break
+                keep = keep_new
+            return bx, by, rx[keep].std(), ry[keep].std(), keep.sum()
 
         # nested comparison: does each group of terms earn its place?
-        _, _, rms_x0, rms_y0 = solve(full[:, :1])
-        _, _, rms_x1, rms_y1 = solve(full[:, :3])
-        bx, by, rms_x, rms_y = solve(full)
+        _, _, rms_x0, rms_y0, _ = solve(full[:, :1])
+        _, _, rms_x1, rms_y1, _ = solve(full[:, :3])
+        bx, by, rms_x, rms_y, kept = solve(full)
 
-        print(f"channel {c}", flush=True)
+        print(f"channel {c} ({kept}/{len(dx)} tiles kept)", flush=True)
         print(f"{'':8s} {'translation only':>22s} {rms_x0:9.3f} {rms_y0:9.3f}",
               flush=True)
         print(f"{'':8s} {'+ affine':>22s} {rms_x1:9.3f} {rms_y1:9.3f}", flush=True)
