@@ -117,10 +117,17 @@ def main() -> None:
                     continue
                 dx = np.array([r[2] for r in rows])
                 dy = np.array([r[3] for r in rows])
-                rms = np.sqrt((dx**2 + dy**2).mean())
-                print(f"  {name} channel {c}: rms |shift| {rms:6.3f} px "
-                      f"(dx {dx.mean():+.3f}+/-{dx.std():.3f}, "
-                      f"dy {dy.mean():+.3f}+/-{dy.std():.3f})", flush=True)
+                magnitude = np.hypot(dx, dy)
+
+                # a handful of tiles whose correlation locks onto the wrong
+                # peak lands several pixels out and dominates an rms, so the
+                # typical residual is reported as a median and the bad tiles
+                # are counted separately rather than averaged in
+                outlier = magnitude > 0.5
+                print(f"  {name} channel {c}: median |shift| "
+                      f"{np.median(magnitude):6.3f} px | "
+                      f"rms {np.sqrt((magnitude**2).mean()):6.3f} | "
+                      f"{outlier.sum()}/{len(rows)} tiles > 0.5 px", flush=True)
 
 
 if __name__ == "__main__":
