@@ -121,8 +121,10 @@ def main() -> None:
 
     num_channel = na.shape(image)["channel"]
     print(f"image shape {na.shape(image)}", flush=True)
-    print(f"sky span x {field.x.min():.3f} .. {field.x.max():.3f}, "
-          f"y {field.y.min():.3f} .. {field.y.max():.3f}", flush=True)
+    print(f"sky span x {na.value(field.x.min()).ndarray} .. "
+          f"{na.value(field.x.max()).ndarray}, "
+          f"y {na.value(field.y.min()).ndarray} .. "
+          f"{na.value(field.y.max()).ndarray}", flush=True)
 
     for name, wavelength_rest in LINES.items():
         print(f"\n=== {name} ({wavelength_rest}) ===", flush=True)
@@ -133,23 +135,31 @@ def main() -> None:
         )
         sensor = distortion.distort(coordinates).position
         print(f"  sensor coordinate axes {list(na.shape(sensor.x))}", flush=True)
+        print(f"  sensor x range {na.value(sensor.x.min()).ndarray:.1f} .. "
+              f"{na.value(sensor.x.max()).ndarray:.1f}", flush=True)
+        print(f"  sensor y range {na.value(sensor.y.min()).ndarray:.1f} .. "
+              f"{na.value(sensor.y.max()).ndarray:.1f}", flush=True)
+
+        # the image axes are ordered (detector_y, detector_x); the sensor
+        # coordinates may be measured either from the corner of the detector
+        # or from its center, so pick the origin that puts them on it
+        num_y, num_x = na.shape(image)["detector_y"], na.shape(image)["detector_x"]
+        offset_x = 0.0 if na.value(sensor.x.min()).ndarray >= -1 else num_x / 2
+        offset_y = 0.0 if na.value(sensor.y.min()).ndarray >= -1 else num_y / 2
+        print(f"  pixel origin offset ({offset_x}, {offset_y})", flush=True)
 
         sky_images = []
         for c in range(num_channel):
             index = dict(channel=c)
-            xc = na.value(sensor.x[index]).ndarray
-            yc = na.value(sensor.y[index]).ndarray
+            xc = na.value(sensor.x[index]).ndarray + offset_x
+            yc = na.value(sensor.y[index]).ndarray + offset_y
             frame = na.value(image[index]).ndarray
 
-            # the sensor axes of the sampled coordinates must be ordered the
-            # same way as the detector axes of the frame
             ix = np.rint(xc).astype(int)
             iy = np.rint(yc).astype(int)
-            inside = (
-                (ix >= 0) & (ix < frame.shape[0]) & (iy >= 0) & (iy < frame.shape[1])
-            )
+            inside = (ix >= 0) & (ix < num_x) & (iy >= 0) & (iy < num_y)
             sampled = np.zeros(ix.shape, dtype=float)
-            sampled[inside] = frame[ix[inside], iy[inside]]
+            sampled[inside] = frame[iy[inside], ix[inside]]
             sky_images.append(sampled)
             signal = sampled[inside].mean() if inside.any() else np.nan
             print(f"  channel {c}: {inside.mean():.1%} of the sky grid on the "
