@@ -136,25 +136,45 @@ def main() -> None:
             a_s = scipy.ndimage.gaussian_filter(a, SIGMA, mode="nearest")
             b_s = scipy.ndimage.gaussian_filter(b, SIGMA, mode="nearest")
             w_s = scipy.ndimage.gaussian_filter(w, SIGMA, mode="nearest")
-            good = w_s > 0.5
-            ratio = np.where(good, b_s / np.where(a_s == 0, np.nan, a_s), np.nan)
 
-            r = ratio[good & np.isfinite(ratio)]
-            r = r / np.median(r)
-            print(f"  channel {c}: observed ratio spread "
-                  f"{100 * r.std():5.2f}% rms, "
-                  f"{100 * (np.percentile(r, 99) - np.percentile(r, 1)):5.2f}% "
-                  f"1-99 range", flush=True)
+            # Near the field stop and the edge of the detector the signal
+            # falls steeply to zero, and a ratio there is dominated by a
+            # vanishing denominator rather than by any gain. The smoothing
+            # spreads that contamination a further few sigma inward, so the
+            # valid region is eroded well past it and a floor is placed under
+            # the denominator.
+            interior = scipy.ndimage.binary_erosion(
+                valid,
+                structure=np.ones((3, 3), dtype=bool),
+                iterations=int(3 * SIGMA),
+                border_value=0,
+            )
+            floor = 0.2 * np.median(a_s[interior]) if interior.any() else np.inf
+            good = interior & (w_s > 0.99) & (a_s > floor)
+            if good.sum() < 100:
+                print(f"  channel {c}: interior too small to measure", flush=True)
+                continue
+
+            ratio = b_s[good] / a_s[good]
+            r = ratio / np.median(ratio)
+
+            def spread(x):
+                """A robust standard deviation, immune to the tails."""
+                return 0.5 * (np.percentile(x, 84) - np.percentile(x, 16))
+
+            print(f"  channel {c}: {100 * good.sum() / valid.sum():4.1f}% of the "
+                  f"overlap usable | observed ratio spread "
+                  f"{100 * spread(r):5.2f}%", flush=True)
 
             if name in predicted:
                 p = predicted[name]
-                pr = (p[c] / p[anchor_index])[good & np.isfinite(ratio)]
+                pr = (p[c] / p[anchor_index])[good]
                 pr = pr / np.median(pr)
                 residual = r / pr
-                print(f"{'':13s} modeled ratio spread {100 * pr.std():5.2f}% rms",
+                print(f"{'':13s} modeled ratio spread {100 * spread(pr):5.2f}%",
                       flush=True)
                 print(f"{'':13s} after removing the model "
-                      f"{100 * residual.std():5.2f}% rms  <- what is unexplained",
+                      f"{100 * spread(residual):5.2f}%  <- what is unexplained",
                       flush=True)
 
 
