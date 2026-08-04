@@ -140,33 +140,37 @@ def main() -> None:
         print(f"  sensor y range {na.value(sensor.y.min()).ndarray:.1f} .. "
               f"{na.value(sensor.y.max()).ndarray:.1f}", flush=True)
 
-        # the image axes are ordered (detector_y, detector_x); the sensor
-        # coordinates may be measured either from the corner of the detector
-        # or from its center, so pick the origin that puts them on it
+        # The image axes are ordered (detector_y, detector_x), and the sensor
+        # coordinates are already detector pixel coordinates measured from the
+        # corner: a line lands on part of the detector and the rest of the sky
+        # grid falls off it, which is exactly the dispersed slitless layout.
         num_y, num_x = na.shape(image)["detector_y"], na.shape(image)["detector_x"]
-        offset_x = 0.0 if na.value(sensor.x.min()).ndarray >= -1 else num_x / 2
-        offset_y = 0.0 if na.value(sensor.y.min()).ndarray >= -1 else num_y / 2
-        print(f"  pixel origin offset ({offset_x}, {offset_y})", flush=True)
 
         sky_images = []
         for c in range(num_channel):
             index = dict(channel=c)
-            xc = na.value(sensor.x[index]).ndarray + offset_x
-            yc = na.value(sensor.y[index]).ndarray + offset_y
+            xc = na.value(sensor.x[index]).ndarray
+            yc = na.value(sensor.y[index]).ndarray
             frame = na.value(image[index]).ndarray
 
             ix = np.rint(xc).astype(int)
             iy = np.rint(yc).astype(int)
             inside = (ix >= 0) & (ix < num_x) & (iy >= 0) & (iy < num_y)
-            sampled = np.zeros(ix.shape, dtype=float)
+
+            # off-detector samples are held apart rather than zero-filled, so
+            # that they cannot masquerade as dark structure in the correlation
+            sampled = np.full(ix.shape, np.nan, dtype=float)
             sampled[inside] = frame[iy[inside], ix[inside]]
             sky_images.append(sampled)
-            signal = sampled[inside].mean() if inside.any() else np.nan
+            signal = np.nanmean(sampled) if inside.any() else np.nan
             print(f"  channel {c}: {inside.mean():.1%} of the sky grid on the "
                   f"detector, mean signal {signal:.1f}", flush=True)
 
         anchor = sky_images[ANCHOR]
         n = NUM_SKY // NUM_TILE
+        scale = (
+            na.value((sky.stop.x - sky.start.x)).ndarray / NUM_SKY * u.deg
+        ).to(u.arcsec)
 
         for c in range(num_channel):
             if c == ANCHOR:
@@ -175,20 +179,36 @@ def main() -> None:
             for i in range(NUM_TILE):
                 for j in range(NUM_TILE):
                     s = (slice(i * n, (i + 1) * n), slice(j * n, (j + 1) * n))
-                    dx, dy = _shift_fft(anchor[s], sky_images[c][s])
-                    rows.append((i, j, dx, dy))
+                    a, b = anchor[s], sky_images[c][s]
+
+                    # a tile is only measurable where both channels actually
+                    # saw the sky; a mostly-empty tile yields a meaningless
+                    # correlation peak
+                    valid = np.isfinite(a) & np.isfinite(b)
+                    if valid.mean() < 0.5:
+                        rows.append((i, j, np.nan, np.nan, valid.mean()))
+                        continue
+                    dx, dy = _shift_fft(np.nan_to_num(a), np.nan_to_num(b))
+                    rows.append((i, j, dx, dy, valid.mean()))
+
             dxs = np.array([r[2] for r in rows])
             dys = np.array([r[3] for r in rows])
             good = np.isfinite(dxs) & np.isfinite(dys)
+            if not good.any():
+                print(f"  channel {c} vs {ANCHOR}: no measurable tiles", flush=True)
+                continue
             print(
-                f"  channel {c} vs {ANCHOR}: "
-                f"median shift ({np.median(dxs[good]):+.2f}, "
-                f"{np.median(dys[good]):+.2f}) sky px, "
-                f"scatter ({dxs[good].std():.2f}, {dys[good].std():.2f})",
+                f"  channel {c} vs {ANCHOR}: {good.sum()}/{len(rows)} tiles | "
+                f"median ({np.median(dxs[good]):+.2f}, {np.median(dys[good]):+.2f}) "
+                f"sky px = ({np.median(dxs[good]) * scale.value:+.2f}, "
+                f"{np.median(dys[good]) * scale.value:+.2f}) arcsec | "
+                f"scatter ({dxs[good].std():.2f}, {dys[good].std():.2f}) px",
                 flush=True,
             )
-            for i, j, dx, dy in rows:
-                print(f"      tile ({i},{j}): ({dx:+.2f}, {dy:+.2f})", flush=True)
+            for i, j, dx, dy, frac in rows:
+                if np.isfinite(dx):
+                    print(f"      tile ({i},{j}): ({dx:+6.2f}, {dy:+6.2f}) px "
+                          f"[{frac:.0%} valid]", flush=True)
 
 
 if __name__ == "__main__":
