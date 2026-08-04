@@ -143,17 +143,26 @@ def main() -> None:
     directory.mkdir(parents=True, exist_ok=True)
     np.save(directory / f"chi2_{label}.npy", np.array(chi2))
 
-    # the velocity map of O V, whose trend across the field is the artifact
-    # the coalignment is meant to remove
-    try:
-        velocity = result.velocity
-        v = na.value(velocity).ndarray
-        np.save(directory / f"velocity_{label}.npy", v)
-        print(f"saved velocity map, shape {v.shape}", flush=True)
-    except Exception as e:  # pragma: nocover
-        print(f"velocity map unavailable ({type(e).__name__}: {e})", flush=True)
-        print(f"available fields: {[f.name for f in dataclasses.fields(result)]}",
-              flush=True)
+    # `velocity` is the Doppler axis of the cube, not a map; the map is the
+    # intensity-weighted first moment, which is what the movies plot and
+    # what carries the red-to-blue trend across the field
+    velocity = result.velocity_mean.to(u.km / u.s)
+    intensity = result.intensity
+
+    for index_line, name in enumerate(result.label_line or []):
+        v = na.value(velocity[{result.axis_line: index_line}]).ndarray
+        w = na.value(intensity[{result.axis_line: index_line}]).ndarray
+        np.save(directory / f"velocity_{label}_line{index_line}.npy", v)
+        np.save(directory / f"intensity_{label}_line{index_line}.npy", w)
+
+        finite = np.isfinite(v) & np.isfinite(w) & (w > 0)
+        if finite.sum() < 10:
+            continue
+        print(f"  {name:20s} velocity mean {np.nanmean(v[finite]):+7.2f} "
+              f"spread {np.nanstd(v[finite]):6.2f} km/s", flush=True)
+
+    print(f"saved velocity and intensity maps, shape "
+          f"{na.shape(velocity)}", flush=True)
 
     print("=== done ===", flush=True)
 
