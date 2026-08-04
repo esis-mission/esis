@@ -80,7 +80,6 @@ def install_correction() -> None:
         cy = 2 * (position.y - center_y) / span_y
         dw = (scene.wavelength - wavelength_mean * u.AA) / (wavelength_half * u.AA)
 
-        dx = na.ScalarArray(np.zeros(1), axes="_dummy") * 0
         shift_x = 0 * position.x
         shift_y = 0 * position.y
         for c, row in correction.items():
