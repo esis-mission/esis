@@ -194,13 +194,28 @@ def fit_distortion_reference(
     directory: None | str | pathlib.Path = None,
 ) -> esis.optics.DistortionParameters:  # pragma: nocover
     """
-    Fit the per-channel reference distortion parameters from scratch.
+    Fit the per-channel reference distortion parameters by scanning alone.
 
-    Reproduces (and lets anyone verify) the fit stored in
-    ``_data/distortion_reference.ecsv``: all nine per-channel degrees of
-    freedom of :class:`esis.optics.DistortionParameters` are fit to one
-    Level-1 frame with :func:`esis.optics.fit_distortion_scan`, reading
-    every channel's peak from a single pass of coherent scans.
+    All nine per-channel degrees of freedom of
+    :class:`esis.optics.DistortionParameters` are fit to one Level-1 frame
+    with :func:`esis.optics.fit_distortion_scan`, reading every channel's
+    peak from a single pass of coherent scans.
+
+    .. warning::
+
+        This does **not** reproduce the fit stored in
+        ``_data/distortion_reference.ecsv``, which was captured by a
+        per-channel differential evolution. Started from the design, the
+        scans converge cleanly (2142 evaluations, every round improving,
+        the last by less than the tolerance) onto a distinctly worse
+        optimum: mean correlation 0.456 against the stored fit's 0.581,
+        with the first joint capture round already pinned to the edge of
+        its pitch grid. The scans are a strong polish of a solution that
+        is already in the right basin, but they do not capture that basin
+        from a cold start. Use a global optimizer for the capture and
+        :class:`esis.optics.ScanPolish` to polish it — a converged
+        evolution followed by these same scan rounds reaches 0.557 in
+        about ninety minutes per channel.
 
     Expect several thousand merit evaluations at a few seconds each: hours
     of runtime on a workstation. Requires the ESIS Level-1 data and the AIA
