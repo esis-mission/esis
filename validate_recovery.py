@@ -34,6 +34,8 @@ TIME = int(os.environ.get("ESIS_TIME", "15"))
 DEGREE = int(os.environ.get("ESIS_DEGREE", "2"))
 NUM_SKY = int(os.environ.get("ESIS_NUM_SKY", "512"))
 NUM_TILE = int(os.environ.get("ESIS_NUM_TILE", "6"))
+INTERPOLATION = os.environ.get("ESIS_INTERPOLATION", "nearest")
+NUM_PASS = int(os.environ.get("ESIS_NUM_PASS", "1"))
 
 # the injected truth, in sky-grid pixels: a translation, a gradient along
 # each sky axis, and a dispersion term, all of the size the real fit found.
@@ -87,73 +89,107 @@ def main() -> None:
     wavelength_mean = np.mean([w.to_value(u.AA) for w in coalign.LINES.values()])
     wavelength_half = abs(coalign.LINES[names[1]].to_value(u.AA) - wavelength_mean)
 
-    def warped(wavelength_rest: u.Quantity) -> na.Cartesian2dVectorArray:
-        """Displace the sky coordinates by the injected field."""
+    truth_x = np.array([TRUTH_X[k] for k in ("constant", "x", "y", "wavelength")])
+    truth_y = np.array([TRUTH_Y[k] for k in ("constant", "x", "y", "wavelength")])
+
+    def field(
+        wavelength_rest: u.Quantity,
+        coefficient_x: np.ndarray,
+        coefficient_y: np.ndarray,
+    ) -> tuple:
+        """Evaluate one displacement field over the sky grid."""
         cx = 2 * (sky.x - center_x) / span_x
         cy = 2 * (sky.y - center_y) / span_y
         dw = (wavelength_rest.to_value(u.AA) - wavelength_mean) / wavelength_half
+        basis = (1, cx, cy, dw)
+        return (
+            sum(c * b for c, b in zip(coefficient_x, basis)),
+            sum(c * b for c, b in zip(coefficient_y, basis)),
+        )
 
-        dx = (
-            TRUTH_X["constant"]
-            + TRUTH_X["x"] * cx
-            + TRUTH_X["y"] * cy
-            + TRUTH_X["wavelength"] * dw
-        )
-        dy = (
-            TRUTH_Y["constant"]
-            + TRUTH_Y["x"] * cx
-            + TRUTH_Y["y"] * cy
-            + TRUTH_Y["wavelength"] * dw
-        )
+    def warped(
+        wavelength_rest: u.Quantity,
+        accumulated_x: np.ndarray,
+        accumulated_y: np.ndarray,
+    ) -> na.Cartesian2dVectorArray:
+        """
+        Displace the sky coordinates by the injected field, less what is fitted.
+
+        Pass zero sees the injected warp whole.  Later passes see only what
+        the accumulated correction has failed to remove, which is the small
+        residual the iteration is supposed to converge on.
+        """
+        dx_true, dy_true = field(wavelength_rest, truth_x, truth_y)
+        dx_fit, dy_fit = field(wavelength_rest, accumulated_x, accumulated_y)
         return na.Cartesian2dVectorArray(
-            x=sky.x + dx * pixel_x,
-            y=sky.y + dy * pixel_y,
+            x=sky.x + (dx_true - dx_fit) * pixel_x,
+            y=sky.y + (dy_true - dy_fit) * pixel_y,
         )
 
-    measurements = {}
-    for name, wavelength_rest in coalign.LINES.items():
-        plain = coalign.project(
-            distortion=distortion,
-            image=image,
-            sky=sky,
-            wavelength=wavelength_rest,
-            num_channel=num_channel,
-        )
-        shifted = coalign.project(
-            distortion=distortion,
-            image=image,
-            sky=sky,
-            wavelength=wavelength_rest,
-            num_channel=num_channel,
-            warp={coalign.ANCHOR: warped(wavelength_rest)},
-        )
+    accumulated_x = np.zeros(4)
+    accumulated_y = np.zeros(4)
 
-        # the anchor's own image, plain, against the anchor's own image
-        # warped: everything else about the two is identical
-        pair = list(plain)
-        pair[CHANNEL_TEST] = shifted[coalign.ANCHOR]
-        measurements[name] = coalign.measure_shifts(pair, NUM_TILE)
+    for index_pass in range(NUM_PASS):
+        measurements = {}
+        for name, wavelength_rest in coalign.LINES.items():
+            plain = coalign.project(
+                distortion=distortion,
+                image=image,
+                sky=sky,
+                wavelength=wavelength_rest,
+                num_channel=num_channel,
+                interpolation=INTERPOLATION,
+            )
+            shifted = coalign.project(
+                distortion=distortion,
+                image=image,
+                sky=sky,
+                wavelength=wavelength_rest,
+                num_channel=num_channel,
+                warp={
+                    coalign.ANCHOR: warped(
+                        wavelength_rest, accumulated_x, accumulated_y
+                    )
+                },
+                interpolation=INTERPOLATION,
+            )
+
+            # the anchor's own image, plain, against the anchor's own image
+            # warped: everything else about the two is identical
+            pair = list(plain)
+            pair[CHANNEL_TEST] = shifted[coalign.ANCHOR]
+            measurements[name] = coalign.measure_shifts(pair, NUM_TILE)
+
+        cx, cy, dw, dx, dy = [], [], [], [], []
+        for name in coalign.LINES:
+            for _cx, _cy, _dx, _dy in measurements[name][CHANNEL_TEST]:
+                cx.append(_cx)
+                cy.append(_cy)
+                dw.append(
+                    (coalign.LINES[name].to_value(u.AA) - wavelength_mean)
+                    / wavelength_half
+                )
+                dx.append(_dx)
+                dy.append(_dy)
+
+        matrix = coalign.design_matrix(np.array(cx), np.array(cy), np.array(dw))
+        bx, by, rms_x, rms_y, kept = coalign.fit_model(
+            matrix, np.array(dx), np.array(dy)
+        )
+        accumulated_x = accumulated_x + bx
+        accumulated_y = accumulated_y + by
+        worst_remaining = max(
+            np.abs(accumulated_x - truth_x).max(),
+            np.abs(accumulated_y - truth_y).max(),
+        )
         print(
-            f"{name}: {len(measurements[name][CHANNEL_TEST])} measurable tiles",
+            f"pass {index_pass}: {kept}/{len(dx)} tiles,"
+            f" rms {rms_x:.3f}/{rms_y:.3f} px,"
+            f" worst remaining error {worst_remaining:.3f} px",
             flush=True,
         )
 
-    cx, cy, dw, dx, dy = [], [], [], [], []
-    for name in coalign.LINES:
-        for _cx, _cy, _dx, _dy in measurements[name][CHANNEL_TEST]:
-            cx.append(_cx)
-            cy.append(_cy)
-            dw.append(
-                (coalign.LINES[name].to_value(u.AA) - wavelength_mean) / wavelength_half
-            )
-            dx.append(_dx)
-            dy.append(_dy)
-
-    matrix = coalign.design_matrix(np.array(cx), np.array(cy), np.array(dw))
-    bx, by, rms_x, rms_y, kept = coalign.fit_model(matrix, np.array(dx), np.array(dy))
-
-    truth_x = np.array([TRUTH_X[k] for k in ("constant", "x", "y", "wavelength")])
-    truth_y = np.array([TRUTH_Y[k] for k in ("constant", "x", "y", "wavelength")])
+    bx, by = accumulated_x, accumulated_y
 
     # the measurement returns the shift of the warped image relative to the
     # plain one, whose sign is set by the convention of the correlation; the
@@ -179,7 +215,7 @@ def main() -> None:
         worst = max(worst, abs(error))
         print(f"{label:>12s} {truth:10.3f} {fitted:10.3f} {error:+10.3f}")
 
-    print(f"\ntruth scale {SCALE:+g}")
+    print(f"\ntruth scale {SCALE:+g}, {NUM_TILE}x{NUM_TILE} tiles, {INTERPOLATION}")
     print(f"worst coefficient error {worst:.3f} sky pixels", flush=True)
     print(
         "for comparison, the real fit left 0.06 to 0.17 px of residual"

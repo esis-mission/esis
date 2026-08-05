@@ -120,6 +120,7 @@ def project(
     wavelength: u.Quantity,
     num_channel: int,
     warp: None | dict = None,
+    interpolation: str = "nearest",
 ) -> list[np.ndarray]:
     """
     Sample each channel's image on a common sky grid at one wavelength.
@@ -139,6 +140,13 @@ def project(
     warp
         An optional per-channel correction applied to the sky coordinates
         before mapping, as returned by :func:`evaluate_warp`.
+    interpolation
+        ``"linear"`` to sample the detector bilinearly, or ``"nearest"`` to
+        round to the nearest pixel. Rounding quantizes the sampling at one
+        detector pixel, which is about 2.5 sky-grid pixels here, and the
+        resulting error varies smoothly across the field rather than
+        averaging away — it biases a measured shift field toward zero
+        gradient. Bilinear sampling costs four gathers instead of one.
     """
     num_y = na.shape(image)["detector_y"]
     num_x = na.shape(image)["detector_x"]
@@ -160,12 +168,30 @@ def project(
         yc = na.value(sensor.y[index]).ndarray
         frame = na.value(image[index]).ndarray
 
-        ix = np.rint(xc).astype(int)
-        iy = np.rint(yc).astype(int)
-        inside = (ix >= 0) & (ix < num_x) & (iy >= 0) & (iy < num_y)
+        sampled = np.full(xc.shape, np.nan, dtype=float)
 
-        sampled = np.full(ix.shape, np.nan, dtype=float)
-        sampled[inside] = frame[iy[inside], ix[inside]]
+        if interpolation == "nearest":
+            ix = np.rint(xc).astype(int)
+            iy = np.rint(yc).astype(int)
+            inside = (ix >= 0) & (ix < num_x) & (iy >= 0) & (iy < num_y)
+            sampled[inside] = frame[iy[inside], ix[inside]]
+        elif interpolation == "linear":
+            ix = np.floor(xc).astype(int)
+            iy = np.floor(yc).astype(int)
+            inside = (ix >= 0) & (ix + 1 < num_x) & (iy >= 0) & (iy + 1 < num_y)
+
+            fx = (xc - ix)[inside]
+            fy = (yc - iy)[inside]
+            ix, iy = ix[inside], iy[inside]
+            sampled[inside] = (
+                frame[iy, ix] * (1 - fx) * (1 - fy)
+                + frame[iy, ix + 1] * fx * (1 - fy)
+                + frame[iy + 1, ix] * (1 - fx) * fy
+                + frame[iy + 1, ix + 1] * fx * fy
+            )
+        else:
+            raise ValueError(f"unknown {interpolation=}")
+
         results.append(sampled)
 
     return results
