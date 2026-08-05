@@ -6,9 +6,15 @@ import esis
 from ....spectrum import O_V, Si_IV
 
 __all__ = [
+    "radiance_scale_default",
     "velocity_scale_default",
     "scene_iris",
 ]
+
+#: The default factor by which the radiance of the IRIS observations is
+#: scaled, which is the ratio of the average quiet-sun radiances of the
+#: simulated and observed lines.
+radiance_scale_default = float(O_V.radiance / Si_IV.radiance)
 
 #: The default factor by which the Doppler velocity of the IRIS observations
 #: is scaled, which maps the average quiet-sun width of the observed line onto
@@ -22,7 +28,7 @@ def scene_iris(
     time_start: str | astropy.time.Time,
     time_stop: None | str | astropy.time.Time = None,
     wavelength_rest: u.Quantity = O_V.wavelength,
-    radiance: u.Quantity = O_V.radiance,
+    radiance_scale: float = radiance_scale_default,
     velocity_scale: float = velocity_scale_default,
     axis_time: str = "time",
     axis_detector_x: str = "detector_x",
@@ -56,9 +62,10 @@ def scene_iris(
     wavelength_rest
         The new rest wavelength of the simulated scene.
         This replaces the actual rest wavelength of the IRIS observations.
-    radiance
-        The average radiance of the simulated scene.
-        This replaces the actual radiance of the IRIS observations.
+    radiance_scale
+        The factor by which to scale the radiance of the IRIS observations.
+        Defaults to the ratio of the average quiet-sun radiances of the
+        simulated and observed lines, see :obj:`radiance_scale_default`.
     velocity_scale
         The factor by which to scale the Doppler velocity of the IRIS
         observations.
@@ -110,7 +117,7 @@ def scene_iris(
         time_start=time_start,
         time_stop=time_stop,
         wavelength_rest=wavelength_rest,
-        radiance=radiance,
+        radiance_scale=radiance_scale,
         velocity_scale=velocity_scale,
         axis_time=axis_time,
         axis_detector_x=axis_detector_x,

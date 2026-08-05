@@ -14,7 +14,7 @@ def scene_iris(
     time_start: str | astropy.time.Time,
     time_stop: None | str | astropy.time.Time,
     wavelength_rest: u.Quantity,
-    radiance: u.Quantity,
+    radiance_scale: float,
     velocity_scale: float,
     axis_time: str = "time",
     axis_detector_x: str = "detector_x",
@@ -47,9 +47,13 @@ def scene_iris(
     wavelength_rest
         The new rest wavelength of the simulated scene.
         This replaces the actual rest wavelength of the IRIS observations.
-    radiance
-        The average radiance of the simulated scene.
-        This replaces the actual radiance of the IRIS observations.
+    radiance_scale
+        The factor by which to scale the radiance of the IRIS observations.
+        The observations are first converted from instrument units to
+        radiometric units using
+        :attr:`iris.sg.SpectrographObservation.radiance`,
+        so this only has to account for the difference in brightness between
+        the line being simulated and the line which was observed.
     velocity_scale
         The factor by which to scale the Doppler velocity of the IRIS
         observations.
@@ -141,18 +145,18 @@ def scene_iris(
 
     scene.outputs[scene.outputs < dn_min] = dn_zero
 
+    # This has to happen while the coordinates are still those of the IRIS
+    # observation, since the conversion needs the exposure length and the
+    # size of a pixel on the sky and in wavelength.
+    scene = scene.radiance
+
+    scene.outputs = scene.outputs * radiance_scale
+
     scene.inputs = na.TemporalDopplerPositionalVectorArray.from_velocity(
         velocity=scene.inputs.velocity * velocity_scale,
         wavelength_rest=wavelength_rest,
         time=scene.inputs.time,
         position=scene.inputs.position,
     )
-
-    radiance_avg = scene.integrate(
-        component="wavelength",
-        axis=axis_velocity,
-    ).outputs.mean()
-
-    scene.outputs = scene.outputs * radiance / radiance_avg
 
     return scene
