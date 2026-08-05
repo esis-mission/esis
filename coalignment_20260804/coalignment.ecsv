@@ -1,0 +1,25 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: channel, datatype: int64}
+# - {name: dx_0, datatype: float64}
+# - {name: dx_x, datatype: float64}
+# - {name: dx_y, datatype: float64}
+# - {name: dx_w, datatype: float64}
+# - {name: dy_0, datatype: float64}
+# - {name: dy_x, datatype: float64}
+# - {name: dy_y, datatype: float64}
+# - {name: dy_w, datatype: float64}
+# - {name: rms_x, datatype: float64}
+# - {name: rms_y, datatype: float64}
+# meta: !!omap
+# - {anchor: 1}
+# - {scale_arcsec: 1.336183044470712}
+# - {velocity_per_pixel: 17.494402676923826}
+# - {description: 'Inter-channel coalignment of the ESIS-I channels against channel 1, in units of the sky grid, as a function of the
+#     sky coordinates normalized to [-1, 1] and the wavelength normalized so that the two lines sit at -1 and +1.'}
+# schema: astropy-2.0
+channel dx_0 dx_x dx_y dx_w dy_0 dy_x dy_y dy_w rms_x rms_y
+0 0.2593162017986701 0.3889668094587241 0.441861035046514 -0.3652757499541873 0.17657608631589686 0.06827860859731547 0.4597779702820209 -0.3846365941592863 0.08466365591337338 0.08669545376643403
+2 -0.30076513627721774 0.8820007618708053 0.7678844591912323 0.37063744608575466 -0.4429181127962756 0.0006007806449831454 -0.09581898190445842 0.19757473886496105 0.10326892922837368 0.07716957986148566
+3 -0.19930445670498217 0.48296047368728784 0.1382262186542077 -0.3231742688012448 -0.44008193123067435 0.508129487657392 0.6248868316549769 -0.049650265051843 0.12370114893621095 0.09548689373792349

@@ -148,10 +148,42 @@ def project(
         averaging away — it biases a measured shift field toward zero
         gradient. Bilinear sampling costs four gathers instead of one.
     """
-    num_y = na.shape(image)["detector_y"]
-    num_x = na.shape(image)["detector_x"]
+    coordinates = sensor_coordinates(distortion, sky, wavelength, num_channel, warp)
+    return [
+        sample(image, c, *coordinates[c], interpolation=interpolation)
+        for c in range(num_channel)
+    ]
 
-    results = []
+
+def sensor_coordinates(
+    distortion,
+    sky: na.Cartesian2dVectorLinearSpace,
+    wavelength: u.Quantity,
+    num_channel: int,
+    warp: None | dict = None,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """
+    Map the sky grid onto every channel's sensor.
+
+    Split out from :func:`project` because the mapping does not depend on
+    the frame: over a movie of the flight it can be built once and reused,
+    which is the whole cost of the projection.
+
+    Parameters
+    ----------
+    distortion
+        The distortion model mapping the sky onto the sensor.
+    sky
+        The grid on the sky to project onto.
+    wavelength
+        The wavelength at which the sky grid is mapped through the model.
+    num_channel
+        The number of channels.
+    warp
+        An optional per-channel correction applied to the sky coordinates
+        before mapping.
+    """
+    result = []
     for c in range(num_channel):
         position = sky
         if warp is not None and c in warp:
@@ -164,37 +196,67 @@ def project(
         sensor = distortion.distort(coordinates).position
 
         index = dict(channel=c)
-        xc = na.value(sensor.x[index]).ndarray
-        yc = na.value(sensor.y[index]).ndarray
-        frame = na.value(image[index]).ndarray
-
-        sampled = np.full(xc.shape, np.nan, dtype=float)
-
-        if interpolation == "nearest":
-            ix = np.rint(xc).astype(int)
-            iy = np.rint(yc).astype(int)
-            inside = (ix >= 0) & (ix < num_x) & (iy >= 0) & (iy < num_y)
-            sampled[inside] = frame[iy[inside], ix[inside]]
-        elif interpolation == "linear":
-            ix = np.floor(xc).astype(int)
-            iy = np.floor(yc).astype(int)
-            inside = (ix >= 0) & (ix + 1 < num_x) & (iy >= 0) & (iy + 1 < num_y)
-
-            fx = (xc - ix)[inside]
-            fy = (yc - iy)[inside]
-            ix, iy = ix[inside], iy[inside]
-            sampled[inside] = (
-                frame[iy, ix] * (1 - fx) * (1 - fy)
-                + frame[iy, ix + 1] * fx * (1 - fy)
-                + frame[iy + 1, ix] * (1 - fx) * fy
-                + frame[iy + 1, ix + 1] * fx * fy
+        result.append(
+            (
+                na.value(sensor.x[index]).ndarray,
+                na.value(sensor.y[index]).ndarray,
             )
-        else:
-            raise ValueError(f"unknown {interpolation=}")
+        )
+    return result
 
-        results.append(sampled)
 
-    return results
+def sample(
+    image: na.AbstractScalar,
+    channel: int,
+    xc: np.ndarray,
+    yc: np.ndarray,
+    interpolation: str = "nearest",
+) -> np.ndarray:
+    """
+    Read one channel's image at the given sensor coordinates.
+
+    Parameters
+    ----------
+    image
+        The observed image, with a ``channel`` axis.
+    channel
+        The channel to read.
+    xc
+        The sensor x coordinate of every sky-grid point.
+    yc
+        The sensor y coordinate of every sky-grid point.
+    interpolation
+        See :func:`project`.
+    """
+    num_y = na.shape(image)["detector_y"]
+    num_x = na.shape(image)["detector_x"]
+    frame = na.value(image[dict(channel=channel)]).ndarray
+
+    sampled = np.full(xc.shape, np.nan, dtype=float)
+
+    if interpolation == "nearest":
+        ix = np.rint(xc).astype(int)
+        iy = np.rint(yc).astype(int)
+        inside = (ix >= 0) & (ix < num_x) & (iy >= 0) & (iy < num_y)
+        sampled[inside] = frame[iy[inside], ix[inside]]
+    elif interpolation == "linear":
+        ix = np.floor(xc).astype(int)
+        iy = np.floor(yc).astype(int)
+        inside = (ix >= 0) & (ix + 1 < num_x) & (iy >= 0) & (iy + 1 < num_y)
+
+        fx = (xc - ix)[inside]
+        fy = (yc - iy)[inside]
+        ix, iy = ix[inside], iy[inside]
+        sampled[inside] = (
+            frame[iy, ix] * (1 - fx) * (1 - fy)
+            + frame[iy, ix + 1] * fx * (1 - fy)
+            + frame[iy + 1, ix] * (1 - fx) * fy
+            + frame[iy + 1, ix + 1] * fx * fy
+        )
+    else:
+        raise ValueError(f"unknown {interpolation=}")
+
+    return sampled
 
 
 def measure_shifts(
