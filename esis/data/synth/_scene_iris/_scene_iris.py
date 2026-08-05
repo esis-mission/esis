@@ -124,23 +124,6 @@ def scene_iris(
 
         scene.outputs = scene.outputs - bg
 
-    if velocity_max is not None:
-        velocity_centers = scene.inputs.velocity.cell_centers(axis_velocity)
-
-        where_upper = +velocity_max < velocity_centers
-
-        index_lower = np.nanargmax(-velocity_max < velocity_centers)[axis_velocity]
-        index_lower = index_lower.ndarray
-
-        if where_upper.any():
-            index_upper = np.nanargmax(where_upper)[axis_velocity].ndarray
-        else:
-            index_upper = None
-
-        crop_wavelength = {scene.axis_wavelength: slice(index_lower, index_upper)}
-
-        scene = scene[crop_wavelength]
-
     scene.outputs = np.nan_to_num(scene.outputs)
 
     scene.outputs[scene.outputs < dn_min] = dn_zero
@@ -158,5 +141,24 @@ def scene_iris(
         time=scene.inputs.time,
         position=scene.inputs.position,
     )
+
+    # Cropped after the velocity has been scaled, so that the limit is a
+    # velocity in the simulated scene rather than in the observations.
+    if velocity_max is not None:
+        velocity_centers = scene.inputs.velocity.cell_centers(axis_velocity)
+
+        where_upper = +velocity_max < velocity_centers
+
+        index_lower = np.nanargmax(-velocity_max < velocity_centers)[axis_velocity]
+        index_lower = index_lower.ndarray
+
+        if where_upper.any():
+            index_upper = np.nanargmax(where_upper)[axis_velocity].ndarray
+        else:
+            index_upper = None
+
+        crop_wavelength = {scene.axis_wavelength: slice(index_lower, index_upper)}
+
+        scene = scene[crop_wavelength]
 
     return scene

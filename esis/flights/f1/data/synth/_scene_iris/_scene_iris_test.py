@@ -43,3 +43,9 @@ def test_scene_iris(
     radiance = result.integrate(component="wavelength", axis=axis_velocity)
     assert np.all(np.isfinite(radiance.outputs))
     assert np.all(radiance.outputs > 0)
+
+    # The limit is a velocity in the simulated scene, not in the observations,
+    # so it has to hold after the velocity has been scaled. It applies to the
+    # center of each cell, the edges of the outermost cells lie beyond it.
+    velocity = result.inputs.velocity.cell_centers(axis_velocity)
+    assert np.all(np.abs(velocity) <= velocity_max)
