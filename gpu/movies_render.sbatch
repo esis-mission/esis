@@ -3,7 +3,7 @@
 #SBATCH --account=group-charleskankelborg
 #SBATCH --partition=unsafe
 #SBATCH --requeue
-#SBATCH --mem=120G
+#SBATCH --mem=300G
 #SBATCH --cpus-per-task=8
 #SBATCH --time=04:00:00
 #SBATCH --output=/home/t26q518/git_repos/esis-coalign/gpu/movie-render-%j.log

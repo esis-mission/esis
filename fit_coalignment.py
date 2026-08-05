@@ -37,8 +37,11 @@ def main() -> None:
     directory = pathlib.Path(__file__).parent / "coalignment_20260804"
     directory.mkdir(parents=True, exist_ok=True)
 
-    print(f"frame {TIME}, {NUM_SKY}^2 sky grid, {NUM_TILE}x{NUM_TILE} tiles, "
-          f"anchor channel {coalign.ANCHOR}", flush=True)
+    print(
+        f"frame {TIME}, {NUM_SKY}^2 sky grid, {NUM_TILE}x{NUM_TILE} tiles, "
+        f"anchor channel {coalign.ANCHOR}",
+        flush=True,
+    )
 
     instrument = esis.flights.f1.optics.distortion_fit(num_distribution=0)
     system = instrument.system
@@ -60,9 +63,9 @@ def main() -> None:
     distortion = linear.distortion
 
     sky = coalign.sky_grid(system, NUM_SKY)
-    scale = float(
-        na.value(sky.stop.x - sky.start.x).ndarray / NUM_SKY
-    ) * u.deg.to(u.arcsec)
+    scale = float(na.value(sky.stop.x - sky.start.x).ndarray / NUM_SKY) * u.deg.to(
+        u.arcsec
+    )
 
     # measure the shift field at each line
     measurements = {}
@@ -89,8 +92,11 @@ def main() -> None:
         if null:
             nx = np.array([r[2] for r in null])
             ny = np.array([r[3] for r in null])
-            print(f"  {name}: null test |dx| max {np.abs(nx).max():.3f}, "
-                  f"|dy| max {np.abs(ny).max():.3f} px", flush=True)
+            print(
+                f"  {name}: null test |dx| max {np.abs(nx).max():.3f}, "
+                f"|dy| max {np.abs(ny).max():.3f} px",
+                flush=True,
+            )
 
     # the dispersion, from where the two lines land on the detector
     centers = {}
@@ -106,13 +112,13 @@ def main() -> None:
     d_wavelength = coalign.LINES[names[1]] - coalign.LINES[names[0]]
     dispersion = d_wavelength / d_pixel
     v_pixel = coalign.velocity_per_pixel(coalign.LINES[names[1]], abs(dispersion))
-    print(f"\ndispersion {dispersion:.5f}/px -> {v_pixel:.1f} per detector pixel",
-          flush=True)
+    print(
+        f"\ndispersion {dispersion:.5f}/px -> {v_pixel:.1f} per detector pixel",
+        flush=True,
+    )
 
     wavelength_mean = np.mean([w.to_value(u.AA) for w in coalign.LINES.values()])
-    wavelength_half = abs(
-        coalign.LINES[names[1]].to_value(u.AA) - wavelength_mean
-    )
+    wavelength_half = abs(coalign.LINES[names[1]].to_value(u.AA) - wavelength_mean)
 
     rows = []
     print(f"\n{'':8s} {'model':>22s} {'rms dx':>9s} {'rms dy':>9s}", flush=True)
@@ -141,22 +147,8 @@ def main() -> None:
         full = coalign.design_matrix(cx, cy, dw)
 
         def solve(matrix):
-            # a tile whose correlation locked onto the wrong peak is an
-            # outlier of several pixels, which least squares would chase, so
-            # the fit is iterated with sigma clipping
-            keep = np.ones(len(dx), dtype=bool)
-            for _ in range(3):
-                bx, *_ = np.linalg.lstsq(matrix[keep], dx[keep], rcond=None)
-                by, *_ = np.linalg.lstsq(matrix[keep], dy[keep], rcond=None)
-                rx = dx - matrix @ bx
-                ry = dy - matrix @ by
-                scale_x = max(rx[keep].std(), 1e-6)
-                scale_y = max(ry[keep].std(), 1e-6)
-                keep_new = (np.abs(rx) < 3 * scale_x) & (np.abs(ry) < 3 * scale_y)
-                if keep_new.sum() < matrix.shape[1] + 2 or (keep_new == keep).all():
-                    break
-                keep = keep_new
-            return bx, by, rx[keep].std(), ry[keep].std(), keep.sum()
+            """Fit one nested model, with the shared outlier rejection."""
+            return coalign.fit_model(matrix, dx, dy)
 
         # nested comparison: does each group of terms earn its place?
         _, _, rms_x0, rms_y0, _ = solve(full[:, :1])
@@ -164,23 +156,40 @@ def main() -> None:
         bx, by, rms_x, rms_y, kept = solve(full)
 
         print(f"channel {c} ({kept}/{len(dx)} tiles kept)", flush=True)
-        print(f"{'':8s} {'translation only':>22s} {rms_x0:9.3f} {rms_y0:9.3f}",
-              flush=True)
+        print(
+            f"{'':8s} {'translation only':>22s} {rms_x0:9.3f} {rms_y0:9.3f}", flush=True
+        )
         print(f"{'':8s} {'+ affine':>22s} {rms_x1:9.3f} {rms_y1:9.3f}", flush=True)
         print(f"{'':8s} {'+ dispersion':>22s} {rms_x:9.3f} {rms_y:9.3f}", flush=True)
-        print(f"{'':8s} dx = {bx[0]:+.3f} {bx[1]:+.3f} X {bx[2]:+.3f} Y "
-              f"{bx[3]:+.3f} W", flush=True)
-        print(f"{'':8s} dy = {by[0]:+.3f} {by[1]:+.3f} X {by[2]:+.3f} Y "
-              f"{by[3]:+.3f} W", flush=True)
-        print(f"{'':8s} dispersion disagreement "
-              f"{abs(bx[3]) * v_pixel.value:.1f} km/s equivalent", flush=True)
+        print(
+            f"{'':8s} dx = {bx[0]:+.3f} {bx[1]:+.3f} X {bx[2]:+.3f} Y "
+            f"{bx[3]:+.3f} W",
+            flush=True,
+        )
+        print(
+            f"{'':8s} dy = {by[0]:+.3f} {by[1]:+.3f} X {by[2]:+.3f} Y "
+            f"{by[3]:+.3f} W",
+            flush=True,
+        )
+        print(
+            f"{'':8s} dispersion disagreement "
+            f"{abs(bx[3]) * v_pixel.value:.1f} km/s equivalent",
+            flush=True,
+        )
 
         rows.append(
             dict(
                 channel=c,
-                dx_0=bx[0], dx_x=bx[1], dx_y=bx[2], dx_w=bx[3],
-                dy_0=by[0], dy_x=by[1], dy_y=by[2], dy_w=by[3],
-                rms_x=rms_x, rms_y=rms_y,
+                dx_0=bx[0],
+                dx_x=bx[1],
+                dx_y=bx[2],
+                dx_w=bx[3],
+                dy_0=by[0],
+                dy_x=by[1],
+                dy_y=by[2],
+                dy_w=by[3],
+                rms_x=rms_x,
+                rms_y=rms_y,
             )
         )
 

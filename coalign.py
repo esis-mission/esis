@@ -248,6 +248,47 @@ def design_matrix(cx: np.ndarray, cy: np.ndarray, dw: np.ndarray) -> np.ndarray:
     return np.stack([np.ones_like(cx), cx, cy, dw], axis=~0)
 
 
+def fit_model(
+    matrix: np.ndarray,
+    dx: np.ndarray,
+    dy: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, float, float, int]:
+    """
+    Solve the correction model for one channel, rejecting outliers.
+
+    A tile whose correlation locked onto the wrong peak is an outlier of
+    several pixels, which least squares would chase, so the fit is iterated
+    with sigma clipping.
+
+    Parameters
+    ----------
+    matrix
+        The design matrix, from :func:`design_matrix`.
+    dx
+        The measured shift along the sky x axis of each tile.
+    dy
+        The measured shift along the sky y axis of each tile.
+
+    Returns
+    -------
+    The two coefficient vectors, the two residual standard deviations of
+    the tiles that survived the clipping, and how many survived.
+    """
+    keep = np.ones(len(dx), dtype=bool)
+    for _ in range(3):
+        bx, *_ = np.linalg.lstsq(matrix[keep], dx[keep], rcond=None)
+        by, *_ = np.linalg.lstsq(matrix[keep], dy[keep], rcond=None)
+        rx = dx - matrix @ bx
+        ry = dy - matrix @ by
+        scale_x = max(rx[keep].std(), 1e-6)
+        scale_y = max(ry[keep].std(), 1e-6)
+        keep_new = (np.abs(rx) < 3 * scale_x) & (np.abs(ry) < 3 * scale_y)
+        if keep_new.sum() < matrix.shape[1] + 2 or (keep_new == keep).all():
+            break
+        keep = keep_new
+    return bx, by, rx[keep].std(), ry[keep].std(), int(keep.sum())
+
+
 def velocity_per_pixel(wavelength: u.Quantity, dispersion: u.Quantity) -> u.Quantity:
     """
     Convert a shift of one detector pixel into an apparent Doppler velocity.
