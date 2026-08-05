@@ -15,8 +15,7 @@ def scene_iris(
     time_stop: None | str | astropy.time.Time,
     wavelength_rest: u.Quantity,
     radiance: u.Quantity,
-    fwhm: u.Quantity,
-    fwhm_source: u.Quantity,
+    velocity_scale: float,
     axis_time: str = "time",
     axis_detector_x: str = "detector_x",
     axis_detector_y: str = "detector_y",
@@ -51,18 +50,12 @@ def scene_iris(
     radiance
         The average radiance of the simulated scene.
         This replaces the actual radiance of the IRIS observations.
-    fwhm
-        The average full-width half maximum, in wavelength units, of the
-        dominant spectral line in the simulated scene.
-        The wavelength axis of the IRIS observations will be scaled to match
-        this value.
-    fwhm_source
-        The average full-width half maximum, in wavelength units, of the
-        spectral line in the IRIS observations which is being shifted and
-        scaled onto `wavelength_rest`.
-        This is given rather than measured because the spectral window
-        usually contains several lines, and the width of the blend is not the
-        width of the line.
+    velocity_scale
+        The factor by which to scale the Doppler velocity of the IRIS
+        observations.
+        Since the line being simulated is not the line which was observed,
+        the velocity axis has to be stretched or compressed to give the
+        simulated line a realistic width.
     axis_time
         The logical axis corresponding to changes in time.
     axis_detector_x
@@ -148,10 +141,8 @@ def scene_iris(
 
     scene.outputs[scene.outputs < dn_min] = dn_zero
 
-    scale = (fwhm / wavelength_rest) / (fwhm_source / scene.inputs.wavelength_rest)
-
     scene.inputs = na.TemporalDopplerPositionalVectorArray.from_velocity(
-        velocity=scene.inputs.velocity * scale,
+        velocity=scene.inputs.velocity * velocity_scale,
         wavelength_rest=wavelength_rest,
         time=scene.inputs.time,
         position=scene.inputs.position,

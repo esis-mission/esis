@@ -6,8 +6,16 @@ import esis
 from ....spectrum import O_V, Si_IV
 
 __all__ = [
+    "velocity_scale_default",
     "scene_iris",
 ]
+
+#: The default factor by which the Doppler velocity of the IRIS observations
+#: is scaled, which maps the average quiet-sun width of the observed line onto
+#: the average quiet-sun width of the simulated line.
+velocity_scale_default = float(
+    (O_V.fwhm / O_V.wavelength) / (Si_IV.fwhm / Si_IV.wavelength)
+)
 
 
 def scene_iris(
@@ -15,8 +23,7 @@ def scene_iris(
     time_stop: None | str | astropy.time.Time = None,
     wavelength_rest: u.Quantity = O_V.wavelength,
     radiance: u.Quantity = O_V.radiance,
-    fwhm: u.Quantity = O_V.fwhm,
-    fwhm_source: u.Quantity = Si_IV.fwhm,
+    velocity_scale: float = velocity_scale_default,
     axis_time: str = "time",
     axis_detector_x: str = "detector_x",
     axis_detector_y: str = "detector_y",
@@ -52,17 +59,11 @@ def scene_iris(
     radiance
         The average radiance of the simulated scene.
         This replaces the actual radiance of the IRIS observations.
-    fwhm
-        The average full-width half maximum, in wavelength units, of the
-        dominant spectral line in the simulated scene.
-        The wavelength axis of the IRIS observations will be scaled to match
-        this value.
-    fwhm_source
-        The average full-width half maximum, in wavelength units, of the
-        spectral line in the IRIS observations which is being shifted and
-        scaled onto `wavelength_rest`.
-        Defaults to the average quiet-sun width of
-        :math:`\text{Si\,IV}\;1394\,\AA`, the line in the default window.
+    velocity_scale
+        The factor by which to scale the Doppler velocity of the IRIS
+        observations.
+        Defaults to the ratio of the average quiet-sun widths of the simulated
+        and observed lines, see :obj:`velocity_scale_default`.
     axis_time
         The logical axis corresponding to changes in time.
     axis_detector_x
@@ -110,8 +111,7 @@ def scene_iris(
         time_stop=time_stop,
         wavelength_rest=wavelength_rest,
         radiance=radiance,
-        fwhm=fwhm,
-        fwhm_source=fwhm_source,
+        velocity_scale=velocity_scale,
         axis_time=axis_time,
         axis_detector_x=axis_detector_x,
         axis_detector_y=axis_detector_y,
