@@ -3,7 +3,7 @@ import astropy.units as u
 import astropy.time
 import named_arrays as na
 import esis
-from ....spectrum import O_V
+from ....spectrum import O_V, Si_IV
 
 __all__ = [
     "scene_iris",
@@ -16,6 +16,7 @@ def scene_iris(
     wavelength_rest: u.Quantity = O_V.wavelength,
     radiance: u.Quantity = O_V.radiance,
     fwhm: u.Quantity = O_V.fwhm,
+    fwhm_source: u.Quantity = Si_IV.fwhm,
     axis_time: str = "time",
     axis_detector_x: str = "detector_x",
     axis_detector_y: str = "detector_y",
@@ -56,6 +57,12 @@ def scene_iris(
         dominant spectral line in the simulated scene.
         The wavelength axis of the IRIS observations will be scaled to match
         this value.
+    fwhm_source
+        The average full-width half maximum, in wavelength units, of the
+        spectral line in the IRIS observations which is being shifted and
+        scaled onto `wavelength_rest`.
+        Defaults to the average quiet-sun width of
+        :math:`\text{Si\,IV}\;1394\,\AA`, the line in the default window.
     axis_time
         The logical axis corresponding to changes in time.
     axis_detector_x
@@ -104,6 +111,7 @@ def scene_iris(
         wavelength_rest=wavelength_rest,
         radiance=radiance,
         fwhm=fwhm,
+        fwhm_source=fwhm_source,
         axis_time=axis_time,
         axis_detector_x=axis_detector_x,
         axis_detector_y=axis_detector_y,

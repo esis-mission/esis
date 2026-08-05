@@ -16,6 +16,7 @@ def scene_iris(
     wavelength_rest: u.Quantity,
     radiance: u.Quantity,
     fwhm: u.Quantity,
+    fwhm_source: u.Quantity,
     axis_time: str = "time",
     axis_detector_x: str = "detector_x",
     axis_detector_y: str = "detector_y",
@@ -55,6 +56,13 @@ def scene_iris(
         dominant spectral line in the simulated scene.
         The wavelength axis of the IRIS observations will be scaled to match
         this value.
+    fwhm_source
+        The average full-width half maximum, in wavelength units, of the
+        spectral line in the IRIS observations which is being shifted and
+        scaled onto `wavelength_rest`.
+        This is given rather than measured because the spectral window
+        usually contains several lines, and the width of the blend is not the
+        width of the line.
     axis_time
         The logical axis corresponding to changes in time.
     axis_detector_x
@@ -92,6 +100,7 @@ def scene_iris(
     scene = iris.sg.open(
         time=time_start,
         time_stop=time_stop,
+        axis_time=axis_time,
         axis_wavelength=axis_velocity,
         axis_detector_x=axis_detector_x,
         axis_detector_y=axis_detector_y,
@@ -139,15 +148,7 @@ def scene_iris(
 
     scene.outputs[scene.outputs < dn_min] = dn_zero
 
-    spectrum = scene.mean((axis_time, axis_detector_x, axis_detector_y))
-
-    fwhm_avg = na.pdf.fwhm(
-        x=spectrum.inputs.wavelength,
-        f=spectrum.outputs,
-        axis=axis_velocity,
-    )
-
-    scale = (fwhm / wavelength_rest) / (fwhm_avg / scene.inputs.wavelength_rest)
+    scale = (fwhm / wavelength_rest) / (fwhm_source / scene.inputs.wavelength_rest)
 
     scene.inputs = na.TemporalDopplerPositionalVectorArray.from_velocity(
         velocity=scene.inputs.velocity * scale,
