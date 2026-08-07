@@ -23,8 +23,11 @@ grid the hardware at hand affords.  The FITS export needs a run over
 every frame (``--frames all``), since the product carries the full
 flight's time axis; a ``--coadd`` run cannot be exported.
 
-Adapted from ``local_mart.py`` (validated 2026-08-04); this variant has
-not itself been run end-to-end.
+Adapted from ``local_mart.py``; validated end-to-end 2026-08-07 at
+``--pitch 1.0 --num-velocity 12`` on one 25 GB laptop GPU (63 min:
+6 min assembly from a warm weights cache, ~110 s/frame, chi-squared
+near one on every channel), including the FITS export and a
+``Level_4.from_fits`` round trip of the result.
 
 Experimental tooling: untracked, not part of the esis package.
 """
