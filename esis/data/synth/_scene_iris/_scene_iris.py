@@ -14,8 +14,8 @@ def scene_iris(
     time_start: str | astropy.time.Time,
     time_stop: None | str | astropy.time.Time,
     wavelength_rest: u.Quantity,
-    radiance: u.Quantity,
-    fwhm: u.Quantity,
+    radiance_scale: float,
+    velocity_scale: float,
     axis_time: str = "time",
     axis_detector_x: str = "detector_x",
     axis_detector_y: str = "detector_y",
@@ -47,14 +47,19 @@ def scene_iris(
     wavelength_rest
         The new rest wavelength of the simulated scene.
         This replaces the actual rest wavelength of the IRIS observations.
-    radiance
-        The average radiance of the simulated scene.
-        This replaces the actual radiance of the IRIS observations.
-    fwhm
-        The average full-width half maximum, in wavelength units, of the
-        dominant spectral line in the simulated scene.
-        The wavelength axis of the IRIS observations will be scaled to match
-        this value.
+    radiance_scale
+        The factor by which to scale the radiance of the IRIS observations.
+        The observations are first converted from instrument units to
+        radiometric units using
+        :attr:`iris.sg.SpectrographObservation.radiance`,
+        so this only has to account for the difference in brightness between
+        the line being simulated and the line which was observed.
+    velocity_scale
+        The factor by which to scale the Doppler velocity of the IRIS
+        observations.
+        Since the line being simulated is not the line which was observed,
+        the velocity axis has to be stretched or compressed to give the
+        simulated line a realistic width.
     axis_time
         The logical axis corresponding to changes in time.
     axis_detector_x
@@ -92,6 +97,7 @@ def scene_iris(
     scene = iris.sg.open(
         time=time_start,
         time_stop=time_stop,
+        axis_time=axis_time,
         axis_wavelength=axis_velocity,
         axis_detector_x=axis_detector_x,
         axis_detector_y=axis_detector_y,
@@ -118,6 +124,26 @@ def scene_iris(
 
         scene.outputs = scene.outputs - bg
 
+    scene.outputs = np.nan_to_num(scene.outputs)
+
+    scene.outputs[scene.outputs < dn_min] = dn_zero
+
+    # This has to happen while the coordinates are still those of the IRIS
+    # observation, since the conversion needs the exposure length and the
+    # size of a pixel on the sky and in wavelength.
+    scene = scene.radiance
+
+    scene.outputs = scene.outputs * radiance_scale
+
+    scene.inputs = na.TemporalDopplerPositionalVectorArray.from_velocity(
+        velocity=scene.inputs.velocity * velocity_scale,
+        wavelength_rest=wavelength_rest,
+        time=scene.inputs.time,
+        position=scene.inputs.position,
+    )
+
+    # Cropped after the velocity has been scaled, so that the limit is a
+    # velocity in the simulated scene rather than in the observations.
     if velocity_max is not None:
         velocity_centers = scene.inputs.velocity.cell_centers(axis_velocity)
 
@@ -134,33 +160,5 @@ def scene_iris(
         crop_wavelength = {scene.axis_wavelength: slice(index_lower, index_upper)}
 
         scene = scene[crop_wavelength]
-
-    scene.outputs = np.nan_to_num(scene.outputs)
-
-    scene.outputs[scene.outputs < dn_min] = dn_zero
-
-    spectrum = scene.mean((axis_time, axis_detector_x, axis_detector_y))
-
-    fwhm_avg = na.pdf.fwhm(
-        x=spectrum.inputs.wavelength,
-        f=spectrum.outputs,
-        axis=axis_velocity,
-    )
-
-    scale = (fwhm / wavelength_rest) / (fwhm_avg / scene.inputs.wavelength_rest)
-
-    scene.inputs = na.TemporalDopplerPositionalVectorArray.from_velocity(
-        velocity=scene.inputs.velocity * scale,
-        wavelength_rest=wavelength_rest,
-        time=scene.inputs.time,
-        position=scene.inputs.position,
-    )
-
-    radiance_avg = scene.integrate(
-        component="wavelength",
-        axis=axis_velocity,
-    ).outputs.mean()
-
-    scene.outputs = scene.outputs * radiance / radiance_avg
 
     return scene
