@@ -19,10 +19,15 @@ __all__ = [
 #: Rest wavelength calculated by the Chianti Atomic Database :cite:p:`Dere1997`.
 wavelength = 1393.755 * u.AA
 
-#: Average quiet-sun radiance, measured by integrating an IRIS raster over the
-#: line and averaging over the field of view. The mean is used rather than the
-#: median since this is meant to be the average over an area of the Sun.
-radiance = 361.70 * u.erg / u.cm**2 / u.sr / u.s
+#: Average quiet-sun radiance measured by :cite:t:`Brekke1993` with the High
+#: Resolution Telescope and Spectrograph.
+#:
+#: Taken from the literature rather than measured from the raster being
+#: scaled, so that the ratio of this to the radiance of the simulated line is
+#: a property of the two lines rather than of the observation. Measuring it
+#: from the raster would divide the observation by itself, which would give
+#: every scene the same brightness however bright the Sun was that day.
+radiance = 280.0 * u.erg / u.cm**2 / u.sr / u.s
 
 #: Average quiet-sun full width at half maximum, measured from the median
 #: spectral profile of an IRIS raster. The median is used rather than the mean
