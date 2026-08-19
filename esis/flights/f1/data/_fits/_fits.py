@@ -48,13 +48,7 @@ def path_directory() -> pathlib.Path:
     The files are too large to distribute with this package, so they are
     downloaded from `Zenodo <https://doi.org/10.5281/zenodo.21997280>`_ the
     first time they are needed and unpacked into :func:`_path_cache`.
-    A copy sitting beside this module is used instead if there is one, which
-    is the case when working from a clone of the repository.
     """
-    result = pathlib.Path(__file__).parent
-    if any(result.glob("*.fit.gz")):
-        return result
-
     files = pooch.retrieve(
         url=_url,
         known_hash=_hash,

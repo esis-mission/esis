@@ -20,19 +20,6 @@ def test_path_directory():
     assert list(result.glob("*.fit.gz"))
 
 
-def test_path_directory_local():
-    """
-    Prefer a copy of the data beside the module.
-
-    That is the case when working from a clone of the repository, and it
-    avoids downloading data which is already present.
-    """
-    local = pathlib.Path(esis.flights.f1.data._fits._fits.__file__).parent
-    if not list(local.glob("*.fit.gz")):
-        return
-    assert esis.flights.f1.data.path_directory() == local
-
-
 def test_path_cache(monkeypatch, tmp_path: pathlib.Path):
     """The download directory can be moved with an environment variable."""
     monkeypatch.setenv("ESIS_DATA_DIR", str(tmp_path))
