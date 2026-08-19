@@ -53,6 +53,8 @@ Documentation = "https://esis-mission.github.io"
 [tool.setuptools]
 packages = ["esis"]
 
+[tool.setuptools_scm]
+
 [tool.ruff.lint]
 preview = true
 select = [
