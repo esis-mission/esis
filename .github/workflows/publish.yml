@@ -1,0 +1,49 @@
+
+name: publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Build and publish to PyPI
+    if: startsWith(github.ref, 'refs/tags')
+    runs-on: ubuntu-latest
+
+    # PyPI is told to trust this workflow rather than an API token, and the
+    # short-lived credential it mints is requested through this permission.
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # `setuptools-scm` reads the version from the tag, so the tags and
+          # the history reaching them both have to be present.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pypa/build
+        run: python -m pip install --upgrade build
+
+      - name: Build a binary wheel and a source tarball
+        run: python -m build --sdist --wheel --outdir dist/
+
+      - name: Check the built version matches the tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          wheel="dist/euv_snapshot_imaging_spectrograph-$tag-py3-none-any.whl"
+          if [ ! -f "$wheel" ]; then
+            echo "::error::expected $wheel but built: $(ls dist)"
+            exit 1
+          fi
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
