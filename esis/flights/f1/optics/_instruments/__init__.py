@@ -3,6 +3,7 @@ from ._instruments import (
     design,
     design_single,
     as_built,
+    as_built_focused,
     distortion_fit,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "design",
     "design_single",
     "as_built",
+    "as_built_focused",
     "distortion_fit",
 ]

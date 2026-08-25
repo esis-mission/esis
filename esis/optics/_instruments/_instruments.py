@@ -1,6 +1,7 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, Self
 import abc
+import copy
 import dataclasses
 import functools
 import numpy as np
@@ -215,6 +216,132 @@ class AbstractInstrument(
             transformation=self.transformation,
             kwargs_plot=self.kwargs_plot,
         )
+
+        return result
+
+    def focus_grating(
+        self,
+        wavelength: None | u.Quantity | na.AbstractScalar = None,
+        field: None | na.AbstractCartesian2dVectorArray = None,
+        pupil: None | na.AbstractCartesian2dVectorArray = None,
+        bounds: tuple[u.Quantity, u.Quantity] = (-1 * u.mm, 2 * u.mm),
+        min_step_size: u.Quantity = 1 * u.um,
+    ) -> Self:
+        r"""
+        Move the gratings along the optic axis to their best focus.
+
+        The gratings image the field stop onto the sensor, so a grating whose
+        radius of curvature differs from the one it was placed for (a
+        measured, as-built radius replacing the design radius, for example)
+        images the field stop to a different distance and defocuses the
+        system unless it is moved to compensate.
+
+        This method finds, independently for every element of the grating
+        (every channel, for example), the translation along :math:`z` which
+        minimizes the root-mean-square radius of the spots imaged onto the
+        sensor, and returns a copy of this instrument with the gratings moved
+        there. Everything else, including the sensor, stays where it was.
+        The search is a vectorized Brent minimization
+        (:func:`named_arrays.optimize.minimum_brent`), so every channel is
+        focused by the same handful of ray traces.
+
+        Parameters
+        ----------
+        wavelength
+            The wavelengths at which to focus.
+            If :obj:`None` (the default), :attr:`wavelength_physical` is used.
+        field
+            The normalized field positions of the traced rays.
+            If :obj:`None` (the default), a :math:`3 \times 3` grid spanning
+            the central half of the field of view is used.
+        pupil
+            The normalized pupil positions of the traced rays.
+            If :obj:`None` (the default), a :math:`21 \times 21` grid is used.
+        bounds
+            The bracket of grating translations, relative to the current
+            position, within which the best focus is sought.
+        min_step_size
+            The tolerance on the translation of the best focus.
+
+        Examples
+        --------
+        Move the gratings of the ESIS-I as-built model, which carries the
+        measured radii of curvature but the design positions, to their best
+        focus in the O V line.
+
+        .. jupyter-execute::
+
+            import astropy.units as u
+            import named_arrays as na
+            import esis
+
+            instrument = esis.flights.f1.optics.as_built(num_distribution=0)
+
+            focused = instrument.focus_grating(wavelength=629.73 * u.AA)
+
+            na.nominal(focused.grating.translation.z - instrument.grating.translation.z)
+        """
+        if wavelength is None:
+            wavelength = self.wavelength_physical
+
+        if field is None:
+            field = na.Cartesian2dVectorLinearSpace(
+                start=-0.5,
+                stop=0.5,
+                axis=na.Cartesian2dVectorArray("field_x", "field_y"),
+                num=3,
+            )
+
+        if pupil is None:
+            pupil = na.Cartesian2dVectorLinearSpace(
+                start=-1,
+                stop=1,
+                axis=na.Cartesian2dVectorArray("pupil_x", "pupil_y"),
+                num=21,
+                centers=True,
+            )
+
+        axis_pupil = tuple(na.shape(pupil))
+        axis_scene = tuple(na.shape(field)) + tuple(na.shape(wavelength))
+
+        result = copy.deepcopy(self)
+        result.__dict__.pop("system", None)
+
+        z = result.grating.translation.z
+
+        # only the positions of the rays matter here, so the traced copy
+        # carries ideal materials, which are several times cheaper to
+        # evaluate than measured multilayers and filters
+        geometry = copy.deepcopy(result)
+        geometry.primary_mirror.material = optika.materials.Mirror()
+        geometry.grating.material = optika.materials.Mirror()
+        geometry.filter.material = None
+        geometry.camera.sensor.material = optika.sensors.materials.IdealSensorMaterial()
+
+        def radius_spot(dz: na.AbstractScalar) -> na.AbstractScalar:
+            instrument = copy.deepcopy(geometry)
+            instrument.grating.translation.z = z + dz
+            rays = instrument.system.rayfunction(
+                wavelength=wavelength,
+                field=field,
+                pupil=pupil,
+            )
+            position = rays.outputs.position
+            unvignetted = na.as_named_array(rays.outputs.unvignetted)
+            x = np.where(unvignetted, position.x, np.nan)
+            y = np.where(unvignetted, position.y, np.nan)
+            variance = np.nanvar(x, axis=axis_pupil) + np.nanvar(y, axis=axis_pupil)
+            return np.nanmean(np.sqrt(variance), axis=axis_scene)
+
+        a, b = bounds
+        dz = na.optimize.minimum_brent(
+            function=radius_spot,
+            a=a,
+            b=b,
+            min_step_size=min_step_size,
+        )
+
+        result.grating.translation.z = z + dz
 
         return result
 

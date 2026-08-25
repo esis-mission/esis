@@ -97,6 +97,17 @@ class AbstractTestAbstractInstrument(
         assert isinstance(result, optika.systems.AbstractSequentialSystem)
         assert result.surfaces
 
+    def test_focus_grating(self, a: esis.optics.abc.AbstractInstrument):
+        bounds = (-0.5 * u.mm, 0.5 * u.mm)
+        result = a.focus_grating(
+            wavelength=a.wavelength_physical.mean(),
+            bounds=bounds,
+        )
+        assert isinstance(result, esis.optics.abc.AbstractInstrument)
+        dz = result.grating.translation.z - a.grating.translation.z
+        assert np.all(dz >= bounds[0])
+        assert np.all(dz <= bounds[1])
+
     def test_schematic_primary(self, a: esis.optics.abc.AbstractInstrument):
 
         fig, ax = plt.subplots()

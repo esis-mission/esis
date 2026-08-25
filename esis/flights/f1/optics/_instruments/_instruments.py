@@ -13,6 +13,7 @@ __all__ = [
     "design",
     "design_single",
     "as_built",
+    "as_built_focused",
     "distortion_fit",
 ]
 
@@ -431,7 +432,10 @@ def as_built(
     radius_017 = [597.065, 597.045, 597.050] * u.mm
     radius_019 = [597.055, 597.045, 597.030] * u.mm
     radius_024 = [596.890, 596.870, 596.880] * u.mm
-    result.grating.sag.radius = na.stack(
+    # the measurements report the magnitude of the radius of curvature;
+    # the sag convention is negative for these concave gratings (compare
+    # the -597.83 mm radius of the design)
+    result.grating.sag.radius = -na.stack(
         arrays=[
             radius_024.mean(),
             radius_017.mean(),
@@ -486,6 +490,77 @@ def as_built(
     )
 
     result.camera.sensor.readout_noise = 6 * u.electron
+
+    return result
+
+
+def as_built_focused(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    r"""
+    Load the as-built optical model with the gratings moved to their best focus.
+
+    :func:`as_built` replaces the design radius of curvature of each grating
+    with its measured value but leaves the grating where the design put it.
+    The measured radii are 0.6 to 0.9 mm shorter than the design radius, so
+    each grating images the field stop short of the sensor and the model is
+    defocused by about two pixels RMS, whereas the flight instrument was
+    focused with the gratings it actually carried.
+
+    This model moves each grating along the optic axis to the position which
+    minimizes the spot size of the :math:`\text{O\,V}\;630\,\AA` line, the
+    brightest line in the passband, using
+    :meth:`esis.optics.abc.AbstractInstrument.focus_grating`, which restores
+    the focus of the design. The offsets come out to roughly
+    :math:`+0.7`, :math:`+0.6`, :math:`+0.6`, and :math:`+0.5` mm toward the
+    field stop for channels 0 through 3, in the same order as the errors in
+    the measured radii. They are found on the nominal model and applied to
+    the model with uncertainties, so that the uncertainty in the position of
+    each grating is that of :func:`as_built`.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+
+    Examples
+    --------
+    Load the focused as-built model and print the displacement of each
+    grating from its design position.
+
+    .. jupyter-execute::
+
+        import esis
+
+        instrument = esis.flights.f1.optics.as_built_focused(num_distribution=0)
+        design = esis.flights.f1.optics.design(num_distribution=0)
+
+        instrument.grating.translation.z - design.grating.translation.z
+    """
+    nominal = as_built(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=0,
+    )
+    focused = nominal.focus_grating(wavelength=O_V.wavelength)
+
+    # the nominal model still carries (empty) distribution axes on its
+    # measured ruling coefficients, which the offset must not inherit
+    dz = na.nominal(focused.grating.translation.z - nominal.grating.translation.z)
+
+    result = as_built(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+    result.grating.translation.z = result.grating.translation.z + dz
 
     return result
 
