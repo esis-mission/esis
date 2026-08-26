@@ -1,5 +1,3 @@
-import dataclasses
-
 import astropy.units as u
 import numpy as np
 import named_arrays as na
@@ -20,40 +18,13 @@ angle_blaze = 2.1 * u.deg
 """The blaze angle of the ESIS-II diffraction gratings."""
 
 
-@dataclasses.dataclass(eq=False, repr=False)
-class _SawtoothRulingsBlazed(optika.rulings.SawtoothRulings):
-    """
-    Sawtooth rulings whose groove depth is derived from a fixed blaze angle.
-
-    The depth tracks the central coefficient of the ruling-spacing model, so
-    factories which override the ruling spacing inherit a consistent blaze
-    angle instead of a stale groove depth.
-    """
-
-    angle: u.Quantity | na.AbstractScalar = 0 * u.deg
-    """The blaze angle of the ruling profile."""
-
-    @property
-    def depth(self) -> u.Quantity | na.AbstractScalar:
-        spacing = self.spacing
-        if hasattr(spacing, "coefficients"):
-            spacing = spacing.coefficients[0]
-        return spacing * np.tan(self.angle)
-
-    @depth.setter
-    def depth(self, value: u.Quantity | na.AbstractScalar) -> None:
-        # the depth is derived from `angle`; ignore the base-class field
-        pass
-
-
 def _blaze_rulings(grating: esis.optics.Grating) -> None:
     """Replace the inherited lamellar ruling model with the blazed profile."""
     rulings = grating.rulings
-    grating.rulings = _SawtoothRulingsBlazed(
+    grating.rulings = optika.rulings.SawtoothRulings(
         spacing=rulings.spacing,
-        depth=0 * u.AA,
+        depth=rulings.spacing.coefficients[0] * np.tan(angle_blaze),
         diffraction_order=rulings.diffraction_order,
-        angle=angle_blaze,
     )
 
 
@@ -545,6 +516,9 @@ def design_single(
         result.grating.rulings.spacing.coefficients[2].nominal = c2
         result.grating.sag.radius.nominal = radius_grating
 
+    # refresh the groove depth so the blaze angle tracks the new ruling spacing
+    _blaze_rulings(result.grating)
+
     return result
 
 
@@ -680,5 +654,9 @@ def design_visible(
 
     if grid is None or grid.wavelength is None:
         result.wavelength = wavelength_HeNe
+
+    # refresh the groove depth so the alignment gratings keep the same
+    # blaze angle as the science gratings
+    _blaze_rulings(result.grating)
 
     return result
