@@ -99,10 +99,7 @@ class AbstractTestAbstractInstrument(
 
     def test_focus_grating(self, a: esis.optics.abc.AbstractInstrument):
         bounds = (-0.5 * u.mm, 0.5 * u.mm)
-        result = a.focus_grating(
-            wavelength=a.wavelength_physical.mean(),
-            bounds=bounds,
-        )
+        result = a.focus_grating(bounds=bounds)
         assert isinstance(result, esis.optics.abc.AbstractInstrument)
         dz = result.grating.translation.z - a.grating.translation.z
         assert np.all(dz >= bounds[0])
