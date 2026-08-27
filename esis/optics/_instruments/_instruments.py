@@ -8,6 +8,7 @@ import scipy.spatial
 import matplotlib.axes
 import matplotlib.pyplot as plt
 import astropy.units as u
+import astropy.constants
 import named_arrays as na
 import optika
 import esis
@@ -177,6 +178,100 @@ class AbstractInstrument(
         return self._wavelength_test_grid.max(
             axis=("wire_grating_input", "wire_grating_output"),
         )
+
+    def dispersion(
+        self,
+        wavelength: u.Quantity | na.AbstractScalar,
+        delta: u.Quantity = 0.5 * u.AA,
+    ) -> u.Quantity | na.AbstractScalar:
+        r"""
+        Compute the wavelength interval imaged onto one pixel.
+
+        Measured from the raytrace: two wavelengths either side of the one
+        asked for are traced along the optical axis, and the distance between
+        where they land is divided into the width of a pixel.
+
+        The dispersion of this instrument varies across its passband by about
+        a percent, so it is reported at a wavelength rather than as a single
+        number for the instrument.
+
+        Parameters
+        ----------
+        wavelength
+            The wavelength to measure the dispersion at.
+        delta
+            The half-interval either side of ``wavelength`` to measure across.
+
+        Examples
+        --------
+        The dispersion at the O V line.
+
+        .. jupyter-execute::
+
+            import esis
+
+            instrument = esis.flights.f1.optics.design_single(num_distribution=0)
+
+            instrument.dispersion(esis.flights.f1.spectrum.O_V.wavelength)
+        """
+        wavelength_test = wavelength + delta * na.ScalarArray(
+            ndarray=np.array([-1, 1]),
+            axes=("_wavelength_dispersion",),
+        )
+
+        axis = na.Cartesian2dVectorArray(0, 0)
+        rayfunction = self.system.rayfunction(
+            wavelength=wavelength_test,
+            field=axis,
+            pupil=axis,
+        )
+
+        # the gratings disperse along the x axis of the sensor, so the
+        # y coordinate carries none of the separation
+        position = rayfunction.outputs.position.x
+        index = {"_wavelength_dispersion": 0}
+        separation = position[{"_wavelength_dispersion": 1}] - position[index]
+
+        width_pixel = self.camera.sensor.width_pixel / u.pix
+
+        return (width_pixel * 2 * delta / separation).to(u.mAA / u.pix)
+
+    def dispersion_doppler(
+        self,
+        wavelength: u.Quantity | na.AbstractScalar,
+        delta: u.Quantity = 0.5 * u.AA,
+    ) -> u.Quantity | na.AbstractScalar:
+        r"""
+        Compute the Doppler velocity interval imaged onto one pixel.
+
+        This is :meth:`dispersion` expressed as a velocity, and it therefore
+        varies across the passband much more than the dispersion itself does,
+        since it is divided by the wavelength. Over the ESIS passband the
+        dispersion changes by about a percent while its Doppler equivalent
+        changes by about ten times that, so the line it is quoted at matters.
+
+        Parameters
+        ----------
+        wavelength
+            The wavelength to measure the dispersion at.
+        delta
+            The half-interval either side of ``wavelength`` to measure across.
+
+        Examples
+        --------
+        The Doppler dispersion at the O V line.
+
+        .. jupyter-execute::
+
+            import esis
+
+            instrument = esis.flights.f1.optics.design_single(num_distribution=0)
+
+            instrument.dispersion_doppler(esis.flights.f1.spectrum.O_V.wavelength)
+        """
+        dispersion = self.dispersion(wavelength, delta=delta)
+        result = dispersion / wavelength * astropy.constants.c
+        return result.to(u.km / u.s / u.pix)
 
     @property
     def wavelength_physical(self) -> na.ScalarArray:
