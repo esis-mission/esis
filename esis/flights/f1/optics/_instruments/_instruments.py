@@ -516,9 +516,11 @@ def as_built_focused(
     the focus of the design. The offsets come out to roughly
     :math:`+0.7`, :math:`+0.6`, :math:`+0.6`, and :math:`+0.5` mm toward the
     field stop for channels 0 through 3, in the same order as the errors in
-    the measured radii. They are found on the nominal model and applied to
-    the model with uncertainties, so that the uncertainty in the position of
-    each grating is that of :func:`as_built`.
+    the measured radii. With ``num_distribution > 0`` every Monte Carlo
+    sample of the model is focused independently, so the uncertainty in the
+    other parameters (the placement of the gratings and the measured rulings,
+    for example) carries through to a spread of about :math:`\pm 0.2` mm in
+    the focus of each channel.
 
     Parameters
     ----------
@@ -544,25 +546,12 @@ def as_built_focused(
 
         instrument.grating.translation.z - design.grating.translation.z
     """
-    nominal = as_built(
-        grid=grid,
-        axis_channel=axis_channel,
-        num_distribution=0,
-    )
-    focused = nominal.focus_grating(wavelength=O_V.wavelength)
-
-    # the nominal model still carries (empty) distribution axes on its
-    # measured ruling coefficients, which the offset must not inherit
-    dz = na.nominal(focused.grating.translation.z - nominal.grating.translation.z)
-
     result = as_built(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
     )
-    result.grating.translation.z = result.grating.translation.z + dz
-
-    return result
+    return result.focus_grating(wavelength=O_V.wavelength)
 
 
 def distortion_fit(
