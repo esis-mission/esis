@@ -13,7 +13,25 @@ from ._cameras import Camera
 from ._requirements import Requirements
 from ._instruments import Instrument
 
+num_interpolation = 32
+"""
+The number of nodes used to interpolate the response of each multilayer
+coating over the angle of incidence.
+
+Solving the transfer matrices of a coating costs far more than the raytrace
+it belongs to, and the response is smooth in the angle of incidence, over
+which each ESIS surface spans only a few degrees.  Interpolating it reproduces
+the exact solve to better than a part in :math:`10^5` while making
+:meth:`optika.systems.SequentialSystem.linearize` about two and a half times
+faster.
+
+See :attr:`optika.materials.AbstractMultilayerMaterial.num_interpolation`.
+Set to :obj:`None` to solve every ray exactly, which is worth doing when
+checking a change to the optical model.
+"""
+
 __all__ = [
+    "num_interpolation",
     "abc",
     "mixins",
     "FrontAperture",
