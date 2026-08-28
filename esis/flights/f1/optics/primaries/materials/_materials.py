@@ -57,6 +57,7 @@ def multilayer_design() -> optika.materials.MultilayerMirror:
             ax.set_ylabel("reflectivity");
     """
     return optika.materials.MultilayerMirror(
+        num_interpolation=esis.optics.num_interpolation,
         layers=[
             optika.materials.Layer(
                 chemical="SiO2",

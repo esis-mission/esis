@@ -1,5 +1,6 @@
 import astropy.units as u
 import optika
+import esis
 
 __all__ = [
     "thin_film_design",
@@ -61,6 +62,7 @@ def thin_film_design() -> optika.materials.ThinFilmFilter:
             ax.autoscale()
     """
     return optika.materials.ThinFilmFilter(
+        num_interpolation=esis.optics.num_interpolation,
         layer=optika.materials.Layer(
             chemical="Al",
             thickness=100 * u.nm,
