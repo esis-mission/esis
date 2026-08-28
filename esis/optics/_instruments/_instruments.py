@@ -309,22 +309,16 @@ class AbstractInstrument(
 
         z = result.grating.translation.z
 
-        # only the positions of the rays matter here, so the traced copy
-        # carries ideal materials, which are several times cheaper to
-        # evaluate than measured multilayers and filters
-        geometry = copy.deepcopy(result)
-        geometry.primary_mirror.material = optika.materials.Mirror()
-        geometry.grating.material = optika.materials.Mirror()
-        geometry.filter.material = None
-        geometry.camera.sensor.material = optika.sensors.materials.IdealSensorMaterial()
-
         def radius_spot(dz: na.AbstractScalar) -> na.AbstractScalar:
-            instrument = copy.deepcopy(geometry)
+            instrument = copy.deepcopy(result)
             instrument.grating.translation.z = z + dz
+            # only the positions of the rays matter here, and the efficiency
+            # of the coatings is most of what tracing them costs
             rays = instrument.system.rayfunction(
                 wavelength=wavelength,
                 field=field,
                 pupil=pupil,
+                efficiency=False,
             )
             position = rays.outputs.position
             unvignetted = na.as_named_array(rays.outputs.unvignetted)
