@@ -431,7 +431,10 @@ def as_built(
     radius_017 = [597.065, 597.045, 597.050] * u.mm
     radius_019 = [597.055, 597.045, 597.030] * u.mm
     radius_024 = [596.890, 596.870, 596.880] * u.mm
-    result.grating.sag.radius = na.stack(
+    # The measurements report the magnitude of the radius of curvature. In the
+    # sag convention it is negative for a concave surface, which these are,
+    # as the design radius of -597.83 mm records.
+    result.grating.sag.radius = -na.stack(
         arrays=[
             radius_024.mean(),
             radius_017.mean(),
