@@ -12,6 +12,7 @@ __all__ = [
     "design_full",
     "design",
     "design_single",
+    "as_built_unfocused",
     "as_built",
     "distortion_fit",
 ]
@@ -383,7 +384,7 @@ def design_single(
     return result
 
 
-def _as_built(
+def as_built_unfocused(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
     num_distribution: int = 11,
@@ -396,9 +397,14 @@ def _as_built(
 
     The gratings carry their measured radii of curvature but sit where the
     design put them, which is not where the instrument that flew carried
-    them: it was focused and aligned with the gratings it actually had. This
-    model is therefore an intermediate rather than a description of the
-    instrument, and :func:`as_built` is the one to use.
+    them: it was focused and aligned with the gratings it actually had.
+    :func:`as_built` is that instrument, and is the model to compare against
+    an image.
+
+    This one is for everything which wants the measurements without the
+    solve that places them: the properties of the camera and the sensor, the
+    coatings, the rulings, and the question of how far the alignment had to
+    move the gratings, which is measured from here.
 
     Parameters
     ----------
@@ -521,7 +527,7 @@ def _as_built_focused(
     r"""
     Load the as-built optical model with the gratings moved to their best focus.
 
-    :func:`_as_built` replaces the design radius of curvature of each grating
+    :func:`as_built_unfocused` replaces the design radius of curvature of each grating
     with its measured value but leaves the grating where the design put it.
     The measured radii are 0.6 to 0.9 mm shorter than the design radius, so
     each grating images the field stop short of the sensor and the model is
@@ -565,7 +571,7 @@ def _as_built_focused(
 
         instrument.grating.translation.z - design.grating.translation.z
     """
-    result = _as_built(
+    result = as_built_unfocused(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
@@ -594,7 +600,7 @@ def as_built(
     :attr:`esis.optics.Sensor.position_image` says it should.
 
     This is the model of the instrument that flew, and the one to use.
-    :func:`_as_built` and :func:`_as_built_focused` are the steps on the way
+    :func:`as_built_unfocused` and :func:`_as_built_focused` are the steps on the way
     to it, kept for comparison rather than for use.
 
     Parameters
@@ -625,7 +631,7 @@ def as_built(
 
         na.nominal(error.length.to(u.um))
     """
-    result = _as_built(
+    result = as_built_unfocused(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,

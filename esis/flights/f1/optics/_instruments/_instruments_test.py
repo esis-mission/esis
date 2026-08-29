@@ -31,7 +31,7 @@ def test_design_single(num_distribution: int):
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
 def test_as_built_unfocused(num_distribution: int):
-    result = esis.flights.f1.optics._as_built(
+    result = esis.flights.f1.optics.as_built_unfocused(
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
@@ -54,7 +54,7 @@ def test_as_built_focused(num_distribution: int):
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
 
-    as_built = esis.flights.f1.optics._as_built(
+    as_built = esis.flights.f1.optics.as_built_unfocused(
         num_distribution=num_distribution,
     )
     dz = na.nominal(result.grating.translation.z) - na.nominal(
@@ -95,7 +95,9 @@ def test_as_built(num_distribution: int):
     assert np.all(np.abs(error.x) < sensor.width_pixel / 100)
 
     # which the model it was aligned from is eight pixels away from
-    as_built = esis.flights.f1.optics._as_built(num_distribution=num_distribution)
+    as_built = esis.flights.f1.optics.as_built_unfocused(
+        num_distribution=num_distribution
+    )
     error_built = na.nominal(as_built.position_line(wavelength) - sensor.position_image)
     assert np.all(np.abs(error_built.x) > 5 * sensor.width_pixel)
 
