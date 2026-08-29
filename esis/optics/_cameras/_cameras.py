@@ -12,6 +12,7 @@ __all__ = [
 
 @dataclasses.dataclass(eq=False, repr=False)
 class Camera(
+    optika.mixins.Replaceable,
     msfc_ccd.Camera,
 ):
     """A model of the cameras developed by MSFC."""

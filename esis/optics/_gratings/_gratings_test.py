@@ -9,6 +9,7 @@ from ..mixins import _mixins_test
 
 class AbstractTestAbstractGrating(
     optika._tests.test_mixins.AbstractTestPrintable,
+    optika._tests.test_mixins.AbstractTestReplaceable,
     optika._tests.test_mixins.AbstractTestRollable,
     optika._tests.test_mixins.AbstractTestYawable,
     optika._tests.test_mixins.AbstractTestPitchable,
