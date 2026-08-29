@@ -97,7 +97,25 @@ jobs:
         run: |
           echo "URL_SLUG=${{ github.event.number }}-${{ github.head_ref }}" >> $GITHUB_ENV
 
+      # Building the documentation takes long enough that a pull request can
+      # be closed while it runs. The cleanup which removes the preview has
+      # already happened by then, so publishing one now would leave it behind
+      # with nothing to ever remove it.
+      - name: Check the pull request is still open
+        id: pull_request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          state=$(gh pr view ${{ github.event.number }} --json state --jq .state)
+          echo "pull request ${{ github.event.number }} is $state"
+          if [ "$state" = "OPEN" ]; then
+            echo "open=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "open=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy
+        if: steps.pull_request.outputs.open == 'true'
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: github-pages
@@ -112,6 +130,7 @@ jobs:
           git-config-email: roytsmart+esis-bot@gmail.com
 
       - name: Comment PR
+        if: steps.pull_request.outputs.open == 'true'
         uses: thollander/actions-comment-pull-request@v2
         with:
           message: |

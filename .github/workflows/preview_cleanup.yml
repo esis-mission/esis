@@ -22,7 +22,23 @@ jobs:
         run: |
           echo "URL_SLUG=${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.ref }}" >> $GITHUB_ENV
 
+      # A pull request closed before its documentation finished building has
+      # no preview to remove, and the deploy action fails rather than doing
+      # nothing when it is asked to delete what is not there.
+      - name: Look for a preview to remove
+        id: preview
+        run: |
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            "https://api.github.com/repos/esis-mission/esis-pr-previews/contents/${URL_SLUG}")
+          echo "status $status for ${URL_SLUG}"
+          if [ "$status" = "200" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy
+        if: steps.preview.outputs.exists == 'true'
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: empty_dir
