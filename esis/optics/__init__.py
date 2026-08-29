@@ -12,6 +12,15 @@ from ._sensors import Sensor
 from ._cameras import Camera
 from ._requirements import Requirements
 from ._instruments import Instrument
+from ._distortions import (
+    DistortionParameters,
+    DistortionObjective,
+    DistortionResidual,
+    ConvergenceLogger,
+    fit_distortion,
+    fit_distortion_scan,
+    fit_distortion_series,
+)
 
 num_interpolation = 32
 """
@@ -44,4 +53,11 @@ __all__ = [
     "Camera",
     "Requirements",
     "Instrument",
+    "DistortionParameters",
+    "DistortionObjective",
+    "DistortionResidual",
+    "ConvergenceLogger",
+    "fit_distortion",
+    "fit_distortion_scan",
+    "fit_distortion_series",
 ]
