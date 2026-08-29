@@ -10,6 +10,7 @@ import esis
 
 class AbstractTestAbstractInstrument(
     optika._tests.test_mixins.AbstractTestPrintable,
+    optika._tests.test_mixins.AbstractTestReplaceable,
 ):
     def test_name(self, a: esis.optics.abc.AbstractInstrument):
         result = a.name

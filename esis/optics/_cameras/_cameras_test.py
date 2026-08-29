@@ -1,6 +1,7 @@
 import pytest
 import astropy.units as u
 import optika
+import optika._tests.test_mixins
 from msfc_ccd._tests.test_cameras import AbstractTestAbstractCamera
 import esis
 
@@ -15,6 +16,7 @@ import esis
     ],
 )
 class TestCameras(
+    optika._tests.test_mixins.AbstractTestReplaceable,
     AbstractTestAbstractCamera,
 ):
     def test_surface(

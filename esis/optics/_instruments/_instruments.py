@@ -23,6 +23,7 @@ __all__ = [
 class AbstractInstrument(
     na.Indexable,
     optika.mixins.Printable,
+    optika.mixins.Replaceable,
     optika.mixins.Rollable,
     optika.mixins.Yawable,
     optika.mixins.Pitchable,

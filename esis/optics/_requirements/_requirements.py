@@ -11,6 +11,7 @@ __all__ = [
 @dataclasses.dataclass(repr=False)
 class Requirements(
     optika.mixins.Printable,
+    optika.mixins.Replaceable,
 ):
     """The requirements of the ESIS optical system."""
 

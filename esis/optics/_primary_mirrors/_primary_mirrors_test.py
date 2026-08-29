@@ -9,6 +9,7 @@ import esis
 
 class AbstractTestAbstractPrimaryMirror(
     test_mixins.AbstractTestPrintable,
+    test_mixins.AbstractTestReplaceable,
     test_mixins.AbstractTestRollable,
     test_mixins.AbstractTestYawable,
     test_mixins.AbstractTestPitchable,
