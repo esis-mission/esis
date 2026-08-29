@@ -14,6 +14,7 @@ __all__ = [
     "design_single",
     "as_built",
     "as_built_focused",
+    "as_built_aligned",
     "distortion_fit",
 ]
 
@@ -229,6 +230,20 @@ def design_full(
             z=filter.translation.z + 200 * u.mm,
         ),
         yaw=-12.252 * u.deg,
+        # Where the center of the field of view lands at the O V line, which
+        # is what the gratings were rotated about y to achieve. Traced from
+        # this model rather than asserted: `test_position_image` checks that
+        # the design still puts the line here, so the number cannot drift
+        # away from the prescription it describes.
+        #
+        # The Zemax design this was ported from carried the same quantity as
+        # a CENY operand, targeting 7.2091 mm. It used 629.7 A for O V where
+        # this model uses 629.732 A, and traced at 629.7 A this model puts
+        # the line within 1.6 um of that target.
+        position_image=na.Cartesian2dVectorArray(
+            x=7.2206 * u.mm,
+            y=0 * u.mm,
+        ),
         material=optika.sensors.materials.e2v_ccd97(
             temperature=-55 * u.deg_C,
         ),
@@ -552,6 +567,66 @@ def as_built_focused(
         num_distribution=num_distribution,
     )
     return result.focus_grating(wavelength=O_V.wavelength)
+
+
+def as_built_aligned(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    r"""
+    Load the as-built optical model, focused and pointed at the sensor.
+
+    The measured radii leave the as-built model imaging the O V line about
+    eight pixels from where the design puts it.
+    :func:`as_built_focused` moves each grating along the optic axis until
+    the spots are as small as the design's, which happens to carry the line
+    most of the way back, since the same error in the radius causes both the
+    defocus and the displacement. It stops a pixel or two short.
+
+    The instrument which flew was aligned as well as focused, so this model
+    rotates each grating about :math:`y` afterwards, by a few arcseconds,
+    until the center of the field of view lands where
+    :attr:`esis.optics.Sensor.position_image` says it should.
+
+    Use this model rather than :func:`as_built_focused` wherever the position
+    of a line matters, which is to say wherever the model is compared against
+    an image.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+
+    Examples
+    --------
+    Confirm the O V line lands where the sensor says it should.
+
+    .. jupyter-execute::
+
+        import astropy.units as u
+        import named_arrays as na
+        import esis
+
+        instrument = esis.flights.f1.optics.as_built_aligned(num_distribution=0)
+
+        error = instrument.position_line(
+            esis.flights.f1.spectrum.O_V.wavelength,
+        ) - instrument.camera.sensor.position_image
+
+        na.nominal(error.length.to(u.um))
+    """
+    result = as_built(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+    return result.align_grating(wavelength=O_V.wavelength)
 
 
 def distortion_fit(

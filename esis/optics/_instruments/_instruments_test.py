@@ -146,6 +146,21 @@ class AbstractTestAbstractInstrument(
         assert np.all(dz >= bounds[0])
         assert np.all(dz <= bounds[1])
 
+    def test_position_line(self, a: esis.optics.abc.AbstractInstrument):
+        result = a.position_line()
+        assert isinstance(result, na.AbstractCartesian2dVectorArray)
+        assert na.unit(result).is_equivalent(u.mm)
+
+    def test_align_grating(self, a: esis.optics.abc.AbstractInstrument):
+        position = a.position_line()
+
+        result = a.align_grating(position=position, bounds=(-0.5 * u.mm, 0.5 * u.mm))
+        assert isinstance(result, esis.optics.abc.AbstractInstrument)
+
+        # the line is put where it was asked for, to a hundredth of a pixel
+        error = result.position_line() - position
+        assert np.all(np.abs(error.x) < a.camera.sensor.width_pixel / 100)
+
     def test_schematic_primary(self, a: esis.optics.abc.AbstractInstrument):
 
         fig, ax = plt.subplots()
