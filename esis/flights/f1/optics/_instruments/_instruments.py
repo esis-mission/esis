@@ -13,8 +13,6 @@ __all__ = [
     "design",
     "design_single",
     "as_built",
-    "as_built_focused",
-    "as_built_aligned",
     "distortion_fit",
 ]
 
@@ -385,16 +383,22 @@ def design_single(
     return result
 
 
-def as_built(
+def _as_built(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
     num_distribution: int = 11,
 ) -> esis.optics.Instrument:
     """
-    Load the as-built optical model.
+    Load the as-built optical model before it has been focused or pointed.
 
     Based on :func:`design`, but includes efficiency and figure measurements of the
     primary mirror and gratings, as well as gain measurements of the sensor.
+
+    The gratings carry their measured radii of curvature but sit where the
+    design put them, which is not where the instrument that flew carried
+    them: it was focused and aligned with the gratings it actually had. This
+    model is therefore an intermediate rather than a description of the
+    instrument, and :func:`as_built` is the one to use.
 
     Parameters
     ----------
@@ -509,7 +513,7 @@ def as_built(
     return result
 
 
-def as_built_focused(
+def _as_built_focused(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
     num_distribution: int = 11,
@@ -517,7 +521,7 @@ def as_built_focused(
     r"""
     Load the as-built optical model with the gratings moved to their best focus.
 
-    :func:`as_built` replaces the design radius of curvature of each grating
+    :func:`_as_built` replaces the design radius of curvature of each grating
     with its measured value but leaves the grating where the design put it.
     The measured radii are 0.6 to 0.9 mm shorter than the design radius, so
     each grating images the field stop short of the sensor and the model is
@@ -556,12 +560,12 @@ def as_built_focused(
 
         import esis
 
-        instrument = esis.flights.f1.optics.as_built_focused(num_distribution=0)
+        instrument = esis.flights.f1.optics._as_built_focused(num_distribution=0)
         design = esis.flights.f1.optics.design(num_distribution=0)
 
         instrument.grating.translation.z - design.grating.translation.z
     """
-    result = as_built(
+    result = _as_built(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
@@ -569,7 +573,7 @@ def as_built_focused(
     return result.focus_grating(wavelength=O_V.wavelength)
 
 
-def as_built_aligned(
+def as_built(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
     num_distribution: int = 11,
@@ -579,7 +583,7 @@ def as_built_aligned(
 
     The measured radii leave the as-built model imaging the O V line about
     eight pixels from where the design puts it.
-    :func:`as_built_focused` moves each grating along the optic axis until
+    :func:`_as_built_focused` moves each grating along the optic axis until
     the spots are as small as the design's, which happens to carry the line
     most of the way back, since the same error in the radius causes both the
     defocus and the displacement. It stops a pixel or two short.
@@ -589,9 +593,9 @@ def as_built_aligned(
     until the center of the field of view lands where
     :attr:`esis.optics.Sensor.position_image` says it should.
 
-    Use this model rather than :func:`as_built_focused` wherever the position
-    of a line matters, which is to say wherever the model is compared against
-    an image.
+    This is the model of the instrument that flew, and the one to use.
+    :func:`_as_built` and :func:`_as_built_focused` are the steps on the way
+    to it, kept for comparison rather than for use.
 
     Parameters
     ----------
@@ -613,7 +617,7 @@ def as_built_aligned(
         import named_arrays as na
         import esis
 
-        instrument = esis.flights.f1.optics.as_built_aligned(num_distribution=0)
+        instrument = esis.flights.f1.optics.as_built(num_distribution=0)
 
         error = instrument.position_line(
             esis.flights.f1.spectrum.O_V.wavelength,
@@ -621,7 +625,7 @@ def as_built_aligned(
 
         na.nominal(error.length.to(u.um))
     """
-    result = as_built(
+    result = _as_built(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,

@@ -34,7 +34,7 @@ def level_0(
 
     return esis.data.Level_0.from_fits(
         path=path,
-        camera=optics.as_built().camera,
+        camera=optics._as_built().camera,
         axis_x=axis_x,
         axis_y=axis_y,
         timeline=nsroc.timeline(),

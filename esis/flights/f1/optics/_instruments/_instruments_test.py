@@ -30,8 +30,8 @@ def test_design_single(num_distribution: int):
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
-def test_as_built(num_distribution: int):
-    result = esis.flights.f1.optics.as_built(
+def test_as_built_unfocused(num_distribution: int):
+    result = esis.flights.f1.optics._as_built(
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
@@ -49,12 +49,12 @@ def test_design_focus_grating():
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
 def test_as_built_focused(num_distribution: int):
-    result = esis.flights.f1.optics.as_built_focused(
+    result = esis.flights.f1.optics._as_built_focused(
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
 
-    as_built = esis.flights.f1.optics.as_built(
+    as_built = esis.flights.f1.optics._as_built(
         num_distribution=num_distribution,
     )
     dz = na.nominal(result.grating.translation.z) - na.nominal(
@@ -81,8 +81,8 @@ def test_position_image(num_distribution: int):
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
-def test_as_built_aligned(num_distribution: int):
-    result = esis.flights.f1.optics.as_built_aligned(
+def test_as_built(num_distribution: int):
+    result = esis.flights.f1.optics.as_built(
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
@@ -95,7 +95,7 @@ def test_as_built_aligned(num_distribution: int):
     assert np.all(np.abs(error.x) < sensor.width_pixel / 100)
 
     # which the model it was aligned from is eight pixels away from
-    as_built = esis.flights.f1.optics.as_built(num_distribution=num_distribution)
+    as_built = esis.flights.f1.optics._as_built(num_distribution=num_distribution)
     error_built = na.nominal(as_built.position_line(wavelength) - sensor.position_image)
     assert np.all(np.abs(error_built.x) > 5 * sensor.width_pixel)
 
@@ -103,7 +103,7 @@ def test_as_built_aligned(num_distribution: int):
     # correct the focus also moves the image, and the two nearly cancel. It
     # is not close enough: a couple of pixels is tens of kilometers per
     # second of apparent Doppler shift.
-    focused = esis.flights.f1.optics.as_built_focused(
+    focused = esis.flights.f1.optics._as_built_focused(
         num_distribution=num_distribution,
     )
     error_focused = na.nominal(
@@ -112,7 +112,7 @@ def test_as_built_aligned(num_distribution: int):
     assert np.all(np.abs(error_focused.x) > np.abs(error.x))
 
     # and it is still focused: the gratings moved along z as they did for
-    # `as_built_focused`, and only rotated by seconds of arc
+    # `_as_built_focused`, and only rotated by seconds of arc
     dz = na.nominal(result.grating.translation.z - as_built.grating.translation.z)
     assert np.all(dz > 0.3 * u.mm)
     assert np.all(dz < 0.9 * u.mm)

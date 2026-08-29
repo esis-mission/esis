@@ -370,7 +370,7 @@ class AbstractInstrument(
             import named_arrays as na
             import esis
 
-            instrument = esis.flights.f1.optics.as_built(num_distribution=0)
+            instrument = esis.flights.f1.optics._as_built(num_distribution=0)
 
             focused = instrument.focus_grating(wavelength=629.73 * u.AA)
 
@@ -535,7 +535,7 @@ class AbstractInstrument(
             import named_arrays as na
             import esis
 
-            instrument = esis.flights.f1.optics.as_built(num_distribution=0)
+            instrument = esis.flights.f1.optics._as_built(num_distribution=0)
 
             aligned = instrument.align_grating()
 
