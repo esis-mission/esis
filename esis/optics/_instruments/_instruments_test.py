@@ -2,6 +2,7 @@ import pytest
 import numpy as np
 import matplotlib.pyplot as plt
 import astropy.units as u
+import astropy.constants
 import named_arrays as na
 import optika._tests.test_mixins
 import esis
@@ -91,6 +92,46 @@ class AbstractTestAbstractInstrument(
 
     def test_wavlength_physical(self, a: esis.optics.abc.AbstractInstrument):
         assert np.all(a.wavelength_physical > 0 * u.nm)
+
+    def test_dispersion(self, a: esis.optics.abc.AbstractInstrument):
+        wavelength = esis.flights.f1.spectrum.O_V.wavelength
+        result = a.dispersion(wavelength)
+
+        assert isinstance(na.as_named_array(result), na.AbstractScalar)
+        assert na.unit_normalized(result).is_equivalent(u.mAA / u.pix)
+        assert np.all(result > 0 * u.mAA / u.pix)
+
+    def test_dispersion_doppler(self, a: esis.optics.abc.AbstractInstrument):
+        wavelength = esis.flights.f1.spectrum.O_V.wavelength
+        result = a.dispersion_doppler(wavelength)
+
+        assert isinstance(na.as_named_array(result), na.AbstractScalar)
+        assert na.unit_normalized(result).is_equivalent(u.km / u.s / u.pix)
+
+        # the same quantity as the dispersion, expressed as a velocity
+        expected = a.dispersion(wavelength) / wavelength * astropy.constants.c
+        assert np.allclose(result, expected.to(u.km / u.s / u.pix))
+
+    def test_dispersion_varies_less_than_its_doppler_equivalent(
+        self,
+        a: esis.optics.abc.AbstractInstrument,
+    ):
+        """
+        Check that the dispersion is the steadier of the two.
+
+        The dispersion is nearly constant across the passband, while the
+        velocity it corresponds to is not, since that is divided by the
+        wavelength. This is why both are reported at a wavelength.
+        """
+        spectrum = esis.flights.f1.spectrum
+        short = spectrum.He_I.wavelength
+        long = spectrum.O_V.wavelength
+
+        def spread(f):
+            lower, upper = f(short), f(long)
+            return np.abs((upper - lower) / lower)
+
+        assert np.all(spread(a.dispersion) < spread(a.dispersion_doppler))
 
     def test_system(self, a: esis.optics.abc.AbstractInstrument):
         result = a.system

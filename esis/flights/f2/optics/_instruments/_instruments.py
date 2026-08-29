@@ -14,6 +14,19 @@ __all__ = [
     "design_visible",
 ]
 
+angle_blaze = 2.1 * u.deg
+"""The blaze angle of the ESIS-II diffraction gratings."""
+
+
+def _blaze_rulings(grating: esis.optics.Grating) -> None:
+    """Replace the inherited lamellar ruling model with the blazed profile."""
+    rulings = grating.rulings
+    grating.rulings = optika.rulings.SawtoothRulings(
+        spacing=rulings.spacing,
+        depth=rulings.spacing.coefficients[0] * np.tan(angle_blaze),
+        diffraction_order=rulings.diffraction_order,
+    )
+
 
 def design_proposed(
     grid: None | optika.vectors.ObjectVectorArray = None,
@@ -118,6 +131,8 @@ def design_proposed(
 
     result.primary_mirror.material = materials.multilayer_AlSc()
     result.grating.material = materials.multilayer_AlSc()
+
+    _blaze_rulings(result.grating)
 
     return result
 
@@ -409,6 +424,8 @@ def design_guess(
             axis="wavelength",
         )
 
+    _blaze_rulings(result.grating)
+
     return result
 
 
@@ -498,6 +515,9 @@ def design_single(
         result.grating.rulings.spacing.coefficients[1].nominal = c1
         result.grating.rulings.spacing.coefficients[2].nominal = c2
         result.grating.sag.radius.nominal = radius_grating
+
+    # refresh the groove depth so the blaze angle tracks the new ruling spacing
+    _blaze_rulings(result.grating)
 
     return result
 
@@ -634,5 +654,9 @@ def design_visible(
 
     if grid is None or grid.wavelength is None:
         result.wavelength = wavelength_HeNe
+
+    # refresh the groove depth so the alignment gratings keep the same
+    # blaze angle as the science gratings
+    _blaze_rulings(result.grating)
 
     return result

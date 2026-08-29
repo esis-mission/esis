@@ -128,6 +128,7 @@ def multilayer_design() -> optika.materials.MultilayerMirror:
     )
 
     return optika.materials.MultilayerMirror(
+        num_interpolation=esis.optics.num_interpolation,
         layers=[
             layer_oxide,
             layer_sic,

@@ -1,5 +1,6 @@
 import astropy.units as u
 import optika
+import esis
 
 __all__ = [
     "multilayer_AlSc",
@@ -50,6 +51,7 @@ def multilayer_AlSc() -> optika.materials.MultilayerMirror:
     d = 257 * u.AA
     gamma = 0.5
     return optika.materials.MultilayerMirror(
+        num_interpolation=esis.optics.num_interpolation,
         layers=[
             optika.materials.Layer(
                 chemical="Al2O3",
@@ -147,6 +149,7 @@ def multilayer_SiSc() -> optika.materials.MultilayerMirror:
     d = 260 * u.AA
     gamma = 0.5
     return optika.materials.MultilayerMirror(
+        num_interpolation=esis.optics.num_interpolation,
         layers=[
             optika.materials.Layer(
                 chemical="SiO2",
