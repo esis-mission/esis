@@ -400,17 +400,12 @@ class AbstractInstrument(
         axis_pupil = tuple(na.shape(pupil))
         axis_scene = tuple(na.shape(field)) + tuple(na.shape(wavelength))
 
-        result = copy.deepcopy(self)
-        result.__dict__.pop("system", None)
-
-        z = result.grating.translation.z
+        z = self.grating.translation.z
 
         def radius_spot(dz: na.AbstractScalar) -> na.AbstractScalar:
-            instrument = copy.deepcopy(result)
-            instrument.grating.translation.z = z + dz
             # only the positions of the rays matter here, and the efficiency
             # of the coatings is most of what tracing them costs
-            rays = instrument.system.rayfunction(
+            rays = self.moved_grating(z + dz).system.rayfunction(
                 wavelength=wavelength,
                 field=field,
                 pupil=pupil,
@@ -431,9 +426,54 @@ class AbstractInstrument(
             min_step_size=min_step_size,
         )
 
-        result.grating.translation.z = z + dz
+        # Deep, so that the caller is given an instrument of their own. The
+        # copies taken while searching are shallow and share everything but
+        # the grating with this one, which is what makes them cheap, and is
+        # fine for something which never leaves this method.
+        return copy.deepcopy(self.moved_grating(z + dz))
 
-        return result
+    def moved_grating(
+        self,
+        z: None | u.Quantity | na.AbstractScalar = None,
+        yaw: None | u.Quantity | na.AbstractScalar = None,
+    ) -> Self:
+        """
+        Copy this instrument, putting its gratings somewhere else.
+
+        Built rather than copied and adjusted, so that the raytrace of the
+        result is the one its gratings ask for. :attr:`system` is cached, and
+        a copy carries the cache with it, so moving a grating on a copy moves
+        nothing: the rays go on being traced through the geometry the cache
+        was built from. A new instrument has nothing cached and cannot go
+        stale in that way.
+
+        The copy is shallow, so everything except the grating is shared with
+        this instrument. Take :func:`copy.deepcopy` of the result before
+        changing anything else about it.
+
+        Parameters
+        ----------
+        z
+            Where to put the gratings along the optic axis.
+            If :obj:`None` (the default), they are left where they are.
+        yaw
+            How far to rotate the gratings about :math:`y`.
+            If :obj:`None` (the default), they are left as they are.
+        """
+        grating = self.grating
+
+        if z is None:
+            z = grating.translation.z
+
+        if yaw is None:
+            yaw = grating.yaw
+
+        return self.replace(
+            grating=grating.replace(
+                translation=grating.translation.replace(z=z),
+                yaw=yaw,
+            ),
+        )
 
     def position_line(
         self,
@@ -571,9 +611,6 @@ class AbstractInstrument(
             **kwargs,
         )
 
-        result = copy.deepcopy(result)
-        result.__dict__.pop("system", None)
-
         yaw = result.grating.yaw
 
         # The image moves along the sensor in proportion to the rotation, so
@@ -582,17 +619,11 @@ class AbstractInstrument(
         step = 1 * u.arcmin
 
         position_0 = result.position_line(wavelength)
-
-        result.grating.yaw = yaw + step
-        result.__dict__.pop("system", None)
-        position_1 = result.position_line(wavelength)
+        position_1 = result.moved_grating(yaw=yaw + step).position_line(wavelength)
 
         slope = (position_1.x - position_0.x) / step
 
-        result.grating.yaw = yaw + (position.x - position_0.x) / slope
-        result.__dict__.pop("system", None)
-
-        return result
+        return result.moved_grating(yaw=yaw + (position.x - position_0.x) / slope)
 
     def schematic_primary(
         self,
