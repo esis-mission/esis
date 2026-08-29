@@ -10,6 +10,7 @@ __all__ = [
 @dataclasses.dataclass(repr=False)
 class Timeline(
     optika.mixins.Printable,
+    optika.mixins.Replaceable,
 ):
     """
     A Python representation of the NSROC timeline for the ESIS mission.

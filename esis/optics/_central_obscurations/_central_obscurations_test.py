@@ -9,6 +9,7 @@ import esis
 
 class AbstractTestAbstractCentralObscuration(
     test_mixins.AbstractTestPrintable,
+    test_mixins.AbstractTestReplaceable,
     test_mixins.AbstractTestTranslatable,
 ):
     def test_num_folds(self, a: esis.optics.abc.AbstractCentralObscuration):
