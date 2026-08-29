@@ -19,6 +19,7 @@ import esis
 )
 class TestRequirements(
     optika._tests.test_mixins.AbstractTestPrintable,
+    optika._tests.test_mixins.AbstractTestReplaceable,
 ):
 
     def test_resolution_spatial(self, a: esis.optics.Requirements):

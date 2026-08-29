@@ -21,7 +21,7 @@ dependencies = [
     "joblib",
     "pooch",
     "named-arrays~=2.8",
-    "optika~=2.4",
+    "optika~=2.5",
     "msfc-ccd~=1.0",
     "solar-dynamics-observatory~=1.0",
     "interface-region-imaging-spectrograph~=1.0,>=1.0.1",

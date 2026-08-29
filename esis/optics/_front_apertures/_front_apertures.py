@@ -11,6 +11,7 @@ __all__ = [
 
 @dataclasses.dataclass(eq=False, repr=False)
 class AbstractFrontAperture(
+    optika.mixins.Replaceable,
     optika.mixins.Translatable,
 ):
     """An interface describing the entrance aperture of the instrument."""

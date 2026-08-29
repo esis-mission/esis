@@ -4,6 +4,7 @@ import esis
 
 
 class AbstactTestAbstractFrontAperture(
+    optika._tests.test_mixins.AbstractTestReplaceable,
     optika._tests.test_mixins.AbstractTestTranslatable,
 ):
     def test_surface(self, a: esis.optics.abc.AbstractFrontAperture):

@@ -9,6 +9,7 @@ import esis
 
 class AbstractTestAbstractFieldStop(
     optika._tests.test_mixins.AbstractTestPrintable,
+    optika._tests.test_mixins.AbstractTestReplaceable,
     optika._tests.test_mixins.AbstractTestTranslatable,
 ):
     def test_num_folds(

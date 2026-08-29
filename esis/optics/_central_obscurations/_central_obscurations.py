@@ -13,6 +13,7 @@ __all__ = [
 @dataclasses.dataclass(eq=False, repr=False)
 class AbstractCentralObscuration(
     optika.mixins.Printable,
+    optika.mixins.Replaceable,
     optika.mixins.Translatable,
 ):
     """An interface defining the central obscuration of the instrument."""

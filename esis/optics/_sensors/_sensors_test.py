@@ -12,6 +12,7 @@ from ..mixins import _mixins_test
     ],
 )
 class TestSensor(
+    test_mixins.AbstractTestReplaceable,
     test_mixins.AbstractTestRollable,
     test_mixins.AbstractTestYawable,
     test_mixins.AbstractTestPitchable,

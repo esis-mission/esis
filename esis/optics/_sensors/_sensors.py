@@ -12,6 +12,7 @@ __all__ = [
 
 @dataclasses.dataclass(repr=False)
 class Sensor(
+    optika.mixins.Replaceable,
     optika.mixins.Rollable,
     optika.mixins.Yawable,
     optika.mixins.Pitchable,

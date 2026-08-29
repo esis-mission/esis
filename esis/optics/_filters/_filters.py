@@ -14,6 +14,7 @@ __all__ = [
 @dataclasses.dataclass(eq=False, repr=False)
 class AbstractFilter(
     optika.mixins.Printable,
+    optika.mixins.Replaceable,
     optika.mixins.Rollable,
     optika.mixins.Yawable,
     optika.mixins.Pitchable,
