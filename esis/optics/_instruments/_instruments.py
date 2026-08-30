@@ -1,6 +1,7 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, Self
 import abc
+import copy
 import dataclasses
 import functools
 import numpy as np
@@ -313,6 +314,316 @@ class AbstractInstrument(
         )
 
         return result
+
+    def focus_grating(
+        self,
+        wavelength: None | u.Quantity | na.AbstractScalar = None,
+        field: None | na.AbstractCartesian2dVectorArray = None,
+        pupil: None | na.AbstractCartesian2dVectorArray = None,
+        bounds: tuple[u.Quantity, u.Quantity] = (-1 * u.mm, 2 * u.mm),
+        min_step_size: u.Quantity = 1 * u.um,
+    ) -> Self:
+        r"""
+        Move the gratings along the optic axis to their best focus.
+
+        The gratings image the field stop onto the sensor, so a grating whose
+        radius of curvature differs from the one it was placed for (a
+        measured, as-built radius replacing the design radius, for example)
+        images the field stop to a different distance and defocuses the
+        system unless it is moved to compensate.
+
+        This method finds, independently for every element of the grating
+        (every channel, for example), the translation along :math:`z` which
+        minimizes the root-mean-square radius of the spots imaged onto the
+        sensor, and returns a copy of this instrument with the gratings moved
+        there. Everything else, including the sensor, stays where it was.
+        The search is a vectorized Brent minimization
+        (:func:`named_arrays.optimize.minimum_brent`), so every channel is
+        focused by the same handful of ray traces.
+
+        Parameters
+        ----------
+        wavelength
+            The wavelengths at which to focus.
+            If :obj:`None` (the default), :attr:`wavelength_physical` is used.
+        field
+            The normalized field positions of the traced rays.
+            If :obj:`None` (the default), a :math:`3 \times 3` grid spanning
+            the central half of the field of view is used.
+        pupil
+            The normalized pupil positions of the traced rays.
+            If :obj:`None` (the default), a :math:`21 \times 21` grid is used.
+        bounds
+            The bracket of grating translations, relative to the current
+            position, within which the best focus is sought.
+        min_step_size
+            The tolerance on the translation of the best focus.
+
+        Examples
+        --------
+        Move the gratings of the ESIS-I as-built model, which carries the
+        measured radii of curvature but the design positions, to their best
+        focus in the O V line.
+
+        .. jupyter-execute::
+
+            import astropy.units as u
+            import named_arrays as na
+            import esis
+
+            instrument = esis.flights.f1.optics.as_built_unfocused(num_distribution=0)
+
+            focused = instrument.focus_grating(wavelength=629.73 * u.AA)
+
+            na.nominal(focused.grating.translation.z - instrument.grating.translation.z)
+        """
+        if wavelength is None:
+            wavelength = self.wavelength_physical
+
+        if field is None:
+            field = na.Cartesian2dVectorLinearSpace(
+                start=-0.5,
+                stop=0.5,
+                axis=na.Cartesian2dVectorArray("field_x", "field_y"),
+                num=3,
+            )
+
+        if pupil is None:
+            pupil = na.Cartesian2dVectorLinearSpace(
+                start=-1,
+                stop=1,
+                axis=na.Cartesian2dVectorArray("pupil_x", "pupil_y"),
+                num=21,
+                centers=True,
+            )
+
+        axis_pupil = tuple(na.shape(pupil))
+        axis_scene = tuple(na.shape(field)) + tuple(na.shape(wavelength))
+
+        z = self.grating.translation.z
+
+        def radius_spot(dz: na.AbstractScalar) -> na.AbstractScalar:
+            # only the positions of the rays matter here, and the efficiency
+            # of the coatings is most of what tracing them costs
+            rays = self.moved_grating(z + dz).system.rayfunction(
+                wavelength=wavelength,
+                field=field,
+                pupil=pupil,
+                efficiency=False,
+            )
+            position = rays.outputs.position
+            unvignetted = na.as_named_array(rays.outputs.unvignetted)
+            x = np.where(unvignetted, position.x, np.nan)
+            y = np.where(unvignetted, position.y, np.nan)
+            variance = np.nanvar(x, axis=axis_pupil) + np.nanvar(y, axis=axis_pupil)
+            return np.nanmean(np.sqrt(variance), axis=axis_scene)
+
+        a, b = bounds
+        dz = na.optimize.minimum_brent(
+            function=radius_spot,
+            a=a,
+            b=b,
+            min_step_size=min_step_size,
+        )
+
+        # Deep, so that the caller is given an instrument of their own. The
+        # copies taken while searching are shallow and share everything but
+        # the grating with this one, which is what makes them cheap, and is
+        # fine for something which never leaves this method.
+        return copy.deepcopy(self.moved_grating(z + dz))
+
+    def moved_grating(
+        self,
+        z: None | u.Quantity | na.AbstractScalar = None,
+        yaw: None | u.Quantity | na.AbstractScalar = None,
+    ) -> Self:
+        """
+        Copy this instrument, putting its gratings somewhere else.
+
+        Built rather than copied and adjusted, so that the raytrace of the
+        result is the one its gratings ask for. :attr:`system` is cached, and
+        a copy carries the cache with it, so moving a grating on a copy moves
+        nothing: the rays go on being traced through the geometry the cache
+        was built from. A new instrument has nothing cached and cannot go
+        stale in that way.
+
+        The copy is shallow, so everything except the grating is shared with
+        this instrument. Take :func:`copy.deepcopy` of the result before
+        changing anything else about it.
+
+        Parameters
+        ----------
+        z
+            Where to put the gratings along the optic axis.
+            If :obj:`None` (the default), they are left where they are.
+        yaw
+            How far to rotate the gratings about :math:`y`.
+            If :obj:`None` (the default), they are left as they are.
+        """
+        grating = self.grating
+
+        if z is None:
+            z = grating.translation.z
+
+        if yaw is None:
+            yaw = grating.yaw
+
+        return self.replace(
+            grating=grating.replace(
+                translation=grating.translation.replace(z=z),
+                yaw=yaw,
+            ),
+        )
+
+    def position_line(
+        self,
+        wavelength: None | u.Quantity | na.AbstractScalar = None,
+    ) -> na.AbstractCartesian2dVectorArray:
+        r"""
+        Where the center of the field of view lands on the sensor.
+
+        The ray from the middle of the field of view, through the middle of
+        the pupil, at the wavelength asked for. This is the position a
+        spectral line is at, in the sense that
+        :attr:`esis.optics.Sensor.position_image` means it.
+
+        It is taken from the one ray rather than from the centroid of the
+        whole image because the centroid depends on how much of each beam
+        survives to the sensor. With the primary aperture stop removed, three
+        quarters of the rays are lost, and asymmetrically enough to drag the
+        centroid of the O V image 0.42 mm from where its central ray lands.
+        That is a real effect and it is what the flight data show, but it is
+        not a property of the alignment, and it would move under any change
+        to the model of the apertures.
+
+        Parameters
+        ----------
+        wavelength
+            The wavelength of the line.
+            If :obj:`None` (the default), :attr:`wavelength_physical` is used.
+        """
+        if wavelength is None:
+            wavelength = self.wavelength_physical
+
+        zero = na.Cartesian2dVectorArray(0, 0)
+
+        rays = self.system.rayfunction(
+            wavelength=wavelength,
+            field=zero,
+            pupil=zero,
+            efficiency=False,
+        )
+
+        return rays.outputs.position.xy
+
+    def align_grating(
+        self,
+        wavelength: None | u.Quantity | na.AbstractScalar = None,
+        position: None | na.AbstractCartesian2dVectorArray = None,
+        field: None | na.AbstractCartesian2dVectorArray = None,
+        pupil: None | na.AbstractCartesian2dVectorArray = None,
+        **kwargs,
+    ) -> Self:
+        r"""
+        Focus the gratings and then point them back at the sensor.
+
+        :meth:`focus_grating` moves each grating along the optic axis, which
+        also moves the image along the sensor. An instrument which was
+        aligned as well as focused puts the image where it belongs, and this
+        method does both, leaving the line within a hundredth of a pixel of
+        the position asked for.
+
+        Focusing alone comes closer than one might expect, because a grating
+        whose radius is wrong both defocuses the image and displaces it, and
+        moving the grating to correct the one largely corrects the other. For
+        the as-built model it leaves a couple of pixels, which is still tens
+        of kilometers per second of apparent Doppler shift.
+
+        The two are solved one after the other rather than together. Rotating
+        a grating about :math:`y` moves the image 915 microns per arcminute
+        while changing the size of a spot by half a micron, so the rotation
+        needed to place the line, of order ten arcseconds, does not disturb
+        the focus. There is no trade to make between the two, and so no
+        weighting between them to choose.
+
+        Parameters
+        ----------
+        wavelength
+            The wavelength of the line to place.
+            If :obj:`None` (the default), :attr:`wavelength_physical` is used.
+        position
+            Where on the sensor to put it.
+            If :obj:`None` (the default),
+            :attr:`esis.optics.Sensor.position_image` is used.
+        field
+            The normalized field positions used to judge the focus.
+            If :obj:`None` (the default), a :math:`3 \times 3` grid of cell
+            centers spanning the field of view is used.
+        pupil
+            The normalized pupil positions used to judge the focus.
+            Passed to :meth:`focus_grating`.
+        kwargs
+            Additional arguments passed to :meth:`focus_grating`.
+
+        Examples
+        --------
+        Align the as-built model and confirm the O V line lands where the
+        sensor says it should.
+
+        .. jupyter-execute::
+
+            import astropy.units as u
+            import named_arrays as na
+            import esis
+
+            instrument = esis.flights.f1.optics.as_built_unfocused(num_distribution=0)
+
+            aligned = instrument.align_grating()
+
+            error = aligned.position_line() - aligned.camera.sensor.position_image
+            na.nominal(error.length.to(u.um))
+        """
+        if wavelength is None:
+            wavelength = self.wavelength_physical
+
+        if position is None:
+            position = self.camera.sensor.position_image
+
+        if field is None:
+            # Sampled across the field of view rather than only its middle.
+            # Which sampling is used barely matters, since defocus varies
+            # little across this field: three by three and seven by seven
+            # agree on the focus to within a micron. Cell centers keep the
+            # samples off the corners of the field stop, where every ray is
+            # vignetted and the size of a spot is not defined.
+            field = na.Cartesian2dVectorLinearSpace(
+                start=-1,
+                stop=1,
+                axis=na.Cartesian2dVectorArray("field_x", "field_y"),
+                num=3,
+                centers=True,
+            )
+
+        result = self.focus_grating(
+            wavelength=wavelength,
+            field=field,
+            pupil=pupil,
+            **kwargs,
+        )
+
+        yaw = result.grating.yaw
+
+        # The image moves along the sensor in proportion to the rotation, so
+        # one step of a secant method lands on the target, and the second
+        # evaluation measures how far off it was.
+        step = 1 * u.arcmin
+
+        position_0 = result.position_line(wavelength)
+        position_1 = result.moved_grating(yaw=yaw + step).position_line(wavelength)
+
+        slope = (position_1.x - position_0.x) / step
+
+        return result.moved_grating(yaw=yaw + (position.x - position_0.x) / slope)
 
     def schematic_primary(
         self,

@@ -12,6 +12,7 @@ __all__ = [
     "design_full",
     "design",
     "design_single",
+    "as_built_unfocused",
     "as_built",
     "distortion_fit",
 ]
@@ -228,6 +229,20 @@ def design_full(
             z=filter.translation.z + 200 * u.mm,
         ),
         yaw=-12.252 * u.deg,
+        # Where the center of the field of view lands at the O V line, which
+        # is what the gratings were rotated about y to achieve. Traced from
+        # this model rather than asserted: `test_position_image` checks that
+        # the design still puts the line here, so the number cannot drift
+        # away from the prescription it describes.
+        #
+        # The Zemax design this was ported from carried the same quantity as
+        # a CENY operand, targeting 7.2091 mm. It used 629.7 A for O V where
+        # this model uses 629.732 A, and traced at 629.7 A this model puts
+        # the line within 1.6 um of that target.
+        position_image=na.Cartesian2dVectorArray(
+            x=7.2206 * u.mm,
+            y=0 * u.mm,
+        ),
         material=optika.sensors.materials.e2v_ccd97(
             temperature=-55 * u.deg_C,
         ),
@@ -369,16 +384,27 @@ def design_single(
     return result
 
 
-def as_built(
+def as_built_unfocused(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
     num_distribution: int = 11,
 ) -> esis.optics.Instrument:
     """
-    Load the as-built optical model.
+    Load the as-built optical model before it has been focused or pointed.
 
     Based on :func:`design`, but includes efficiency and figure measurements of the
     primary mirror and gratings, as well as gain measurements of the sensor.
+
+    The gratings carry their measured radii of curvature but sit where the
+    design put them, which is not where the instrument that flew carried
+    them: it was focused and aligned with the gratings it actually had.
+    :func:`as_built` is that instrument, and is the model to compare against
+    an image.
+
+    This one is for everything which wants the measurements without the
+    solve that places them: the properties of the camera and the sensor, the
+    coatings, the rulings, and the question of how far the alignment had to
+    move the gratings, which is measured from here.
 
     Parameters
     ----------
@@ -491,6 +517,126 @@ def as_built(
     result.camera.sensor.readout_noise = 6 * u.electron
 
     return result
+
+
+def _as_built_focused(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    r"""
+    Load the as-built optical model with the gratings moved to their best focus.
+
+    :func:`as_built_unfocused` replaces the design radius of curvature of each grating
+    with its measured value but leaves the grating where the design put it.
+    The measured radii are 0.6 to 0.9 mm shorter than the design radius, so
+    each grating images the field stop short of the sensor and the model is
+    defocused by about two pixels RMS, whereas the flight instrument was
+    focused with the gratings it actually carried.
+
+    This model moves each grating along the optic axis to the position which
+    minimizes the spot size of the :math:`\text{O\,V}\;630\,\AA` line, the
+    brightest line in the passband, using
+    :meth:`esis.optics.abc.AbstractInstrument.focus_grating`, which restores
+    the focus of the design. The offsets come out to roughly
+    :math:`+0.7`, :math:`+0.6`, :math:`+0.6`, and :math:`+0.5` mm toward the
+    field stop for channels 0 through 3, in the same order as the errors in
+    the measured radii. With ``num_distribution > 0`` every Monte Carlo
+    sample of the model is focused independently, so the uncertainty in the
+    other parameters (the placement of the gratings and the measured rulings,
+    for example) carries through to a spread of about :math:`\pm 0.2` mm in
+    the focus of each channel.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+
+    Examples
+    --------
+    Load the focused as-built model and print the displacement of each
+    grating from its design position.
+
+    .. jupyter-execute::
+
+        import esis
+
+        instrument = esis.flights.f1.optics._as_built_focused(num_distribution=0)
+        design = esis.flights.f1.optics.design(num_distribution=0)
+
+        instrument.grating.translation.z - design.grating.translation.z
+    """
+    result = as_built_unfocused(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+    return result.focus_grating(wavelength=O_V.wavelength)
+
+
+def as_built(
+    grid: None | optika.vectors.ObjectVectorArray = None,
+    axis_channel: str = "channel",
+    num_distribution: int = 11,
+) -> esis.optics.Instrument:
+    r"""
+    Load the as-built optical model, focused and pointed at the sensor.
+
+    The measured radii leave the as-built model imaging the O V line about
+    eight pixels from where the design puts it.
+    :func:`_as_built_focused` moves each grating along the optic axis until
+    the spots are as small as the design's, which happens to carry the line
+    most of the way back, since the same error in the radius causes both the
+    defocus and the displacement. It stops a pixel or two short.
+
+    The instrument which flew was aligned as well as focused, so this model
+    rotates each grating about :math:`y` afterwards, by a few arcseconds,
+    until the center of the field of view lands where
+    :attr:`esis.optics.Sensor.position_image` says it should.
+
+    This is the model of the instrument that flew, and the one to use.
+    :func:`as_built_unfocused` and :func:`_as_built_focused` are the steps on the way
+    to it, kept for comparison rather than for use.
+
+    Parameters
+    ----------
+    grid
+        sampling of wavelength, field, and pupil positions that will be used to
+        characterize the optical system.
+    axis_channel
+        The name of the logical axis corresponding to changing camera channel.
+    num_distribution
+        number of Monte Carlo samples to draw when computing uncertainties
+
+    Examples
+    --------
+    Confirm the O V line lands where the sensor says it should.
+
+    .. jupyter-execute::
+
+        import astropy.units as u
+        import named_arrays as na
+        import esis
+
+        instrument = esis.flights.f1.optics.as_built(num_distribution=0)
+
+        error = instrument.position_line(
+            esis.flights.f1.spectrum.O_V.wavelength,
+        ) - instrument.camera.sensor.position_image
+
+        na.nominal(error.length.to(u.um))
+    """
+    result = as_built_unfocused(
+        grid=grid,
+        axis_channel=axis_channel,
+        num_distribution=num_distribution,
+    )
+    return result.align_grating(wavelength=O_V.wavelength)
 
 
 def distortion_fit(
