@@ -53,6 +53,13 @@ def _idealized(instrument: esis.optics.Instrument) -> esis.optics.Instrument:
     coefficients = instrument.grating.rulings.spacing.coefficients
     for k in list(coefficients):
         coefficients[k] = na.nominal(coefficients[k])
+    # the as-built gratings were focused and aligned with uncertain measured
+    # radii, which leaves their placement wrapped even without a distribution
+    grating = instrument.grating
+    grating.translation = na.nominal(grating.translation)
+    grating.yaw = na.nominal(grating.yaw)
+    grating.pitch = na.nominal(grating.pitch)
+    grating.roll = na.nominal(grating.roll)
     return instrument
 
 

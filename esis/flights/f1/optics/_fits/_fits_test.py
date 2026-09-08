@@ -16,6 +16,13 @@ def test_idealized():
     coefficients = result.grating.rulings.spacing.coefficients
     for k in coefficients:
         assert not isinstance(coefficients[k], na.AbstractUncertainScalarArray)
+    for value in (result.grating.translation.z, result.grating.yaw):
+        assert not isinstance(value, na.AbstractUncertainScalarArray)
+    # and a channel of it can be linearized and masked by the merit
+    channel = result[dict(channel=1)]
+    channel.wavelength = _fits._wavelength_lines()
+    parameters = esis.optics.DistortionParameters.from_instrument(channel)
+    assert not isinstance(parameters.yaw_grating, na.AbstractUncertainScalarArray)
 
 
 def test_wavelength_lines():

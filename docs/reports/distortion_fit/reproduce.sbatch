@@ -27,7 +27,7 @@ source ${ESIS_VENV:-$HOME/venvs/linfit}/bin/activate
 export CUDA_HOME=${CUDA_HOME:-$HOME/linfit/cuda}
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$CUDA_HOME/nvvm/lib64:$LD_LIBRARY_PATH
 mkdir -p "$DIRECTORY"
-cd "$(dirname "$0")"
+cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
 case "$COMMAND" in
   channel|pointing) python reproduce.py "$COMMAND" "${SLURM_ARRAY_TASK_ID:-0}" "$DIRECTORY" ;;
   combine|gather)   python reproduce.py "$COMMAND" "$DIRECTORY" ;;
