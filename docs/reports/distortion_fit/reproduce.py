@@ -69,7 +69,11 @@ def combine(directory: pathlib.Path) -> None:
 
 def pointing(t: int, directory: pathlib.Path) -> None:
     """Fit the pointing of one frame and save it as a one-row ECSV."""
+    parameters = esis.optics.DistortionParameters.from_file(
+        directory / "distortion_reference.ecsv"
+    )
     _fits.fit_distortion_pointing(
+        instrument=parameters.to_instrument(_fits._base(None)),
         device=DEVICE,
         frames=(t,),
         path=directory / f"pointing_{t:02d}.ecsv",

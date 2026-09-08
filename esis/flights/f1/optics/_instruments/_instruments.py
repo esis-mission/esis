@@ -650,14 +650,15 @@ def distortion_fit(
     axis_time: None | str = None,
 ) -> esis.optics.Instrument:
     """
-    Apply the best-fit distortion parameters to the ESIS-I :func:`design`.
+    Apply the best-fit distortion parameters to the ESIS-I :func:`as_built`.
 
     The per-channel parameters are loaded from
     ``_data/distortion_reference.ecsv``, the best distortion fit of the
     ESIS-I flight data, optimized against the ``time=15`` frame of the
     2019-09-30 flight (:func:`esis.flights.f1.data.level_1`, with a start
     time of 2019-09-30T18:08:41.642 UTC). The provenance of the fit is
-    recorded in the file header.
+    recorded in the file header, and the fit is reproduced from the as-built
+    model and the data by :func:`fit_distortion_reference`.
 
     If `axis_time` is given, the instrument pointing additionally carries the
     fitted per-frame payload pointing along that axis, one element per frame
@@ -750,7 +751,7 @@ def distortion_fit(
             )
         ax.ndarray[0].legend(loc="upper right");
     """
-    model = design(
+    model = as_built(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,

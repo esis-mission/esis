@@ -3,7 +3,7 @@
 #SBATCH --partition=gpuunsafe
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=64G
+#SBATCH --mem=150G
 #SBATCH --time=06:00:00
 #SBATCH --output=%x_%A_%a.out
 # Reproduce the committed distortion fit on the cluster.
@@ -15,7 +15,8 @@
 #
 # The environment must provide `esis` with the linearized fit, `named_arrays`
 # and `optika` with device support, `regridding` >= 3.4 with `torch`, and a
-# numba that can see the CUDA driver (see the notes in the report).
+# numba that can see the CUDA driver (see the notes in the report).  Loading
+# the Level-1 frames peaks above 100 GB of memory.
 COMMAND=$1
 DIRECTORY=$2
 export PYTHONHASHSEED=0
