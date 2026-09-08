@@ -87,7 +87,8 @@ The first produces one ECSV per channel, the second the committed
 ``distortion_reference.ecsv``, the last two the committed
 ``distortion_pointing.ecsv``.  The environment needs ``named_arrays`` and
 ``optika`` with device support, ``regridding`` 3.4 with ``torch``, and a
-``numba`` that can see the CUDA driver.
+``numba`` that can see the CUDA driver.  Loading the Level-1 frames peaks
+above 100 GB of memory, which the job script asks for.
 
 Acceptance
 ----------

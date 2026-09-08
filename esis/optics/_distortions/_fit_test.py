@@ -56,5 +56,6 @@ def test_fit_distortion(tmp_path):
     )
     assert isinstance(result, esis.optics.DistortionParameters)
     assert objective(na.pack(result).ndarray) < objective(na.pack(parameters).ndarray)
-    assert any("capture" in m for m in messages)
+    assert any("capture generation 1:" in m for m in messages)
+    assert any("capture:" in m for m in messages)
     assert any("polish" in m for m in messages)

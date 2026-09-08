@@ -199,11 +199,14 @@ def fit_distortion(
 
     generation = [0]
 
-    def callback(intermediate_result=None, convergence=None):
+    # scipy only passes the result object to a callback whose single
+    # parameter is named `intermediate_result`
+    def callback(intermediate_result):
         generation[0] += 1
-        fun = getattr(intermediate_result, "fun", None)
-        if fun is not None:
-            _log(log, f"capture generation {generation[0]}: {-fun:.4f}")
+        _log(
+            log,
+            f"capture generation {generation[0]}: {-intermediate_result.fun:.4f}",
+        )
 
     kwargs = dict(
         bounds=scipy.optimize.Bounds(lb, ub),

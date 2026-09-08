@@ -15,6 +15,7 @@ split across jobs.  Run one of::
 Environment: ESIS_DEVICE (default ``cuda``), ESIS_WORKERS (default 6).
 """
 
+import logging
 import os
 import pathlib
 import sys
@@ -22,6 +23,10 @@ import sys
 import astropy.table
 import esis
 from esis.flights.f1.optics._fits import _fits
+
+# a dependency configures the root logger at INFO, which lets numba report
+# every device allocation
+logging.getLogger("numba").setLevel(logging.WARNING)
 
 DEVICE = os.environ.get("ESIS_DEVICE", "cuda")
 WORKERS = int(os.environ.get("ESIS_WORKERS", "6"))
