@@ -156,3 +156,42 @@ def test_distortion_fit(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+
+
+def test_distortion_fit_axis_time():
+    result = esis.flights.f1.optics.distortion_fit(num_distribution=0, axis_time="time")
+    assert na.shape(result.pitch) == dict(channel=4, time=30)
+    reference = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+    delta = result.yaw - reference.yaw
+    # the yaw drifted monotonically through the flight, changing sign at the
+    # reference frame
+    assert np.all(delta[dict(time=0, channel=0)] > 0 * u.arcsec)
+    assert np.all(delta[dict(time=~0, channel=0)] < 0 * u.arcsec)
+    assert np.all(np.abs(delta[dict(time=15)]) < 0.01 * u.arcsec)
+
+
+def test_distortion_fit_sensor_terms():
+    # the loaded reference carries the sensor placement (zero for a file
+    # written before it existed) and the primary displacement is measured
+    # from the nominal focal length
+    result = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(result)
+    assert na.shape(parameters) == dict(channel=4)
+    assert np.all(np.isfinite(np.asarray(na.value(parameters.z_sensor))))
+
+
+def test_distortion_fit_bounds():
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+    lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
+    x = na.pack(parameters).ndarray
+    assert lb.shape == ub.shape == x.shape
+    # every parameter starts within its box, and no box is degenerate
+    assert np.all(lb <= x)
+    assert np.all(x <= ub)
+    assert np.all(ub > lb)
+    # the sensor terms are bounded about wherever the sensor is
+    assert np.all(upper.yaw_sensor - parameters.yaw_sensor == 3 * u.deg)
+    assert np.all(parameters.yaw_sensor - lower.yaw_sensor == 3 * u.deg)
+    assert np.all(upper.z_sensor == parameters.z_sensor + 10 * u.mm)
