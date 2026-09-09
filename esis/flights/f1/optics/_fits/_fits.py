@@ -30,8 +30,7 @@ as stand-ins for the camera placement.
 _LINES_ALIGNMENT = ("He I", "O V")
 """The bright, isolated lines the channels are aligned on."""
 
-_SENSOR = (
-    "z_sensor",
+_SENSOR_PLACEMENT = (
     "roll_sensor",
     "pitch_sensor",
     "yaw_sensor",
@@ -39,12 +38,14 @@ _SENSOR = (
     "y_sensor",
 )
 """
-The placement of the sensor.
+The orientation and in-plane position of the sensor.
 
 A fit against the proxy scene cannot tell these from the pointing and the
 grating, so the absolute stage holds them at their as-built values and they
 move only once the shared optics are fixed, in the second stage and in the
-internal alignment.
+internal alignment.  The focus-preserving distance is not among them: the
+as-built gratings were focused with their measured radii, which changes the
+magnification, and no other parameter can put it back.
 """
 
 
@@ -178,7 +179,9 @@ def _logger(directory: None | str | pathlib.Path, name: str) -> Callable[[str], 
 def _names_absolute(parameters: esis.optics.DistortionParameters) -> tuple[str, ...]:
     """Name the fields the absolute stage fits: everything but the sensor placement."""
     return tuple(
-        f.name for f in dataclasses.fields(parameters) if f.name not in _SENSOR
+        f.name
+        for f in dataclasses.fields(parameters)
+        if f.name not in _SENSOR_PLACEMENT
     )
 
 
