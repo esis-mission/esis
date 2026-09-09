@@ -1,3 +1,5 @@
+import pytest
+import dataclasses
 import numpy as np
 import named_arrays as na
 import esis
@@ -59,3 +61,39 @@ def test_fit_distortion(tmp_path):
     assert any("capture generation 1:" in m for m in messages)
     assert any("capture:" in m for m in messages)
     assert any("polish" in m for m in messages)
+
+
+def test_fit_distortion_free():
+    instrument = esis.flights.f1.optics.design(num_distribution=0)[dict(channel=1)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+    x0 = na.pack(parameters).ndarray
+    target = x0 + 0.1 * (na.pack(upper).ndarray - na.pack(lower).ndarray)
+
+    def objective(x):
+        return float(np.mean(np.square(x - target)))
+
+    free = ("pitch", "yaw", "z_sensor")
+    result = _fit.fit_distortion(
+        objective=objective,
+        parameters=parameters,
+        bounds=(lower, upper),
+        popsize=2,
+        maxiter=3,
+        free=free,
+    )
+    x = na.pack(result).ndarray
+    names = [f.name for f in dataclasses.fields(parameters)]
+    for i, name in enumerate(names):
+        if name in free:
+            assert x[i] != x0[i]
+        else:
+            assert x[i] == x0[i]
+
+    with pytest.raises(ValueError):
+        _fit.fit_distortion(
+            objective=objective,
+            parameters=parameters,
+            bounds=(lower, upper),
+            free=("nope",),
+        )

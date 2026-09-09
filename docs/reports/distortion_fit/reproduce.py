@@ -51,6 +51,7 @@ def channel(c: int, directory: pathlib.Path) -> None:
         parameters=p0,
         bounds=esis.flights.f1.optics.distortion_fit_bounds(p0),
         workers=WORKERS,
+        free=_fits._names_absolute(p0),
         log=log,
     )
     fitted.to_file(directory / f"channel_{c}.ecsv", metadata=dict(channel=c))

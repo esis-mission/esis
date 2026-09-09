@@ -1,7 +1,8 @@
 """The optimizers of the distortion fit: a seeded capture and a local polish."""
 
 from __future__ import annotations
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
+import dataclasses
 import datetime
 import multiprocessing
 import time
@@ -112,6 +113,7 @@ def fit_distortion(
     tol: float = 0.05,
     seed: int = 0,
     scale_polish: float = 0.02,
+    free: None | Sequence[str] = None,
     log: None | Callable[[str], None] = None,
     kwargs_optimizer: None | dict[str, Any] = None,
 ) -> esis.optics.DistortionParameters:
@@ -151,11 +153,20 @@ def fit_distortion(
     scale_polish
         The size of the starting simplex of the polish as a fraction of the
         bounds.
+    free
+        The names of the fields of `parameters` to fit.  The others are held
+        at their starting values.  If :obj:`None`, every field is fit.
     log
         A callable to report progress.
     kwargs_optimizer
         Additional keyword arguments passed to
         :func:`scipy.optimize.differential_evolution`.
+
+    Raises
+    ------
+    ValueError
+        If `free` names a field `parameters` does not have, or if the fields
+        of `parameters` are not scalars.
 
     Examples
     --------
@@ -193,6 +204,25 @@ def fit_distortion(
     lower, upper = bounds
     lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
     x0 = na.pack(parameters).ndarray
+
+    names = [f.name for f in dataclasses.fields(parameters)]
+    if free is None:
+        free = names
+    unknown = set(free) - set(names)
+    if unknown:
+        raise ValueError(f"unknown parameters {sorted(unknown)}")
+    if len(names) != len(x0):
+        raise ValueError("`free` needs one element per field of `parameters`")
+    index = np.array([i for i, n in enumerate(names) if n in free])
+    x_full = x0.copy()
+    objective_full = objective
+
+    def objective(y: np.ndarray) -> float:
+        x = x_full.copy()
+        x[index] = y
+        return objective_full(x)
+
+    x0, lb, ub = x0[index], lb[index], ub[index]
 
     time_start = time.perf_counter()
     _log(log, f"start: {-objective(x0):.4f}")
@@ -239,4 +269,5 @@ def fit_distortion(
         f"polish: {-fun:.4f} after {num} evaluations, "
         f"{time.perf_counter() - time_start:.0f} s in total",
     )
-    return na.unpack(x, parameters)
+    x_full[index] = x
+    return na.unpack(x_full, parameters)

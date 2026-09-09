@@ -30,6 +30,23 @@ as stand-ins for the camera placement.
 _LINES_ALIGNMENT = ("He I", "O V")
 """The bright, isolated lines the channels are aligned on."""
 
+_SENSOR = (
+    "z_sensor",
+    "roll_sensor",
+    "pitch_sensor",
+    "yaw_sensor",
+    "x_sensor",
+    "y_sensor",
+)
+"""
+The placement of the sensor.
+
+A fit against the proxy scene cannot tell these from the pointing and the
+grating, so the absolute stage holds them at their as-built values and they
+move only once the shared optics are fixed, in the second stage and in the
+internal alignment.
+"""
+
 
 def _idealized(instrument: esis.optics.Instrument) -> esis.optics.Instrument:
     """
@@ -156,6 +173,13 @@ def _logger(directory: None | str | pathlib.Path, name: str) -> Callable[[str], 
                 f.write(message + "\n")
 
     return log
+
+
+def _names_absolute(parameters: esis.optics.DistortionParameters) -> tuple[str, ...]:
+    """Name the fields the absolute stage fits: everything but the sensor placement."""
+    return tuple(
+        f.name for f in dataclasses.fields(parameters) if f.name not in _SENSOR
+    )
 
 
 def _frames_by_axis(
@@ -320,6 +344,7 @@ def fit_distortion_reference(
             parameters=p0,
             bounds=esis.flights.f1.optics.distortion_fit_bounds(p0),
             workers=workers,
+            free=_names_absolute(p0),
             log=log,
         )
     if any(p is None for p in parameters):

@@ -38,7 +38,10 @@ data alone.
     as-built model a local method alone fails on two channels of four, and
     from starts displaced by a tenth of the bounds it fails five times in
     twelve.  Because the merit is deterministic and the capture is seeded,
-    the stage is reproducible.  About an hour per channel on one GPU.
+    the stage is reproducible.  The sensor placement is held at its as-built
+    value here: against the proxy scene it is degenerate with the pointing
+    and the grating, and freeing it only slows the capture.  About an hour
+    per channel on one GPU.
 2.  **Shared.**  The primary displacement, the field-stop roll and the
     payload pitch and yaw belong to the instrument, and a fit which lets
     them differ per channel is using them as stand-ins for the camera
