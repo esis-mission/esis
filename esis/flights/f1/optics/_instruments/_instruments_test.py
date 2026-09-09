@@ -177,7 +177,8 @@ def test_distortion_fit_sensor_terms():
     result = esis.flights.f1.optics.distortion_fit(num_distribution=0)
     parameters = esis.optics.DistortionParameters.from_instrument(result)
     assert na.shape(parameters) == dict(channel=4)
-    assert np.all(np.isfinite(np.asarray(na.value(parameters.z_sensor))))
+    z = na.value(parameters.z_sensor)
+    assert np.all(np.isfinite(np.asarray(getattr(z, "ndarray", z))))
 
 
 def test_distortion_fit_bounds():

@@ -10,30 +10,38 @@
 # - {name: pitch, unit: arcsec, datatype: float64}
 # - {name: yaw, unit: arcsec, datatype: float64}
 # - {name: roll, unit: deg, datatype: float64}
+# - {name: z_sensor, unit: mm, datatype: float64}
+# - {name: roll_sensor, unit: deg, datatype: float64}
+# - {name: pitch_sensor, unit: deg, datatype: float64}
+# - {name: yaw_sensor, unit: deg, datatype: float64}
+# - {name: x_sensor, unit: mm, datatype: float64}
+# - {name: y_sensor, unit: mm, datatype: float64}
 # meta: !!omap
 # - {axis: channel}
-# - {description: 'Best-fit ESIS-I distortion parameters, optimized against the time=15 frame of esis.flights.f1.data.level_1() (start
-#     2019-09-30T18:08:41.642 UTC).'}
-# - {provenance: 'Per-channel differential evolution (run ESISI_distortion_optimization_20260213_151715), with the per-channel pointing
-#     re-polished 2026-07-07 against the deterministic PSF-smoothed correlation (401-pixel scene, sigma_psf=1 px, per-channel peaks read
-#     from coherent pointing scans).'}
-# - correlation: [0.57183, 0.60406, 0.56359, 0.58488]
+# - {description: 'Best-fit ESIS-I distortion parameters, optimized against the time=15 frame of esis.flights.f1.data.level_1().'}
+# - {provenance: 'esis.flights.f1.optics.fit_distortion_reference(time=15, num_scene=401): a seeded capture and polish of every channel
+#     against the AIA proxy scene, the shared optics set to their mean, and the channels aligned to one another on the sky at He I, O
+#     V (median shift vs channel 1: 0.24, 0.00, 0.17, 0.23 px)'}
 # - __serialized_columns__:
 #     displacement_primary:
 #       __class__: astropy.units.quantity.Quantity
-#       unit: !astropy.units.Unit {unit: mm}
+#       unit: &id002 !astropy.units.Unit {unit: mm}
 #       value: !astropy.table.SerializedColumn {name: displacement_primary}
 #     pitch:
 #       __class__: astropy.units.quantity.Quantity
-#       unit: &id002 !astropy.units.Unit {unit: arcsec}
+#       unit: &id003 !astropy.units.Unit {unit: arcsec}
 #       value: !astropy.table.SerializedColumn {name: pitch}
 #     pitch_grating:
 #       __class__: astropy.units.quantity.Quantity
-#       unit: &id003 !astropy.units.Unit {unit: arcmin}
+#       unit: &id004 !astropy.units.Unit {unit: arcmin}
 #       value: !astropy.table.SerializedColumn {name: pitch_grating}
-#     roll:
+#     pitch_sensor:
 #       __class__: astropy.units.quantity.Quantity
 #       unit: &id001 !astropy.units.Unit {unit: deg}
+#       value: !astropy.table.SerializedColumn {name: pitch_sensor}
+#     roll:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
 #       value: !astropy.table.SerializedColumn {name: roll}
 #     roll_field_stop:
 #       __class__: astropy.units.quantity.Quantity
@@ -43,21 +51,41 @@
 #       __class__: astropy.units.quantity.Quantity
 #       unit: *id001
 #       value: !astropy.table.SerializedColumn {name: roll_grating}
+#     roll_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: roll_sensor}
 #     spacing_rulings:
 #       __class__: astropy.units.quantity.Quantity
 #       unit: !astropy.units.Unit {unit: um}
 #       value: !astropy.table.SerializedColumn {name: spacing_rulings}
-#     yaw:
+#     x_sensor:
 #       __class__: astropy.units.quantity.Quantity
 #       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: x_sensor}
+#     y_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: y_sensor}
+#     yaw:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id003
 #       value: !astropy.table.SerializedColumn {name: yaw}
 #     yaw_grating:
 #       __class__: astropy.units.quantity.Quantity
-#       unit: *id003
+#       unit: *id004
 #       value: !astropy.table.SerializedColumn {name: yaw_grating}
+#     yaw_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: yaw_sensor}
+#     z_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: z_sensor}
 # schema: astropy-2.0
-yaw_grating pitch_grating roll_grating roll_field_stop spacing_rulings displacement_primary pitch yaw roll
--269.3 3.704 1.027 -0.2066 0.3854 -5.649 -19.7717 -20.13878 -0.82038
--268.1 1.522 0.2393 -0.2891 0.3859 -0.02207 -21.25244 -16.59384 -0.3028
--268.7 1.316 0.3678 -0.5264 0.3855 -2.795 -22.08457 -16.49289 -0.24703
--268.0 5.705 1.02 1.182 0.3863 -1.616 -21.68604 -15.38459 -1.06117
+yaw_grating pitch_grating roll_grating roll_field_stop spacing_rulings displacement_primary pitch yaw roll z_sensor roll_sensor pitch_sensor yaw_sensor x_sensor y_sensor
+-275.10036929315964 2.962971943178882 0.6268063755956205 0.23449395619868207 0.3848290998075354 -4.868072153800619 -23.01094764045053 -15.703983413278404 -0.3938656559367377 -1.7148109768399642 -0.8441135631056282 -0.0947459245973425 -12.635698966847269 -4.626830504888084 -1.6879569708908937
+-265.69128546706935 2.1329965722383486 0.5727749172991821 0.23449395619868207 0.38483303117028567 -4.868072153800619 -23.01094764045053 -15.703983413278404 -0.47334488550379206 -7.016001029970861 -0.3237670681006313 -0.6457948234546298 -12.436844073401572 2.4296836932463552 -0.04479608432782532
+-273.49120661329704 -0.4940808773869426 0.55983305905192 0.23449395619868207 0.3845476395168871 -4.868072153800619 -23.01094764045053 -15.703983413278404 -0.3412274890122037 -5.5654152459062285 -0.3439626180214266 -0.4597597701964166 -12.775098291408932 -3.8694355798569036 1.7478918737614473
+-274.5797704575462 3.245445667748882 0.5275053455118245 0.23449395619868207 0.38464201082493366 -4.868072153800619 -23.01094764045053 -15.703983413278404 -0.5621637039726198 -6.272997110227137 -0.9812939675921422 0.15723074749000843 -12.500693800210447 -5.024230381950244 -0.9127592038983641

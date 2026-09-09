@@ -101,6 +101,28 @@ The first produces one ECSV per channel, the second the committed
 ``numba`` that can see the CUDA driver.  Loading the Level-1 frames peaks
 above 100 GB of memory, which the job script asks for.
 
+Results
+-------
+
+The correlation of each channel with its frame after each stage of the
+reproduction on tempest, from the focused as-built model:
+
+===========  ======  ======  ======  ======
+stage         ch0     ch1     ch2     ch3
+===========  ======  ======  ======  ======
+as-built     0.350   0.419   0.404   0.379
+absolute     0.776   0.833   0.791   0.818
+shared       0.789   0.845   0.799   0.828
+aligned      0.787   0.845   0.796   0.826
+===========  ======  ======  ======  ======
+
+The shared stage costs nothing, and gains where the polish of the absolute
+stage had stopped early.  The alignment moves the median tile shift against
+channel 1 from 0.87, 0.78 and 1.31 px (channels 0, 2 and 3) to 0.24, 0.17
+and 0.23 px, at a cost of at most 0.0024 in correlation.  The stages are
+deterministic: the shared stage run twice, once serially and once in worker
+processes, gave the same correlations to four decimals.
+
 Acceptance
 ----------
 
