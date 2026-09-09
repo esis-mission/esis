@@ -12,6 +12,19 @@ from ._sensors import Sensor
 from ._cameras import Camera
 from ._requirements import Requirements
 from ._instruments import Instrument
+from ._distortions import (
+    DistortionParameters,
+    KAPPA_FOCUS,
+    LinearMerit,
+    correlation,
+    correlation_raytraced,
+    fit_distortion,
+    polish,
+    align_channels,
+    sky_grid,
+    sample_on_sky,
+    measure_shifts,
+)
 
 num_interpolation = 32
 """
@@ -44,4 +57,15 @@ __all__ = [
     "Camera",
     "Requirements",
     "Instrument",
+    "DistortionParameters",
+    "KAPPA_FOCUS",
+    "LinearMerit",
+    "correlation",
+    "correlation_raytraced",
+    "fit_distortion",
+    "polish",
+    "align_channels",
+    "sky_grid",
+    "sample_on_sky",
+    "measure_shifts",
 ]
