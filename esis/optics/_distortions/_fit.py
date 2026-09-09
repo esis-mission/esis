@@ -22,6 +22,25 @@ def _log(log: None | Callable[[str], None], message: str) -> None:
         log(f"{datetime.datetime.now():%H:%M:%S} | {message}")
 
 
+@dataclasses.dataclass
+class _Subset:
+    """
+    An objective of a subset of a parameter vector, with the rest fixed.
+
+    A class rather than a closure so that it can be sent to worker
+    processes.
+    """
+
+    objective: Callable[[np.ndarray], float]
+    x_full: np.ndarray
+    index: np.ndarray
+
+    def __call__(self, y: np.ndarray) -> float:
+        x = self.x_full.copy()
+        x[self.index] = y
+        return self.objective(x)
+
+
 def polish(
     objective: Callable[[np.ndarray], float],
     x0: np.ndarray,
@@ -215,13 +234,7 @@ def fit_distortion(
         raise ValueError("`free` needs one element per field of `parameters`")
     index = np.array([i for i, n in enumerate(names) if n in free])
     x_full = x0.copy()
-    objective_full = objective
-
-    def objective(y: np.ndarray) -> float:
-        x = x_full.copy()
-        x[index] = y
-        return objective_full(x)
-
+    objective = _Subset(objective, x_full, index)
     x0, lb, ub = x0[index], lb[index], ub[index]
 
     time_start = time.perf_counter()

@@ -63,15 +63,23 @@ def test_fit_distortion(tmp_path):
     assert any("polish" in m for m in messages)
 
 
+@dataclasses.dataclass
+class _Distance:
+    """A picklable objective, so that the test can use worker processes."""
+
+    target: np.ndarray
+
+    def __call__(self, x):
+        return float(np.mean(np.square(x - self.target)))
+
+
 def test_fit_distortion_free():
     instrument = esis.flights.f1.optics.design(num_distribution=0)[dict(channel=1)]
     parameters = esis.optics.DistortionParameters.from_instrument(instrument)
     lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
     x0 = na.pack(parameters).ndarray
     target = x0 + 0.1 * (na.pack(upper).ndarray - na.pack(lower).ndarray)
-
-    def objective(x):
-        return float(np.mean(np.square(x - target)))
+    objective = _Distance(target)
 
     free = ("pitch", "yaw", "z_sensor")
     result = _fit.fit_distortion(
@@ -81,6 +89,7 @@ def test_fit_distortion_free():
         popsize=2,
         maxiter=3,
         free=free,
+        workers=2,
     )
     x = na.pack(result).ndarray
     names = [f.name for f in dataclasses.fields(parameters)]
