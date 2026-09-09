@@ -466,6 +466,7 @@ def fit_distortion_pointing(
     instrument: None | esis.optics.Instrument = None,
     num_scene: int = 401,
     device: None | str = None,
+    frame_reference: int = 15,
     frames: None | tuple[int, ...] = None,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
@@ -496,6 +497,11 @@ def fit_distortion_pointing(
         the format of ``_data/distortion_pointing.ecsv``.
     directory
         A directory where the progress of every frame is logged.
+    frame_reference
+        The frame the reference was fit to.  If it is among `frames`, its
+        own offset is subtracted from every row, so that the table is
+        relative to the reference frame and zero there; see
+        :func:`pointing_relative`.
     """
     if instrument is None:
         instrument = _idealized(
@@ -570,6 +576,49 @@ def fit_distortion_pointing(
             ),
         )
     )
+    if frame_reference in frames:
+        table = pointing_relative(table, frame_reference)
     if path is not None:
         table.write(path, format="ascii.ecsv", overwrite=True)
     return table
+
+
+def pointing_relative(table: astropy.table.QTable, frame: int) -> astropy.table.QTable:
+    """
+    Make a table of pointing offsets relative to one of its frames.
+
+    The reference fit carries the absolute pointing of the frame it was fit
+    to, and a per-frame fit of the pointing alone lands a fraction of an
+    arcsecond from it, since it optimizes the mean merit of the four
+    channels in three terms rather than every channel in every term.  The
+    offsets are therefore taken relative to the reference frame's own fit,
+    which puts that frame at zero and the others where the per-frame fits
+    place them with respect to it.
+
+    Parameters
+    ----------
+    table
+        A table with ``frame``, ``pitch``, ``yaw`` and ``roll`` columns.
+    frame
+        The frame to take as the origin.
+
+    Raises
+    ------
+    ValueError
+        If `frame` is not in the table.
+    """
+    where = np.flatnonzero(np.asarray(table["frame"]) == frame)
+    if where.size != 1:
+        raise ValueError(f"frame {frame} is not in the table")
+    result = table.copy()
+    origin = dict()
+    for name in ("pitch", "yaw", "roll"):
+        origin[name] = table[name][where[0]]
+        result[name] = table[name] - origin[name]
+    result.meta["frame_reference"] = int(frame)
+    result.meta["offset_reference"] = (
+        f"the fit of frame {frame} alone landed at pitch {origin['pitch']:.3f}, "
+        f"yaw {origin['yaw']:.3f}, roll {origin['roll']:.5f} from the reference, "
+        "which is subtracted from every row"
+    )
+    return result

@@ -1,3 +1,5 @@
+import astropy.table
+import pytest
 import numpy as np
 import astropy.units as u
 import named_arrays as na
@@ -73,3 +75,24 @@ def test_stack():
     assert na.shape(result) == dict(channel=4)
     for c in range(4):
         assert result.roll[dict(channel=c)] == parameters[c].roll
+
+
+def test_pointing_relative():
+    table = astropy.table.QTable(
+        dict(
+            frame=np.array([0, 1, 2]),
+            pitch=np.array([1.0, 2.0, 3.0]) * u.arcsec,
+            yaw=np.array([-1.0, 0.0, 1.0]) * u.arcsec,
+            roll=np.array([0.1, 0.2, 0.3]) * u.deg,
+        )
+    )
+    result = _fits.pointing_relative(table, frame=1)
+    assert result["pitch"][1] == 0 * u.arcsec
+    assert result["yaw"][1] == 0 * u.arcsec
+    assert result["roll"][1] == 0 * u.deg
+    assert result["pitch"][2] == 1 * u.arcsec
+    assert result.meta["frame_reference"] == 1
+    # the input is untouched
+    assert table["pitch"][1] == 2 * u.arcsec
+    with pytest.raises(ValueError):
+        _fits.pointing_relative(table, frame=7)

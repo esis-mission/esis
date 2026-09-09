@@ -97,6 +97,7 @@ def gather(directory: pathlib.Path) -> None:
     table = astropy.table.vstack(tables, metadata_conflicts="silent")
     table.sort("frame")
     table.meta.update(tables[0].meta)
+    table = _fits.pointing_relative(table, frame=15)
     table.write(
         directory / "distortion_pointing.ecsv", format="ascii.ecsv", overwrite=True
     )
