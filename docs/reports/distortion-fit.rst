@@ -96,7 +96,14 @@ Slurm cluster::
 
 The first produces one ECSV per channel, the second the committed
 ``distortion_reference.ecsv``, the last two the committed
-``distortion_pointing.ecsv``.  The environment needs ``named_arrays`` and
+``distortion_pointing.ecsv``: the payload pitch, yaw and roll of every
+frame relative to the reference frame, from a polish of the mean merit of
+the four channels in those three terms alone.  The fit of the reference
+frame by itself lands 0.3 arcsec in pitch, 0.1 arcsec in yaw and 12 arcsec
+in roll from the reference, which is the gap between the mean of four
+merits in three terms and every channel in every term; the table is taken
+relative to it so that the reference frame is zero.  The yaw sweeps from
++3.6 arcsec at the first frame to -3.9 arcsec at the last.  The environment needs ``named_arrays`` and
 ``optika`` with device support, ``regridding`` 3.4 with ``torch``, and a
 ``numba`` that can see the CUDA driver.  Loading the Level-1 frames peaks
 above 100 GB of memory, which the job script asks for.
