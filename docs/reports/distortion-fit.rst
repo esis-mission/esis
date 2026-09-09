@@ -38,13 +38,16 @@ data alone.
     as-built model a local method alone fails on two channels of four, and
     from starts displaced by a tenth of the bounds it fails five times in
     twelve.  Because the merit is deterministic and the capture is seeded,
-    the stage is reproducible.  The orientation and in-plane position of
-    the sensor are held at their as-built values here: against the proxy
-    scene they are degenerate with the pointing and the grating, and freeing
-    them only slows the capture.  The focus-preserving sensor distance is
-    free, because the as-built gratings were focused with their measured
-    radii, which changed the magnification, and nothing else can put it
-    back.  About an hour per channel on one GPU.
+    the stage is reproducible.  Every parameter is free here, the sensor
+    placement included.  Holding the sensor at its as-built value, so that
+    only the internal alignment would move it, was tried: on the as-built
+    model three channels of four then stall at 0.70 to 0.76 in correlation
+    where the full set reaches 0.78 to 0.82, and neither freeing the
+    focus-preserving distance alone nor starting from the design model
+    closes the gap.  The price is that the capture searches fifteen
+    dimensions, about two hours per channel on one GPU, and that the second,
+    smaller simplex of the polish is what carries channel 0 the last five
+    hundredths.
 2.  **Shared.**  The primary displacement, the field-stop roll and the
     payload pitch and yaw belong to the instrument, and a fit which lets
     them differ per channel is using them as stand-ins for the camera

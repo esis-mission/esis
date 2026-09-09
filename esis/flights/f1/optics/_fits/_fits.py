@@ -40,12 +40,15 @@ _SENSOR_PLACEMENT = (
 """
 The orientation and in-plane position of the sensor.
 
-A fit against the proxy scene cannot tell these from the pointing and the
-grating, so the absolute stage holds them at their as-built values and they
-move only once the shared optics are fixed, in the second stage and in the
-internal alignment.  The focus-preserving distance is not among them: the
-as-built gratings were focused with their measured radii, which changes the
-magnification, and no other parameter can put it back.
+These were meant to stay at their as-built values until the internal
+alignment, since against the proxy scene they are partly degenerate with
+the pointing and the grating.  On the as-built model of the flight they
+cannot: with them held, the absolute fit of three channels of four stalls
+at 0.70 to 0.76 in correlation where freeing them reaches 0.78 to 0.82, and
+freeing the focus-preserving distance alone does not close the gap, nor
+does the design model in place of the as-built one.  The absolute stage
+therefore fits every parameter, and the internal alignment still has the
+last word on the sensor.
 """
 
 
@@ -177,12 +180,8 @@ def _logger(directory: None | str | pathlib.Path, name: str) -> Callable[[str], 
 
 
 def _names_absolute(parameters: esis.optics.DistortionParameters) -> tuple[str, ...]:
-    """Name the fields the absolute stage fits: everything but the sensor placement."""
-    return tuple(
-        f.name
-        for f in dataclasses.fields(parameters)
-        if f.name not in _SENSOR_PLACEMENT
-    )
+    """Name the fields the absolute stage fits, which is every field."""
+    return tuple(f.name for f in dataclasses.fields(parameters))
 
 
 def _frames_by_axis(
