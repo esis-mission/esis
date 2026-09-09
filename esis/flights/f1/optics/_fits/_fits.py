@@ -5,6 +5,7 @@ from typing import Callable
 import copy
 import dataclasses
 import datetime
+import multiprocessing
 import pathlib
 import numpy as np
 import astropy.units as u
@@ -12,6 +13,7 @@ import astropy.table
 import named_arrays as na
 import optika
 import esis
+from esis.optics._distortions import _fit
 
 __all__ = [
     "fit_distortion_reference",
@@ -184,6 +186,50 @@ def _names_absolute(parameters: esis.optics.DistortionParameters) -> tuple[str, 
     return tuple(f.name for f in dataclasses.fields(parameters))
 
 
+def _polish_own(
+    job: tuple,
+) -> tuple[esis.optics.DistortionParameters, float, int]:  # pragma: nocover
+    """
+    Polish one channel's own terms with the shared optics fixed.
+
+    A module-level function so that the channels can be sent to worker
+    processes.
+
+    Parameters
+    ----------
+    job
+        The channel, its parameters, the scene, its frame, the device, and
+        the indices of the packed parameters that belong to the channel.
+
+    Returns
+    -------
+    The polished parameters, their correlation, and the number of
+    evaluations.
+    """
+    instrument, parameters, scene, observation, device, index_own = job
+    merit = esis.optics.LinearMerit(
+        instrument=instrument,
+        parameters=parameters,
+        scene=scene,
+        observation=observation,
+        device=device,
+    )
+    lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+    lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
+    x_full = na.pack(parameters).ndarray
+    index = np.array(index_own)
+    objective = _fit._Subset(merit, x_full, index)
+    y, fun, num = esis.optics.polish(
+        objective,
+        x_full[index],
+        lb[index],
+        ub[index],
+        scale=0.01,
+    )
+    x_full[index] = y
+    return na.unpack(x_full, parameters), -fun, num
+
+
 def _frames_by_axis(
     observation: na.AbstractScalar, num_channel: int
 ) -> list[np.ndarray]:
@@ -284,7 +330,8 @@ def fit_distortion_reference(
         The device on which to build and apply the regridding weights, for
         example ``"cuda"``.
     workers
-        The number of processes evaluating the population of the capture.
+        The number of processes evaluating the population of the capture,
+        and polishing the channels of the shared stage side by side.
     channels
         The channels to fit in the absolute stage.  If :obj:`None`, every
         channel is fit; a subset lets the channels be fit by separate jobs,
@@ -356,35 +403,29 @@ def fit_distortion_reference(
     parameters = enforce_shared(parameters)
     names = [f.name for f in dataclasses.fields(parameters[0])]
     index_own = [i for i, n in enumerate(names) if n not in _SHARED]
-    for c in range(num_channel):
-        channel = instrument[dict(channel=c)]
-        merit = esis.optics.LinearMerit(
-            instrument=channel,
-            parameters=parameters[c],
-            scene=scene,
-            observation=observation[dict(channel=c)],
-            device=device,
+    log("polish of every channel with the shared optics fixed")
+    jobs = [
+        (
+            instrument[dict(channel=c)],
+            parameters[c],
+            scene,
+            observation[dict(channel=c)],
+            device,
+            index_own,
         )
-        lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters[c])
-        lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
-        x_full = na.pack(parameters[c]).ndarray
-
-        def objective(y, x_full=x_full, merit=merit):
-            x = x_full.copy()
-            x[index_own] = y
-            return merit(x)
-
-        log(f"channel {c}: polish with the shared optics fixed")
-        y, _, _ = esis.optics.polish(
-            objective,
-            x_full[index_own],
-            lb[index_own],
-            ub[index_own],
-            scale=0.01,
-            log=log,
-        )
-        x_full[index_own] = y
-        parameters[c] = na.unpack(x_full, parameters[c])
+        for c in range(num_channel)
+    ]
+    if workers > 1:
+        # the polish is serial within a channel but the channels are
+        # independent, so they run side by side
+        with multiprocessing.get_context("spawn").Pool(
+            min(workers, num_channel)
+        ) as pool:
+            results = pool.map(_polish_own, jobs)
+    else:
+        results = [_polish_own(job) for job in jobs]
+    for c, (parameters[c], rho, num) in enumerate(results):
+        log(f"channel {c}: {rho:.4f} after {num} evaluations")
 
     # 3. internal
     log("internal alignment")

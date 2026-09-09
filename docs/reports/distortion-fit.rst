@@ -52,8 +52,10 @@ data alone.
     payload pitch and yaw belong to the instrument, and a fit which lets
     them differ per channel is using them as stand-ins for the camera
     placement.  They are set to their mean over the channels and each
-    channel's own terms are polished again, at a cost of a few thousandths
-    in correlation.
+    channel's own terms are polished again, the channels side by side in
+    worker processes.  The polish costs nothing in correlation and gains a
+    few thousandths, since the polish of the absolute stage had not
+    converged.  About three hours.
 3.  **Internal.**  A fit against the proxy scene places a channel to about
     a pixel; the channels compared with one another on the sky plane resolve
     a tenth of a pixel.  :func:`esis.optics.align_channels` samples every

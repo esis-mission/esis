@@ -66,6 +66,7 @@ def combine(directory: pathlib.Path) -> None:
     ]
     _fits.fit_distortion_reference(
         device=DEVICE,
+        workers=WORKERS,
         channels=(),
         parameters=parameters,
         path=directory / "distortion_reference.ecsv",

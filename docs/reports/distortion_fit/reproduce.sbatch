@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=150G
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=%x_%A_%a.out
 # Reproduce the committed distortion fit on the cluster.
 #
