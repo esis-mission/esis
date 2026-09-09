@@ -134,8 +134,17 @@ Acceptance
 ----------
 
 The fit was accepted by inverting frames 14--16 with the MART pipeline at
-production scale, with the mapping of each stage in turn.  Every stage
-lowers the residual of every channel against the previously committed
-reference, and the internal alignment reduces the spurious velocity ramp
-across the field of view of every line: at O V from 5.2 to 1.4 km/s, at
-O III from 2.7 to 1.5, at O IV from 1.9 to 0.8.
+production scale, with the mapping of the committed tables installed in
+place of the previous reference.  Against the previous reference the
+residual of every channel falls on every frame, by 1.9 to 2.1 percent on
+channel 0, 2.5 to 2.7 on channel 1, 7.2 to 7.5 on channel 2 and 0.1 to 0.7
+on channel 3, which is more than the affine coalignment patch achieved on
+any channel.  The spurious velocity ramp across the field of view falls at
+every line: at O V from 5.2 to 2.3 km/s, at O III from 2.7 to 1.9, at O IV
+from 1.9 to 1.1, at Mg X from 0.31 to 0.14 and at He I from 0.60 to 0.27.
+
+During development the same chain, run from scripts on an earlier model of
+the instrument, reached ramps of 1.4, 1.5 and 0.8 km/s at O V, O III and
+O IV with a smaller improvement on channel 0; the committed tables come
+from the package pipeline on the as-built model of the flight, and are the
+ones the pipeline reproduces.
