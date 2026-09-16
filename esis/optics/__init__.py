@@ -16,16 +16,18 @@ from ._instruments import Instrument
 num_interpolation = 32
 """
 The number of nodes used to interpolate the response of each multilayer
-coating over the angle of incidence.
+coating, and of the sensor, over the angle of incidence.
 
-Solving the transfer matrices of a coating costs far more than the raytrace
-it belongs to, and the response is smooth in the angle of incidence, over
-which each ESIS surface spans only a few degrees.  Interpolating it reproduces
-the exact solve to better than a part in :math:`10^5` while making
+Solving the transfer matrices of a stack costs far more than the raytrace it
+belongs to, and the response is smooth in the angle of incidence, over which
+each ESIS surface spans only a few degrees.  Interpolating it reproduces the
+exact solve to better than a part in :math:`10^5` while making
 :meth:`optika.systems.SequentialSystem.linearize` about two and a half times
-faster.
+faster; the sensor, whose absorbance is the response of its oxide over its
+substrate, cost as much again as the two mirrors together until it was
+interpolated too.
 
-See :attr:`optika.materials.AbstractMultilayerMaterial.num_interpolation`.
+See :func:`optika.materials.multilayer_efficiency`.
 Set to :obj:`None` to solve every ray exactly, which is worth doing when
 checking a change to the optical model.
 """
