@@ -93,7 +93,9 @@ def test_align_channels():
     frame = merit.image(p_anchor)
     frame = np.asarray(na.value(frame).ndarray_aligned(("detector_y", "detector_x")))
 
+    messages = []
     aligned, medians = esis.optics.align_channels(
+        log=messages.append,
         instruments=[channel, channel],
         parameters=[p_anchor, p_wrong],
         frames=[frame, frame],
@@ -104,6 +106,7 @@ def test_align_channels():
         num_tile=4,
         num_pass=3,
     )
+    assert any("pass 0" in m for m in messages)
     assert medians[0] == 0
     assert medians[1] < 0.5
     # the anchor is untouched, and the shared optics of the other are too

@@ -1,3 +1,5 @@
+import dataclasses
+import pathlib
 import astropy.table
 import pytest
 import numpy as np
@@ -96,3 +98,37 @@ def test_pointing_relative():
     assert table["pitch"][1] == 2 * u.arcsec
     with pytest.raises(ValueError):
         _fits.pointing_relative(table, frame=7)
+
+
+def test_base():
+    instrument = _fits._base(None)
+    assert isinstance(instrument, esis.optics.Instrument)
+    assert na.shape(instrument.wavelength) == dict(wavelength=3)
+    # a given instrument is passed through untouched
+    assert _fits._base(instrument) is instrument
+
+
+def test_logger(tmp_path: pathlib.Path):
+    log = _fits._logger(tmp_path, "test")
+    log("hello")
+    assert "hello" in (tmp_path / "test.log").read_text()
+    # without a directory the logger only prints
+    _fits._logger(None, "test")("hello")
+
+
+def test_names_absolute():
+    instrument = esis.flights.f1.optics.design(num_distribution=0)[dict(channel=1)]
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    names = _fits._names_absolute(parameters)
+    assert names == tuple(f.name for f in dataclasses.fields(parameters))
+
+
+def test_frames_by_axis():
+    observation = na.ScalarArray(
+        np.arange(2 * 3 * 4).reshape(2, 3, 4) * u.DN,
+        axes=("channel", "detector_x", "detector_y"),
+    )
+    frames = _fits._frames_by_axis(observation, num_channel=2)
+    assert len(frames) == 2
+    assert frames[1].shape == (4, 3)
+    assert frames[1][0, 0] == 12

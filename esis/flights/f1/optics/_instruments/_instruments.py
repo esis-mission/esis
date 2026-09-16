@@ -703,7 +703,8 @@ def distortion_fit(
 
         rays = model.system.rayfunction_default.outputs
         position = rays.position.to(u.um).mean(axis=("pupil_x", "pupil_y"))
-        position = position / model.camera.sensor.width_pixel * u.pixel
+        position = na.nominal(position / model.camera.sensor.width_pixel) * u.pixel
+        unvignetted = na.nominal(rays.unvignetted)
 
         fig, ax = na.plt.subplots(
             figsize=(8, 17),
@@ -746,7 +747,7 @@ def distortion_fit(
                 color=colors[i],
                 ax=ax,
                 s=8,
-                where=rays.unvignetted[j],
+                where=unvignetted[j],
                 label=spectral_lines[i],
             )
         ax.ndarray[0].legend(loc="upper right");

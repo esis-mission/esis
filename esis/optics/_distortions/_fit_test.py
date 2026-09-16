@@ -1,3 +1,4 @@
+import astropy.units as u
 import pytest
 import dataclasses
 import numpy as np
@@ -105,4 +106,22 @@ def test_fit_distortion_free():
             parameters=parameters,
             bounds=(lower, upper),
             free=("nope",),
+        )
+
+
+def test_fit_distortion_free_needs_scalars():
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    # a field with a logical axis packs to more than one element per field
+    parameters = dataclasses.replace(
+        parameters,
+        pitch=na.ScalarArray(np.zeros(2), axes="channel") * u.arcsec,
+    )
+    bounds = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+    with pytest.raises(ValueError):
+        _fit.fit_distortion(
+            objective=lambda x: 0.0,
+            parameters=parameters,
+            bounds=bounds,
+            free=("pitch",),
         )

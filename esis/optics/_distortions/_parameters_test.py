@@ -1,3 +1,5 @@
+import dataclasses
+import pytest
 import pathlib
 import numpy as np
 import astropy.units as u
@@ -110,3 +112,16 @@ def test_from_file_without_sensor_terms(tmp_path: pathlib.Path):
     assert result.roll_sensor == 0 * u.deg
     assert np.all(result.yaw_grating == parameters.yaw_grating)
     assert len(lines) > 0
+
+
+def test_to_file_errors(tmp_path: pathlib.Path):
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    with pytest.raises(ValueError):
+        parameters.to_file(tmp_path / "a.ecsv", metadata=dict(axis="channel"))
+    two_axes = dataclasses.replace(
+        parameters,
+        pitch=na.ScalarArray(np.zeros((2, 3)), axes=("channel", "other")) * u.arcsec,
+    )
+    with pytest.raises(ValueError):
+        two_axes.to_file(tmp_path / "b.ecsv")
