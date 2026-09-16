@@ -245,6 +245,8 @@ def design_full(
         ),
         material=optika.sensors.materials.e2v_ccd97(
             temperature=-55 * u.deg_C,
+        ).replace(
+            num_interpolation=esis.optics.num_interpolation,
         ),
     )
 
