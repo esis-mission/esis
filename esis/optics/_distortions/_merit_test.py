@@ -136,3 +136,23 @@ def test_correlation_raytraced(merit):
         sigma_psf=2.0,
     )
     assert 0 < result <= 1
+
+
+def test_merit_propagates_faults(merit, monkeypatch):
+    m, truth = merit
+    x = na.pack(truth).ndarray
+
+    def bad(*args, **kwargs):
+        raise RuntimeError("no device")
+
+    monkeypatch.setattr(m, "correlation", bad)
+    with pytest.raises(RuntimeError):
+        m(x)
+
+    def off(*args, **kwargs):
+        raise ValueError("off the sensor")
+
+    failed = m.num_failed
+    monkeypatch.setattr(m, "correlation", off)
+    assert m(x) == 1.0
+    assert m.num_failed == failed + 1

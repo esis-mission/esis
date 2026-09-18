@@ -197,6 +197,9 @@ def fit_distortion(
     ValueError
         If `free` names a field `parameters` does not have, or if the fields
         of `parameters` are not scalars.
+    RuntimeError
+        If the objective already fails at the starting point, which is a
+        fault of the setup rather than a bad trial.
 
     Examples
     --------
@@ -249,7 +252,13 @@ def fit_distortion(
     x0, lb, ub = x0[index], lb[index], ub[index]
 
     time_start = time.perf_counter()
-    _log(log, f"start: {-objective(x0):.4f}")
+    failed_before = getattr(objective, "num_failed", 0)
+    fun_start = objective(x0)
+    if getattr(objective, "num_failed", 0) > failed_before:
+        raise RuntimeError(
+            "the objective fails at the starting point; nothing can be fit from it"
+        )
+    _log(log, f"start: {-fun_start:.4f}")
 
     generation = [0]
 
