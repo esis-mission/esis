@@ -96,12 +96,9 @@ def polish(
             best["fun"], best["x"] = f, np.array(x)
         return f
 
-    x = np.array(x0)
-    for i in range(num_round):
-        step = scale * (upper - lower)
-        step = np.where(x + step <= upper, step, -step)
+    def run(x: np.ndarray, step: np.ndarray) -> scipy.optimize.OptimizeResult:
         simplex = np.vstack([x] + [x + step * e for e in np.eye(len(x))])
-        result = scipy.optimize.minimize(
+        return scipy.optimize.minimize(
             tracked,
             x,
             method="Nelder-Mead",
@@ -114,6 +111,20 @@ def polish(
                 adaptive=True,
             ),
         )
+
+    x = np.array(x0)
+    for i in range(num_round):
+        step = scale * (upper - lower)
+        step = np.where(x + step <= upper, step, -step)
+        fun_before = best["fun"]
+        result = run(x, step)
+        if not best["fun"] < fun_before:
+            # every vertex of the simplex was worse than the start, which
+            # happens when the start sits against a guard of the objective
+            # that the steps walk into; the mirrored simplex looks the other
+            # way
+            step = np.where(x - step >= lower, -step, step)
+            result = run(x, step)
         _log(
             log,
             f"polish round {i + 1}: {-result.fun:.4f} after {result.nfev} evaluations",

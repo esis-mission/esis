@@ -125,3 +125,19 @@ def test_fit_distortion_free_needs_scalars():
             bounds=bounds,
             free=("pitch",),
         )
+
+
+def test_polish_mirrors_a_blocked_simplex():
+    # the objective is worst on one side of the start, where the inward
+    # steps of the simplex go; the mirrored simplex must find the descent
+    lower, upper = np.zeros(2), np.full(2, 10.0)
+    x0 = np.array([9.9, 9.9])
+
+    def objective(x):
+        if np.any(x < 9.9 - 1e-9):
+            return 1.0
+        return -float(np.sum(x))
+
+    x, fun, num = _fit.polish(objective, x0, lower, upper, scale=0.02, num_round=1)
+    assert fun < objective(x0)
+    assert np.all(x >= 9.9 - 1e-9)
