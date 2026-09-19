@@ -13,12 +13,13 @@ split across jobs.  Run one of::
     python reproduce.py gather <directory>        # pointing rows -> ECSV
 
 Environment: ESIS_DEVICE (default ``cuda``), ESIS_WORKERS (default 6),
-ESIS_FREE (comma-separated fields to fit per channel; default all).
+ESIS_FREE (colon-separated fields to fit per channel; default all).
 """
 
 import logging
 import os
 import pathlib
+import re
 import sys
 
 import astropy.table
@@ -31,9 +32,12 @@ logging.getLogger("numba").setLevel(logging.WARNING)
 
 DEVICE = os.environ.get("ESIS_DEVICE", "cuda")
 WORKERS = int(os.environ.get("ESIS_WORKERS", "6"))
-# ESIS_FREE names the fields fit per channel, comma separated; unset fits every field
+# ESIS_FREE names the fields fit per channel, separated by colons (a comma
+# would be split by Slurm's --export); unset fits every field
 FREE = (
-    tuple(os.environ["ESIS_FREE"].split(",")) if os.environ.get("ESIS_FREE") else None
+    tuple(n for n in re.split(r"[:,\s]+", os.environ["ESIS_FREE"]) if n)
+    if os.environ.get("ESIS_FREE")
+    else None
 )
 
 
