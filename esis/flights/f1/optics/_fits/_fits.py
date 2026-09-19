@@ -292,6 +292,7 @@ def fit_distortion_reference(
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
     parameters: None | list[esis.optics.DistortionParameters] = None,
+    free: None | tuple[str, ...] = None,
 ) -> esis.optics.DistortionParameters:  # pragma: nocover
     """
     Fit the reference distortion parameters of ESIS-I from the as-built model.
@@ -342,6 +343,11 @@ def fit_distortion_reference(
     directory
         A directory where the progress of every stage is logged.
         If :obj:`None`, the fit is not logged.
+    free
+        The names of the fields fit per channel, in every stage.  If
+        :obj:`None`, every field is fit in the absolute stage and every
+        field but the shared optics afterwards.  A smaller set holds the
+        others at their values in the as-built model.
     parameters
         The result of the absolute stage for every channel, if it was run
         by separate jobs; the absolute stage is then skipped for those
@@ -393,7 +399,7 @@ def fit_distortion_reference(
             parameters=p0,
             bounds=esis.flights.f1.optics.distortion_fit_bounds(p0),
             workers=workers,
-            free=_names_absolute(p0),
+            free=free if free is not None else _names_absolute(p0),
             log=log,
         )
     if any(p is None for p in parameters):
@@ -402,8 +408,9 @@ def fit_distortion_reference(
     # 2. shared
     parameters = enforce_shared(parameters)
     names = [f.name for f in dataclasses.fields(parameters[0])]
-    index_own = [i for i, n in enumerate(names) if n not in _SHARED]
-    log("polish of every channel with the shared optics fixed")
+    own = [n for n in names if n not in _SHARED and (free is None or n in free)]
+    index_own = [names.index(n) for n in own]
+    log("polish of every channel with the shared optics fixed: " + ", ".join(own))
     jobs = [
         (
             instrument[dict(channel=c)],
@@ -435,6 +442,7 @@ def fit_distortion_reference(
         frames=_frames_by_axis(observation, num_channel),
         scene_position=scene.inputs.position,
         wavelengths=_wavelengths_alignment(),
+        free=None if free is None else tuple(own),
         log=log,
     )
 

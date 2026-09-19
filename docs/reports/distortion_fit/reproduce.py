@@ -12,7 +12,8 @@ split across jobs.  Run one of::
     python reproduce.py pointing <t> <directory>  # per-frame pointing of frame t
     python reproduce.py gather <directory>        # pointing rows -> ECSV
 
-Environment: ESIS_DEVICE (default ``cuda``), ESIS_WORKERS (default 6).
+Environment: ESIS_DEVICE (default ``cuda``), ESIS_WORKERS (default 6),
+ESIS_FREE (comma-separated fields to fit per channel; default all).
 """
 
 import logging
@@ -30,6 +31,10 @@ logging.getLogger("numba").setLevel(logging.WARNING)
 
 DEVICE = os.environ.get("ESIS_DEVICE", "cuda")
 WORKERS = int(os.environ.get("ESIS_WORKERS", "6"))
+# ESIS_FREE names the fields fit per channel, comma separated; unset fits every field
+FREE = (
+    tuple(os.environ["ESIS_FREE"].split(",")) if os.environ.get("ESIS_FREE") else None
+)
 
 
 def channel(c: int, directory: pathlib.Path) -> None:
@@ -51,7 +56,7 @@ def channel(c: int, directory: pathlib.Path) -> None:
         parameters=p0,
         bounds=esis.flights.f1.optics.distortion_fit_bounds(p0),
         workers=WORKERS,
-        free=_fits._names_absolute(p0),
+        free=FREE if FREE is not None else _fits._names_absolute(p0),
         log=log,
     )
     fitted.to_file(directory / f"channel_{c}.ecsv", metadata=dict(channel=c))
@@ -69,6 +74,7 @@ def combine(directory: pathlib.Path) -> None:
         workers=WORKERS,
         channels=(),
         parameters=parameters,
+        free=FREE,
         path=directory / "distortion_reference.ecsv",
         directory=directory,
     )
