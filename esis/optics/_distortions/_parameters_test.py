@@ -125,3 +125,39 @@ def test_to_file_errors(tmp_path: pathlib.Path):
     )
     with pytest.raises(ValueError):
         two_axes.to_file(tmp_path / "b.ecsv")
+
+
+def test_roll_rotates_the_image():
+    """
+    An instrument roll must turn the image about the centre of the field.
+
+    The roll is a rigid rotation of the optics about the optical axis, which
+    passes through the field stop, so the image of the centre of the field
+    stays put while the corners move.  The optika releases 2.7.0 and 2.8.0
+    expressed the traced rays in the frame of the un-rolled sensor instead,
+    which turned a roll into a translation of the whole image by about 125 px
+    per degree; a reference fit made against that behaviour is silently
+    wrong on any other version.
+    """
+    instrument = _channel()
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    rolled = dataclasses.replace(parameters, roll=0.4 * u.deg)
+    wavelength = na.ScalarArray([584, 610, 630] * u.AA, axes=("wavelength",))
+    coordinates = na.SpectralPositionalVectorArray(
+        wavelength=wavelength,
+        position=na.Cartesian2dVectorArray(
+            x=na.linspace(-400, 400, axis="field_x", num=3) * u.arcsec,
+            y=na.linspace(-400, 400, axis="field_y", num=3) * u.arcsec,
+        ),
+    )
+
+    def image(p: esis.optics.DistortionParameters) -> na.Cartesian2dVectorArray:
+        model = p.to_instrument(instrument)
+        linear = model.system.linearize(wavelength=wavelength, degree=2)
+        return linear.distortion.distort(coordinates).position
+
+    shift = image(rolled) - image(parameters)
+    centre = shift[dict(field_x=1, field_y=1)]
+    corner = shift[dict(field_x=0, field_y=0)]
+    assert np.abs(centre.length.ndarray).max() < 0.5 * u.pix
+    assert np.abs(corner.length.ndarray).min() > 3 * u.pix
