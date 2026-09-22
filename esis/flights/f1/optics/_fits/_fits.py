@@ -198,21 +198,23 @@ def _polish_own(
     Parameters
     ----------
     job
-        The channel, its parameters, the scene, its frame, the device, and
-        the indices of the packed parameters that belong to the channel.
+        The channel, its parameters, the scene, its frame, the device,
+        the indices of the packed parameters that belong to the channel, and
+        the merit to maximize.
 
     Returns
     -------
     The polished parameters, their correlation, and the number of
     evaluations.
     """
-    instrument, parameters, scene, observation, device, index_own = job
+    instrument, parameters, scene, observation, device, index_own, merit = job
     merit = esis.optics.LinearMerit(
         instrument=instrument,
         parameters=parameters,
         scene=scene,
         observation=observation,
         device=device,
+        merit=merit,
     )
     lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
     lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
@@ -293,6 +295,7 @@ def fit_distortion_reference(
     directory: None | str | pathlib.Path = None,
     parameters: None | list[esis.optics.DistortionParameters] = None,
     free: None | tuple[str, ...] = None,
+    merit: str = "correlation",
 ) -> esis.optics.DistortionParameters:  # pragma: nocover
     """
     Fit the reference distortion parameters of ESIS-I from the as-built model.
@@ -348,6 +351,10 @@ def fit_distortion_reference(
         :obj:`None`, every field is fit in the absolute stage and every
         field but the shared optics afterwards.  A smaller set holds the
         others at their values in the as-built model.
+    merit
+        The comparison every stage maximizes, see
+        :class:`esis.optics.LinearMerit`: ``"correlation"`` or
+        ``"least_squares"``.
     parameters
         The result of the absolute stage for every channel, if it was run
         by separate jobs; the absolute stage is then skipped for those
@@ -386,16 +393,17 @@ def fit_distortion_reference(
     for c in channels:
         channel = instrument[dict(channel=c)]
         p0 = esis.optics.DistortionParameters.from_instrument(channel)
-        merit = esis.optics.LinearMerit(
+        objective = esis.optics.LinearMerit(
             instrument=channel,
             parameters=p0,
             scene=scene,
             observation=observation[dict(channel=c)],
             device=device,
+            merit=merit,
         )
         log(f"channel {c}: absolute fit")
         parameters[c] = esis.optics.fit_distortion(
-            objective=merit,
+            objective=objective,
             parameters=p0,
             bounds=esis.flights.f1.optics.distortion_fit_bounds(p0),
             workers=workers,
@@ -419,6 +427,7 @@ def fit_distortion_reference(
             observation[dict(channel=c)],
             device,
             index_own,
+            merit,
         )
         for c in range(num_channel)
     ]
@@ -478,6 +487,7 @@ def fit_distortion_pointing(
     frames: None | tuple[int, ...] = None,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
+    merit: str = "correlation",
 ) -> astropy.table.QTable:  # pragma: nocover
     r"""
     Fit the per-frame payload pointing of the whole flight.
@@ -505,6 +515,9 @@ def fit_distortion_pointing(
         the format of ``_data/distortion_pointing.ecsv``.
     directory
         A directory where the progress of every frame is logged.
+    merit
+        The comparison the pointing maximizes, see
+        :class:`esis.optics.LinearMerit`.
     frame_reference
         The frame the reference was fit to.  If it is among `frames`, its
         own offset is subtracted from every row, so that the table is
@@ -539,6 +552,7 @@ def fit_distortion_pointing(
                 scene=scene,
                 observation=observation[dict(channel=c)],
                 device=device,
+                merit=merit,
             )
             for c in range(num_channel)
         ]

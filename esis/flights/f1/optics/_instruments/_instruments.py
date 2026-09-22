@@ -871,6 +871,9 @@ def distortion_fit_bounds(
     yaw_sensor = about(p.yaw_sensor, 3 * u.deg)
     x_sensor = about(p.x_sensor, 5 * u.mm)
     y_sensor = about(p.y_sensor, 5 * u.mm)
+    degradation = absolute(
+        p.degradation, 0.1 * u.dimensionless_unscaled, 3 * u.dimensionless_unscaled
+    )
 
     lower = esis.optics.DistortionParameters(
         yaw_grating=yaw_grating[0],
@@ -888,6 +891,7 @@ def distortion_fit_bounds(
         yaw_sensor=yaw_sensor[0],
         x_sensor=x_sensor[0],
         y_sensor=y_sensor[0],
+        degradation=degradation[0],
     )
 
     upper = esis.optics.DistortionParameters(
@@ -906,6 +910,7 @@ def distortion_fit_bounds(
         yaw_sensor=yaw_sensor[1],
         x_sensor=x_sensor[1],
         y_sensor=y_sensor[1],
+        degradation=degradation[1],
     )
 
     return lower, upper

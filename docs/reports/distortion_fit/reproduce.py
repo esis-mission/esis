@@ -40,6 +40,10 @@ FREE = (
     else None
 )
 
+# ESIS_MERIT selects the comparison the fit maximizes: "correlation" (the
+# default) or "least_squares", which also fits the degradation of each channel
+MERIT = os.environ.get("ESIS_MERIT", "correlation")
+
 
 def channel(c: int, directory: pathlib.Path) -> None:
     """Fit one channel absolutely and save it as a one-row ECSV."""
@@ -54,6 +58,7 @@ def channel(c: int, directory: pathlib.Path) -> None:
         scene=scene,
         observation=observation[dict(channel=c)],
         device=DEVICE,
+        merit=MERIT,
     )
     fitted = esis.optics.fit_distortion(
         objective=merit,
@@ -64,7 +69,10 @@ def channel(c: int, directory: pathlib.Path) -> None:
         log=log,
     )
     fitted.to_file(directory / f"channel_{c}.ecsv", metadata=dict(channel=c))
-    log(f"channel {c}: {merit.correlation(fitted):.4f}")
+    log(
+        f"channel {c}: correlation {merit.correlation(fitted):.4f}, "
+        f"least-squares score {merit.score(fitted):.4f}"
+    )
 
 
 def combine(directory: pathlib.Path) -> None:
@@ -76,6 +84,7 @@ def combine(directory: pathlib.Path) -> None:
     _fits.fit_distortion_reference(
         device=DEVICE,
         workers=WORKERS,
+        merit=MERIT,
         channels=(),
         parameters=parameters,
         free=FREE,
@@ -92,6 +101,7 @@ def pointing(t: int, directory: pathlib.Path) -> None:
     _fits.fit_distortion_pointing(
         instrument=parameters.to_instrument(_fits._base(None)),
         device=DEVICE,
+        merit=MERIT,
         frames=(t,),
         path=directory / f"pointing_{t:02d}.ecsv",
         directory=directory,

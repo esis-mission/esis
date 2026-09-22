@@ -1,3 +1,4 @@
+import dataclasses
 import pytest
 import numpy as np
 import astropy.units as u
@@ -156,3 +157,34 @@ def test_merit_propagates_faults(merit, monkeypatch):
     monkeypatch.setattr(m, "correlation", off)
     assert m(x) == 1.0
     assert m.num_failed == failed + 1
+
+
+def test_least_squares():
+    a = na.ScalarArray(np.array([1.0, 2.0, 3.0]), axes=("x",))
+    assert _merit.least_squares(a, a) == 1
+    assert _merit.least_squares(2 * a, a) == 0
+    assert _merit.least_squares(3 * a, a) < 0
+    assert _merit.least_squares(a, 0 * a) == 1 - (a * a).sum()
+
+
+def test_score_sees_the_level(merit):
+    """The least-squares score, unlike the correlation, rewards the right level."""
+    m, truth = merit
+    dim = _merit.LinearMerit(
+        m.instrument,
+        m.parameters,
+        m.scene,
+        observation=0.5 * m.observation,
+        merit="least_squares",
+    )
+    faint = dataclasses.replace(truth, degradation=0.5 * u.dimensionless_unscaled)
+    assert dim.score(faint) > 0.999
+    assert dim.score(truth) < dim.score(faint)
+    assert dim.correlation(truth) == pytest.approx(dim.correlation(faint))
+    x = na.pack(faint).ndarray
+    assert dim(x) == pytest.approx(-dim.score(faint))
+
+
+def test_merit_unknown():
+    with pytest.raises(ValueError):
+        _merit.LinearMerit(None, None, None, None, merit="nonsense")

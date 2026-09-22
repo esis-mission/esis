@@ -127,6 +127,17 @@ class DistortionParameters(
     y_sensor: u.Quantity | na.AbstractScalar = 0 * u.mm
     """The in-plane translation of the sensor along its :math:`y` axis."""
 
+    degradation: u.Quantity | na.AbstractScalar = 1 * u.dimensionless_unscaled
+    """
+    The factor by which the channel's response falls short of the model.
+
+    A scale on the image rather than an optical parameter: it stands in for
+    whatever throughput the material models do not yet carry, so that a
+    merit which compares absolute intensities has one number per channel to
+    absorb the difference.  :meth:`to_instrument` leaves the instrument
+    untouched by it.
+    """
+
     @classmethod
     def from_instrument(
         cls,

@@ -10,6 +10,7 @@ import esis
 __all__ = [
     "LinearMerit",
     "correlation",
+    "least_squares",
 ]
 
 
@@ -63,6 +64,35 @@ def correlation(
     return (_standardize(a, axis) * _standardize(b, axis)).mean(axis)
 
 
+def least_squares(
+    a: na.AbstractScalar,
+    b: na.AbstractScalar,
+    axis: None | tuple[str, ...] = None,
+) -> na.AbstractScalar:
+    """
+    Compute one minus the squared difference of two arrays relative to the second.
+
+    Unlike :func:`correlation` this compares absolute intensities: the gain
+    and the offset of `a` are not free, so a model image is only rewarded
+    when it reproduces the level of the observation as well as its shape.
+    It is one at a perfect match and falls with the residual, so that it can
+    be maximized in place of the correlation.
+
+    Parameters
+    ----------
+    a
+        The model image.
+    b
+        The observation, whose power normalizes the residual.
+    axis
+        The logical axes along which to sum.
+        If :obj:`None`, every axis is used.
+    """
+    power = (b * b).sum(axis)
+    residual = ((a - b) * (a - b)).sum(axis)
+    return 1 - residual / np.where(power == 0, 1, power)
+
+
 def _host(a: na.AbstractScalar) -> na.ScalarArray:
     """Bring an array that may live on a device back to the host."""
     ndarray = a.ndarray
@@ -113,6 +143,13 @@ class LinearMerit:
         :meth:`optika.systems.AbstractLinearSystem.image`.
     degree
         The degree of the polynomial distortion model.
+    merit
+        Which comparison :meth:`__call__` maximizes: ``"correlation"``,
+        the Pearson correlation of :meth:`correlation`, or
+        ``"least_squares"``, the absolute comparison of :meth:`score`, which
+        lets the channel's
+        :attr:`~esis.optics.DistortionParameters.degradation` set the level
+        of the image.
     axis_wavelength
         The logical axis of the scene along which the wavelength varies
         within each spectral line.
@@ -128,6 +165,7 @@ class LinearMerit:
         observation: na.AbstractScalar,
         device: None | str = None,
         degree: int = 2,
+        merit: str = "correlation",
         axis_wavelength: str = "velocity",
         axis_field: tuple[str, str] = ("detector_x", "detector_y"),
     ):
@@ -136,6 +174,9 @@ class LinearMerit:
         self.observation = na.value(observation)
         self.device = device
         self.degree = degree
+        if merit not in ("correlation", "least_squares"):
+            raise ValueError(f"unknown merit {merit!r}")
+        self.merit = merit
         self.axis_wavelength = axis_wavelength
         self.axis_field = axis_field
         # the linear forward model wants spectral-positional coordinates
@@ -316,9 +357,29 @@ class LinearMerit:
         result = correlation(image, self.observation, self.axis_field)
         return float(na.value(result).ndarray)
 
+    def score(
+        self,
+        parameters: esis.optics.DistortionParameters,
+    ) -> float:
+        """
+        Compute the least-squares score of the linearized image against the observation.
+
+        The image is scaled by the channel's
+        :attr:`~esis.optics.DistortionParameters.degradation` before the
+        comparison, see :func:`least_squares`.
+
+        Parameters
+        ----------
+        parameters
+            The distortion parameters to apply to the channel.
+        """
+        image = self.image(parameters) * float(na.value(parameters.degradation))
+        result = least_squares(image, self.observation, self.axis_field)
+        return float(na.value(result).ndarray)
+
     def __call__(self, x: np.ndarray) -> float:
         """
-        Evaluate the negative correlation for a flat parameter vector.
+        Evaluate the negative merit for a flat parameter vector.
 
         A trial that cannot be imaged (rays off the stops, a singular
         polynomial fit, the scene off the sensor) is reported as the worst
@@ -334,6 +395,8 @@ class LinearMerit:
         parameters = na.unpack(np.asarray(x), self.parameters)
         self.num_calls += 1
         try:
+            if self.merit == "least_squares":
+                return -self.score(parameters)
             return -self.correlation(parameters)
         except (ValueError, np.linalg.LinAlgError, FloatingPointError):
             # a trial that cannot be imaged (off the sensor, a singular

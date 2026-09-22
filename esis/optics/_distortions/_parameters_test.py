@@ -26,7 +26,7 @@ def test_pack_round_trip():
     instrument = _channel()
     parameters = esis.optics.DistortionParameters.from_instrument(instrument)
     x = na.pack(parameters).ndarray
-    assert x.shape == (15,)
+    assert x.shape == (16,)
     result = na.unpack(x, parameters)
     for name in ("yaw_grating", "pitch", "z_sensor", "yaw_sensor"):
         assert getattr(result, name) == getattr(parameters, name)
@@ -104,12 +104,14 @@ def test_from_file_without_sensor_terms(tmp_path: pathlib.Path):
         "yaw_sensor",
         "x_sensor",
         "y_sensor",
+        "degradation",
     ):
         table.remove_column(name)
     table.write(path, format="ascii.ecsv", overwrite=True)
     result = esis.optics.DistortionParameters.from_file(path)
     assert result.z_sensor == 0 * u.mm
     assert result.roll_sensor == 0 * u.deg
+    assert result.degradation == 1
     assert np.all(result.yaw_grating == parameters.yaw_grating)
     assert len(lines) > 0
 
