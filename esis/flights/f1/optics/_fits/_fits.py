@@ -21,6 +21,9 @@ __all__ = [
 ]
 
 _SHARED = ("displacement_primary", "roll_field_stop", "pitch", "yaw")
+
+# the fields that do not move the mapping, which the alignment cannot use
+_PHOTOMETRIC = ("degradation",)
 """
 The parameters that belong to the instrument rather than to a channel.
 
@@ -451,7 +454,7 @@ def fit_distortion_reference(
         frames=_frames_by_axis(observation, num_channel),
         scene_position=scene.inputs.position,
         wavelengths=_wavelengths_alignment(),
-        free=None if free is None else tuple(own),
+        free=(None if free is None else tuple(n for n in own if n not in _PHOTOMETRIC)),
         log=log,
     )
 
