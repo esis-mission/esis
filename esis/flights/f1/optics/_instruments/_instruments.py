@@ -871,9 +871,9 @@ def distortion_fit_bounds(
     yaw_sensor = about(p.yaw_sensor, 3 * u.deg)
     x_sensor = about(p.x_sensor, 5 * u.mm)
     y_sensor = about(p.y_sensor, 5 * u.mm)
-    degradation = absolute(
-        p.degradation, 0.1 * u.dimensionless_unscaled, 3 * u.dimensionless_unscaled
-    )
+    # the level of the ideal-material model is hundreds of times that of the
+    # frame, so the box follows whatever estimate the parameters carry
+    degradation = (p.degradation / 3, p.degradation * 3)
 
     lower = esis.optics.DistortionParameters(
         yaw_grating=yaw_grating[0],
