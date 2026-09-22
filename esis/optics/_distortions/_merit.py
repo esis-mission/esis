@@ -3,6 +3,8 @@
 from __future__ import annotations
 from typing import Callable
 import numpy as np
+import astropy.units as u
+import scipy.ndimage
 import named_arrays as na
 import optika
 import esis
@@ -191,6 +193,62 @@ class LinearMerit:
         self.num_calls = 0
         self.num_failed = 0
         self.pupil_mask = self._pupil_mask(parameters.to_instrument(instrument))
+        # the level of the frame away from every window, which the image
+        # model cannot produce, is removed before any comparison
+        self.background = self._background(parameters)
+        self.observation = self.observation - self.background
+
+    def _background(
+        self,
+        parameters: esis.optics.DistortionParameters,
+        margin: int = 12,
+    ) -> float:
+        """
+        Estimate the level of the observation outside every window.
+
+        The image of the scene at the given parameters says where the
+        windows are; the median of the observation more than `margin`
+        pixels from any of them is the background.
+
+        Parameters
+        ----------
+        parameters
+            The distortion parameters that place the windows.
+        margin
+            The distance from a window, in pixels, beyond which the
+            observation is taken to be background.
+        """
+        axes = tuple(self.axis_field)
+        image = np.asarray(self.image(parameters).ndarray_aligned(axes))
+        observation = np.asarray(self.observation.ndarray_aligned(axes))
+        if observation.shape != image.shape:
+            # a placeholder observation, as a probe that only images has
+            return 0.0
+        lit = image > 1e-4 * image.max()
+        outside = ~scipy.ndimage.binary_dilation(lit, iterations=margin)
+        if not outside.any():
+            return 0.0
+        return float(np.median(observation[outside]))
+
+    def estimate_degradation(
+        self,
+        parameters: esis.optics.DistortionParameters,
+    ) -> u.Quantity:
+        """
+        Estimate the degradation that best scales the image onto the observation.
+
+        The least-squares gain of the image at the given parameters, whose
+        own degradation plays no part, which seeds a fit whose start knows
+        nothing about the level of the frame.
+
+        Parameters
+        ----------
+        parameters
+            The distortion parameters to image the scene with.
+        """
+        image = self.image(parameters)
+        gain = (image * self.observation).sum() / (image * image).sum()
+        return float(na.value(gain).ndarray) * u.dimensionless_unscaled
 
     def _pupil_mask(self, instrument) -> tuple[float, float]:
         """

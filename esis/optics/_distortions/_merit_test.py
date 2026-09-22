@@ -188,3 +188,20 @@ def test_score_sees_the_level(merit):
 def test_merit_unknown():
     with pytest.raises(ValueError):
         _merit.LinearMerit(None, None, None, None, merit="nonsense")
+
+
+def test_background_removed(merit):
+    """A pedestal on the frame is measured away from the windows and removed."""
+    m, truth = merit
+    lifted = _merit.LinearMerit(
+        m.instrument,
+        m.parameters,
+        m.scene,
+        observation=m.observation + 5,
+        merit="least_squares",
+    )
+    assert lifted.background == pytest.approx(5)
+    assert lifted.score(truth) > 0.999
+    assert lifted.estimate_degradation(truth).value == pytest.approx(1, abs=1e-3)
+    faint = dataclasses.replace(truth, degradation=0.5 * u.dimensionless_unscaled)
+    assert lifted.estimate_degradation(faint).value == pytest.approx(1, abs=1e-3)
