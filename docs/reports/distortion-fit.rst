@@ -4,6 +4,44 @@ Distortion fit
 How the distortion of ESIS-I is fit to the flight data, and how to reproduce
 the fit committed to the package.
 
+What the data determine
+-----------------------
+
+One Level-1 frame determines eight combinations of the parameters of a
+channel: two translations, the dispersion, two scales, a rotation, a shear
+and one more.  That is the result of a singular-value decomposition of the
+Jacobian of the sky-to-sensor mapping with respect to the fifteen optical
+parameters, sampled over the field at the three bright lines: eight singular
+values above forty pixels per half-box, then a cliff to below three.  The
+null directions are what one would guess.  The roll of the field stop moves
+only the edges of the windows.  The displacement of the primary trades
+against the focus-preserving distance of the sensor.  The in-plane position
+of the sensor trades against the grating's yaw and pitch, and both trade
+against the pointing: the mapping cannot tell a moved sky from a moved
+grating.  A global search over a set that contains null directions lands
+somewhere along them at random, and two seeds disagree by tens of pixels;
+over the nine terms that span the eight combinations without a null
+direction, two seeds agree to two hundredths in merit.
+
+Two things break the degeneracies the frame leaves.  The edges of the
+windows are the image of the field stop through the optics, and do not move
+when the pointing does, so they say where the grating and sensor put the
+image and leave the pointing to explain the rest.  Measured in every frame
+of the flight, they move by less than half a pixel in :math:`x` while the
+pointing sweeps seven arcseconds, and drift smoothly by two pixels in
+:math:`y` end to end, top and bottom together, which is the optics moving
+and is carried per frame.  And the channels compared with one another on
+the sky resolve a tenth of a pixel where the proxy scene resolves one.
+
+What the data do not determine is stated rather than fit.  The angle
+between the windows and the sky, which a roll of the instrument or of the
+field stop would set, changes the merit by less than three thousandths over
+four degrees and is held at the design.  The instrument roll is one number
+for the whole instrument and is held at zero; a per-channel value would be
+the azimuth of that channel's arm, which turns the window and the sky
+together and is the sensor's roll by another name.  The primary's
+displacement is the one shared quantity the windows do measure, see below.
+
 The merit
 ---------
 
@@ -11,140 +49,137 @@ The fit compares an image of the Sun seen by another instrument (the AIA
 proxy scene, :func:`esis.flights.f1.data.synth.scene_aia`) with a Level-1
 frame, after imaging the scene through the model of one channel.  The
 image is made by :class:`esis.optics.LinearMerit`: the channel is
-linearized (:meth:`optika.systems.SequentialSystem.linearize`), the scene
-is clipped by the field stop in object space, and it is regridded
-conservatively onto the sensor.  The merit is the Pearson correlation with
-the frame.
+linearized (:meth:`optika.systems.SequentialSystem.linearize`) with its
+field of view carried as the polygon its stop rays trace, so that every
+scene cell outside the field stop is blocked before the lines are summed,
+and the scene is regridded conservatively onto the sensor.  The merit is
+the Pearson correlation with the frame, or the least-squares score of
+:func:`esis.optics.least_squares`, which compares absolute intensities
+after the level of the frame outside every window is subtracted and lets
+one :attr:`~esis.optics.DistortionParameters.degradation` per channel set
+the level of the image.  Both give the same geometry within the
+acceptance test's noise; the least-squares score delivers the four
+degradations, which reproduce the factor of 1.6 between the channel pairs
+seen in the photon budget.
 
-Compared with the sparse ray trace this replaced, the linearized image has
-no sampling noise, so the merit is deterministic and smooth, and it needs no
-point-spread function: the footprint integral of the regrid is a physically
-sized smoothing of its own.  It is three times cheaper per evaluation, and
-the regrid runs on a GPU.  Applying the field stop per line, before the
-lines are summed, is what keeps each line's spill-over out of its
-neighbours' windows; a mask over the summed image does not.
+The edge pixels are 0.37 % of a window.  Moving only the edges by a pixel
+changes the correlation by 0.0003 to 0.0014; moving the whole image by a
+pixel changes it by 0.005.  The merit therefore cannot place the windows,
+which is why the edges are measured directly.
 
 The stages
 ----------
 
-:func:`esis.flights.f1.optics.fit_distortion_reference` runs three stages
+:func:`esis.flights.f1.optics.fit_distortion_reference` runs the stages
 from the as-built model (:func:`esis.flights.f1.optics.as_built`) and the
-data alone.
+data alone; the free set of every stage is recorded in the table it
+writes.
 
 1.  **Absolute.**  Each channel is fit on its own with
-    :func:`esis.optics.fit_distortion`: a seeded differential evolution with
-    a loose tolerance, which only has to land in the basin, followed by a
-    restarted Nelder-Mead polish.  The capture is required: from the
-    as-built model a local method alone fails on two channels of four, and
-    from starts displaced by a tenth of the bounds it fails five times in
-    twelve.  Because the merit is deterministic and the capture is seeded,
-    the stage is reproducible.  Every parameter is free here, the sensor
-    placement included.  Holding the sensor at its as-built value, so that
-    only the internal alignment would move it, was tried: on the as-built
-    model three channels of four then stall at 0.70 to 0.76 in correlation
-    where the full set reaches 0.78 to 0.82, and neither freeing the
-    focus-preserving distance alone nor starting from the design model
-    closes the gap.  The price is that the capture searches fifteen
-    dimensions, about two hours per channel on one GPU, and that the second,
-    smaller simplex of the polish is what carries channel 0 the last five
-    hundredths.
-2.  **Shared.**  The primary displacement, the field-stop roll and the
-    payload pitch and yaw belong to the instrument, and a fit which lets
-    them differ per channel is using them as stand-ins for the camera
-    placement.  They are set to their mean over the channels and each
-    channel's own terms are polished again, the channels side by side in
-    worker processes.  The polish costs nothing in correlation and gains a
-    few thousandths, since the polish of the absolute stage had not
-    converged.  About three hours.
-3.  **Internal.**  A fit against the proxy scene places a channel to about
-    a pixel; the channels compared with one another on the sky plane resolve
-    a tenth of a pixel.  :func:`esis.optics.align_channels` samples every
+    :func:`esis.optics.fit_distortion`: a seeded differential evolution
+    over the nine terms one frame determines (grating yaw and pitch, ruling
+    spacing, pointing pitch and yaw, and the sensor's focus-preserving
+    distance, roll, pitch and yaw), eighty generations of fifteen members
+    per dimension, then a restarted Nelder-Mead polish.  Every other term
+    stays at the as-built model.
+
+2.  **Edges.**  :func:`esis.flights.f1.optics.measure_window_edges` fits an
+    error-function step where each window's predicted outline crosses the
+    rows and columns of every frame whose signal is at least half the
+    flight's median, and takes the median over the frames per crossing,
+    with the per-frame departures kept as the drift of the windows.  The
+    middle window sits on its neighbours and is left out.
+
+3.  **Outline.**  :func:`esis.optics.fit_distortion_outline` places each
+    channel's windows on the median edges through the grating's yaw and
+    pitch and the sensor's roll, which move the windows without moving the
+    sky within them, then re-polishes the sky terms against the merit,
+    twice.
+
+4.  **Primary.**  Displacing the primary changes the scale of the sky on
+    the sensor and not the size of the windows; the focus-preserving sensor
+    move does the opposite.  With the sky's scale pinned by the merit, the
+    width of the windows against the edges therefore fixes the one
+    displacement the instrument has.  The scan tries a grid of
+    displacements, re-polishes every channel's scale terms at each, and
+    takes the one whose windows have the measured width.
+
+5.  **Shared.**  The primary displacement, the field-stop roll and the
+    payload pitch and yaw belong to the instrument.  The pointing is set to
+    its mean over the channels, the others to what the stages above left,
+    and each channel's grating and camera placement is polished again with
+    them fixed, the channels side by side in worker processes.
+
+6.  **Internal.**  :func:`esis.optics.align_channels` samples every
     channel's frame on a common sky grid through its own distortion at
     He I 584 and O V 630, measures the tile shifts against channel 1, and
-    solves for the increments of the grating and camera terms whose change
-    of the mapping reproduces the shifts.  Using two lines separates a
-    geometric error from a dispersion error.  Three passes of forty seconds
-    reach the floor of the measurement, about a fifth of a pixel.  The
-    pointing, the primary and the field stop are never revised by this
-    stage.
+    solves for the increments of the same terms whose change of the mapping
+    reproduces the shifts.  Using two lines separates a geometric error
+    from a dispersion error.
 
-The parameters
---------------
+7.  **Pointing.**  :func:`esis.flights.f1.optics.fit_distortion_pointing`
+    polishes the pitch, yaw and roll of every frame on the mean merit of
+    the four channels, with each channel's grating offset by that frame's
+    measured window drift first; both ride along in the pointing table for
+    :func:`esis.flights.f1.optics.distortion_fit` to apply.
 
-:class:`esis.optics.DistortionParameters` carries, per channel, the grating
-yaw, pitch and roll, the ruling spacing, the azimuth offset, and the sensor
-placement: a focus-preserving distance, roll, pitch, yaw, and in-plane
-translation.  The sensor terms are what let one channel's mapping differ
-from another's by a scale, an anisotropy and a rotation, which is what the
-internal alignment measures and which none of the other parameters can
-produce.  The distance is compound: the sensor moves by the parameter and
-the grating by :obj:`esis.optics.KAPPA_FOCUS` times less along the beam, so
-that the magnification changes without the focus.  The ratio is measured on
-the model as 16.9, the longitudinal magnification of a system with a
-magnification of four.
+8.  **Acceptance.**  :func:`esis.flights.f1.optics.acceptance` scores the
+    result on frames it was not fit to: the merit with each frame's
+    pointing applied, the median tile shift of every channel against
+    channel 1 at each aligned line, and the residual of the window outlines
+    and widths against the measured edges.  No inversion is involved.
 
 Reproducing the committed fit
 -----------------------------
 
 The scripts under ``docs/reports/distortion_fit`` run the stages on a
-Slurm cluster::
+Slurm cluster, in this order::
 
     sbatch --job-name=dist-channel --array=0-3 reproduce.sbatch channel <dir>
+    sbatch --job-name=dist-edges reproduce.sbatch edges <dir>
     sbatch --job-name=dist-combine reproduce.sbatch combine <dir>
     sbatch --job-name=dist-pointing --array=0-29 reproduce.sbatch pointing <dir>
     sbatch --job-name=dist-gather reproduce.sbatch gather <dir>
+    sbatch --job-name=dist-accept reproduce.sbatch accept <dir>
+    sbatch --job-name=dist-blink reproduce.sbatch blink <dir>
 
-The first produces one ECSV per channel, the second the committed
-``distortion_reference.ecsv``, the last two the committed
-``distortion_pointing.ecsv``: the payload pitch, yaw and roll of every
-frame relative to the reference frame, from a polish of the mean merit of
-the four channels in those three terms alone.  The fit of the reference
-frame by itself lands 0.3 arcsec in pitch, 0.1 arcsec in yaw and 12 arcsec
-in roll from the reference, which is the gap between the mean of four
-merits in three terms and every channel in every term; the table is taken
-relative to it so that the reference frame is zero.  The yaw sweeps from
-+3.6 arcsec at the first frame to -3.9 arcsec at the last.  The environment needs ``named_arrays`` and
-``optika`` with device support, ``regridding`` 3.4 with ``torch``, and a
-``numba`` that can see the CUDA driver.  Loading the Level-1 frames peaks
-above 100 GB of memory, which the job script asks for.
+The first produces one ECSV per channel; ``edges`` the median edges and
+the drift; ``combine`` runs the outline, primary, shared and internal
+stages into the committed ``distortion_reference.ecsv``; ``pointing`` and
+``gather`` the committed ``distortion_pointing.ecsv``; ``accept`` the
+acceptance table; and ``blink`` renders every frame beside its model for
+``blink.py page`` to bind into a page that blinks between them.  The
+environment needs the ``optika`` that carries the field of view on a
+linearized system and moves the optics rather than the object under a
+roll, ``named_arrays`` and ``regridding`` with device support, and a
+``numba`` that can see the CUDA driver; the exact versions the committed
+tables were made with are in their headers.  Loading the Level-1 frames
+peaks above 100 GB of memory, which the job script asks for.  End to end
+the chain is about a working day on the cluster: three to five hours for
+the capture, an hour for the edges, two to three for the combine, an hour
+for the pointing.
 
 Results
 -------
 
-The correlation of each channel with its frame after each stage of the
-reproduction on tempest, from the focused as-built model:
-
-===========  ======  ======  ======  ======
-stage         ch0     ch1     ch2     ch3
-===========  ======  ======  ======  ======
-as-built     0.350   0.419   0.404   0.379
-absolute     0.776   0.833   0.791   0.818
-shared       0.789   0.845   0.799   0.828
-aligned      0.787   0.845   0.796   0.826
-===========  ======  ======  ======  ======
-
-The shared stage costs nothing, and gains where the polish of the absolute
-stage had stopped early.  The alignment moves the median tile shift against
-channel 1 from 0.87, 0.78 and 1.31 px (channels 0, 2 and 3) to 0.24, 0.17
-and 0.23 px, at a cost of at most 0.0024 in correlation.  The stages are
-deterministic: the shared stage run twice, once serially and once in worker
-processes, gave the same correlations to four decimals.
+RESULTS_TABLE
 
 Acceptance
 ----------
 
-The fit was accepted by inverting frames 14--16 with the MART pipeline at
-production scale, with the mapping of the committed tables installed in
-place of the previous reference.  Against the previous reference the
-residual of every channel falls on every frame, by 1.9 to 2.1 percent on
-channel 0, 2.5 to 2.7 on channel 1, 7.2 to 7.5 on channel 2 and 0.1 to 0.7
-on channel 3, which is more than the affine coalignment patch achieved on
-any channel.  The spurious velocity ramp across the field of view falls at
-every line: at O V from 5.2 to 2.3 km/s, at O III from 2.7 to 1.9, at O IV
-from 1.9 to 1.1, at Mg X from 0.31 to 0.14 and at He I from 0.60 to 0.27.
+ACCEPTANCE_TABLE
 
-During development the same chain, run from scripts on an earlier model of
-the instrument, reached ramps of 1.4, 1.5 and 0.8 km/s at O V, O III and
-O IV with a smaller improvement on channel 0; the committed tables come
-from the package pipeline on the as-built model of the flight, and are the
-ones the pipeline reproduces.
+What remains open
+-----------------
+
+The fit model traces ideal materials, and its photometry is about ten
+times brighter than the V&R radiance and the effective area predict, so
+the degradations are not yet a throughput; that is a units or integration
+factor to find in the scene synthesis or the image operator before they
+are read as physics.  The model has no knob for a scale along :math:`y`
+alone, and the anisotropy of channels 0 and 3 is expressed through the
+sensor's yaw and distance; the physical candidate is the per-channel
+grating radius, which was measured and differs.  The reference is fit to
+one frame and scored on the others; a polish over several frames at once
+is the natural next step now that every stage takes the frame as a
+parameter.

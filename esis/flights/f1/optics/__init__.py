@@ -15,8 +15,10 @@ from ._instruments import (
     distortion_fit_bounds,
 )
 from ._fits import (
+    measure_window_edges,
     fit_distortion_reference,
     fit_distortion_pointing,
+    acceptance,
 )
 
 __all__ = [
@@ -31,6 +33,8 @@ __all__ = [
     "as_built",
     "distortion_fit",
     "distortion_fit_bounds",
+    "measure_window_edges",
     "fit_distortion_reference",
     "fit_distortion_pointing",
+    "acceptance",
 ]
