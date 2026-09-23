@@ -192,7 +192,6 @@ class LinearMerit:
         self.field_centers = self.scene.inputs.position.cell_centers(axis=axis_field)
         self.num_calls = 0
         self.num_failed = 0
-        self.pupil_mask = self._pupil_mask(parameters.to_instrument(instrument))
         # the level of the frame away from every window, which the image
         # model cannot produce, is removed before any comparison
         self.background = self._background(parameters)
@@ -250,60 +249,6 @@ class LinearMerit:
         gain = (image * self.observation).sum() / (image * image).sum()
         return float(na.value(gain).ndarray) * u.dimensionless_unscaled
 
-    def _pupil_mask(self, instrument) -> tuple[float, float]:
-        """
-        Choose the normalized pupil point of the chief rays used by the mask.
-
-        The field-stop mask traces one ray per scene cell, and that ray must
-        clear everything *except* the field stop.  The channels are rotated
-        copies of one another, so a fixed pupil point can land on the central
-        obscuration or a grating edge for some of them: pick, per channel,
-        the candidate that clears the most field.
-        """
-        best = None
-        for candidate in [(0.3, 0.3), (-0.3, 0.3), (0.3, -0.3), (-0.3, -0.3)]:
-            self.pupil_mask = candidate
-            fraction = float(
-                np.asarray(self.mask_field_stop(instrument).ndarray).mean()
-            )
-            if best is None or fraction > best[0]:
-                best = (fraction, candidate)
-        return best[1]
-
-    def mask_field_stop(self, instrument) -> na.AbstractScalar:
-        """
-        Which cells of the scene clear the field stop.
-
-        The stop sits before the grating, so this is the same octagon for
-        every spectral line; applying it in object space, before the
-        wavelength sum, is what keeps each line's spill-over out of its
-        neighbours' windows.
-
-        Parameters
-        ----------
-        instrument
-            The channel with the current parameters applied.
-        """
-        wavelength = instrument.wavelength
-        if "wavelength" in na.shape(wavelength):
-            wavelength = wavelength[dict(wavelength=~0)]
-        rays = instrument.system.rayfunction(
-            wavelength=wavelength,
-            field=self.field_centers,
-            pupil=na.Cartesian2dVectorArray(
-                x=na.ScalarArray(np.array([self.pupil_mask[0]]), axes="_pupil_mask_x"),
-                y=na.ScalarArray(np.array([self.pupil_mask[1]]), axes="_pupil_mask_y"),
-            ),
-            normalized_field=False,
-            normalized_pupil=True,
-            efficiency=False,
-        )
-        mask = rays.outputs.unvignetted
-        extra = tuple(set(na.shape(mask)) - set(self.axis_field))
-        if extra:
-            mask = mask.all(axis=extra)
-        return mask
-
     def linearize(self, instrument) -> optika.systems.LinearSystem:
         """
         Linearize the channel with the effective area pinned per line.
@@ -316,6 +261,7 @@ class LinearMerit:
         linear = instrument.system.linearize(
             wavelength=instrument.wavelength,
             degree=self.degree,
+            field_stop=True,
         )
         # the fit is geometric: every line shares one effective area, which
         # also removes the sampling scatter of the fitted area model
@@ -372,9 +318,7 @@ class LinearMerit:
         """
         instrument = parameters.to_instrument(self.instrument)
         linear = self.linearize(instrument)
-        mask = self.mask_field_stop(instrument)
-        scene = self.scene.copy_shallow()
-        scene.outputs = self.scene.outputs * mask
+        scene = self.scene
         self._check_on_sensor(linear)
         kwargs_device = dict() if self.device is None else dict(device=self.device)
         weights = linear.weights(
@@ -396,7 +340,6 @@ class LinearMerit:
             result = result.sum(axis=extra)
         # kept for callers that also need the mapping, e.g. the alignment
         self.linear = linear
-        self.mask = mask
         return result
 
     def correlation(

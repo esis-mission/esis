@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 import astropy.units as u
 import named_arrays as na
+import optika
 import esis
 from . import _merit
 
@@ -102,10 +103,17 @@ class TestLinearMerit:
         assert m(x) == 1.0
         assert m.num_failed >= 1
 
-    def test_mask(self, merit):
+    def test_field_stop(self, merit):
+        # the linearized channel carries the field of view, and it clips
+        # the scene: part of the field is inside it and part outside
         m, truth = merit
-        mask = m.mask_field_stop(truth.to_instrument(m.instrument))
-        fraction = float(np.asarray(mask.ndarray).mean())
+        linear = m.linearize(truth.to_instrument(m.instrument))
+        assert isinstance(linear.field_stop, optika.apertures.PolygonalAperture)
+        centers = m.field_centers
+        inside = linear.field_stop(
+            na.Cartesian3dVectorArray(x=centers.x, y=centers.y, z=0 * centers.x)
+        )
+        fraction = float(np.asarray(na.value(inside).ndarray).mean())
         assert 0.3 < fraction < 0.9
 
     def test_linearize_pins_area(self, merit):
