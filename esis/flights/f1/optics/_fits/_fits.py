@@ -395,6 +395,182 @@ def _outline_own(
     return result, -objective(na.pack(result).ndarray), residual, messages
 
 
+_PRIMARY_SCAN = tuple(d * u.mm for d in (-8, -6, -4, -2, 0))
+"""
+The primary-mirror displacements the shared stage tries.
+
+Displacing the primary changes the scale of the sky on the sensor and not
+the size of the windows, while the compound sensor move changes the size
+of the windows and not the scale of the sky.  With the sky's scale pinned
+by the merit, the width of the windows therefore measures the one shared
+displacement, about half a percent of width per five millimetres.
+"""
+
+
+def _width_own(
+    job: tuple,
+) -> tuple[esis.optics.DistortionParameters, float, float]:  # pragma: nocover
+    """
+    Re-polish one channel's scale terms at a given primary displacement.
+
+    A module-level function so that the channels can be sent to worker
+    processes.
+
+    Parameters
+    ----------
+    job
+        The channel, its parameters, the scene, its frame, the device, the
+        merit, its measured edges, and the names of the scale terms.
+
+    Returns
+    -------
+    The polished parameters, their merit, and the error of the window
+    widths.
+    """
+    instrument, parameters, scene, observation, device, merit, edges, terms = job
+    objective = esis.optics.LinearMerit(
+        instrument=instrument,
+        parameters=parameters,
+        scene=scene,
+        observation=observation,
+        device=device,
+        merit=merit,
+    )
+    names = [f.name for f in dataclasses.fields(parameters)]
+    index = np.array([names.index(n) for n in terms])
+    lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+    lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
+    x = na.pack(parameters).ndarray.copy()
+    y, fun, _ = _fit.polish(
+        _fit._Subset(objective, x.copy(), index),
+        x[index],
+        lb[index],
+        ub[index],
+        scale=0.01,
+        num_round=1,
+        maxfev=400,
+    )
+    x[index] = y
+    result = na.unpack(x, parameters)
+    linear = objective.linearize(result.to_instrument(instrument))
+    wavelength = instrument.wavelength
+    footprints = [
+        linear.footprint(wavelength[dict(wavelength=i)])
+        for i in range(na.shape(wavelength)["wavelength"])
+    ]
+    return result, -fun, esis.optics.width_residual(footprints, edges)
+
+
+def scan_primary(
+    instrument: esis.optics.Instrument,
+    parameters: list[esis.optics.DistortionParameters],
+    scene: na.FunctionArray,
+    observation: na.AbstractScalar,
+    edges: astropy.table.QTable,
+    displacements: tuple[u.Quantity, ...] = _PRIMARY_SCAN,
+    terms: tuple[str, ...] = ("z_sensor", "yaw_sensor", "pitch_sensor"),
+    device: None | str = None,
+    workers: int = 1,
+    merit: str = "correlation",
+    log: None | Callable[[str], None] = None,
+) -> tuple[
+    list[esis.optics.DistortionParameters], u.Quantity, list[float]
+]:  # pragma: nocover
+    """
+    Find the one primary displacement whose windows have the measured width.
+
+    At every trial displacement the scale terms of each channel are
+    re-polished against the merit, which pins the scale of the sky, and the
+    widths of the windows are compared with the measured edges.  The
+    displacement with the smallest summed width error wins, refined by a
+    parabola through its neighbours, and every channel is re-polished
+    there.
+
+    Parameters
+    ----------
+    instrument
+        The instrument model.
+    parameters
+        The parameters of every channel.
+    scene
+        The scene of the reference frame.
+    observation
+        The reference frame of every channel.
+    edges
+        The measured edges of every channel's windows.
+    displacements
+        The displacements to try.
+    terms
+        The names of the terms re-polished at every displacement.
+    device
+        The device the merit runs on.
+    workers
+        The number of channels polished side by side.
+    merit
+        The comparison the polish maximizes.
+    log
+        A callable that records progress.
+
+    Returns
+    -------
+    The parameters of every channel at the winning displacement, the
+    displacement, and the width errors of every trial.
+    """
+    num_channel = len(parameters)
+
+    def trial(displacement: u.Quantity) -> list[tuple]:
+        jobs = []
+        for c in range(num_channel):
+            p = copy.copy(parameters[c])
+            p.displacement_primary = displacement
+            jobs.append(
+                (
+                    instrument[dict(channel=c)],
+                    p,
+                    scene,
+                    observation[dict(channel=c)],
+                    device,
+                    merit,
+                    edges[np.asarray(edges["channel"]) == c],
+                    terms,
+                )
+            )
+        if workers > 1:
+            with multiprocessing.get_context("spawn").Pool(
+                min(workers, num_channel)
+            ) as pool:
+                return pool.map(_width_own, jobs)
+        return [_width_own(job) for job in jobs]
+
+    errors = []
+    for displacement in displacements:
+        results = trial(displacement)
+        error = float(np.sqrt(np.mean([r[2] ** 2 for r in results])))
+        errors.append(error)
+        if log is not None:
+            log(
+                f"primary {displacement:+.2f}: width error {error:.2f} px "
+                "("
+                + ", ".join(f"{r[2]:.2f}" for r in results)
+                + "), merit "
+                + ", ".join(f"{r[1]:.4f}" for r in results)
+            )
+    values = u.Quantity(displacements)
+    k = int(np.argmin(errors))
+    best = values[k]
+    if 0 < k < len(errors) - 1:
+        # a parabola through the minimum and its neighbours
+        y0, y1, y2 = errors[k - 1], errors[k], errors[k + 1]
+        denominator = y0 - 2 * y1 + y2
+        if denominator > 0:
+            step = values[k + 1] - values[k]
+            best = values[k] + 0.5 * (y0 - y2) / denominator * step
+    if log is not None:
+        log(f"primary: {best:+.2f} from the width of the windows")
+    results = trial(best)
+    return [r[0] for r in results], best, errors
+
+
 def _versions() -> dict[str, str]:
     """Record the versions of the packages the fit ran on."""
     result = {}
@@ -586,6 +762,7 @@ def fit_distortion_reference(
     edges: None | str | pathlib.Path | astropy.table.QTable = None,
     window: tuple[str, ...] = _WINDOW,
     sky: tuple[str, ...] = _SKY,
+    primary: bool = True,
     merit: str = "correlation",
     popsize: int = 15,
     maxiter: int = 80,
@@ -658,6 +835,9 @@ def fit_distortion_reference(
     sky
         The names of the fields the outline stage re-polishes against the
         merit.
+    primary
+        Whether to find the shared primary displacement from the width of
+        the windows, see :func:`scan_primary`; needs `edges`.
     merit
         The comparison every stage maximizes, see
         :class:`esis.optics.LinearMerit`: ``"correlation"`` or
@@ -775,6 +955,26 @@ def fit_distortion_reference(
             residuals.append(residual)
         scores["outline"] = dict(merit=[float(r[1]) for r in results], edges=residuals)
 
+    # 1c. the shared primary, from the width of the windows
+    displacement = None
+    if edges is not None and primary:
+        parameters, displacement, widths = scan_primary(
+            instrument=instrument,
+            parameters=parameters,
+            scene=scene,
+            observation=observation,
+            edges=edges,
+            device=device,
+            workers=workers,
+            merit=merit,
+            log=log,
+        )
+        scores["primary"] = dict(
+            displacements=[float(d.to_value(u.mm)) for d in _PRIMARY_SCAN],
+            widths=widths,
+            displacement=float(displacement.to_value(u.mm)),
+        )
+
     # 2. shared
     parameters = enforce_shared(parameters)
     names = [f.name for f in dataclasses.fields(parameters[0])]
@@ -857,6 +1057,14 @@ def fit_distortion_reference(
                     outline=(
                         dict(window=list(window), sky=list(sky), edges=residuals)
                         if edges is not None
+                        else None
+                    ),
+                    primary=(
+                        dict(
+                            displacement=float(displacement.to_value(u.mm)),
+                            scan=[float(d.to_value(u.mm)) for d in _PRIMARY_SCAN],
+                        )
+                        if displacement is not None
                         else None
                     ),
                     shared=dict(free=list(own), fixed=list(_SHARED)),

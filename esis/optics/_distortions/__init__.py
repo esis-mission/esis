@@ -22,6 +22,7 @@ from ._outline import (
     measure_edges,
     predict_edges,
     outline_residual,
+    width_residual,
     fit_distortion_outline,
 )
 
@@ -41,5 +42,6 @@ __all__ = [
     "measure_edges",
     "predict_edges",
     "outline_residual",
+    "width_residual",
     "fit_distortion_outline",
 ]

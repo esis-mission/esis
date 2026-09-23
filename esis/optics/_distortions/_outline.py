@@ -28,6 +28,7 @@ __all__ = [
     "measure_edges",
     "predict_edges",
     "outline_residual",
+    "width_residual",
     "fit_distortion_outline",
 ]
 
@@ -283,6 +284,49 @@ def outline_residual(
     if finite.mean() < 0.9:
         return float(clip)
     clipped = np.minimum(np.abs(residual[finite]), clip)
+    return float(np.sqrt(np.mean(clipped**2)))
+
+
+def width_residual(
+    footprints: list[na.AbstractCartesian2dVectorArray],
+    edges: astropy.table.QTable,
+    clip: float = 3.0,
+) -> float:
+    """
+    Compute the root-mean-square error of the width of every window.
+
+    The width across a row is the right crossing minus the left, and down
+    a column the bottom minus the top, measured and modelled at the same
+    rows and columns, so the residual is blind to where a window sits and
+    sees only how large it is.  Every error is clipped at `clip` pixels.
+
+    Parameters
+    ----------
+    footprints
+        The predicted outline of each window, in pixels.
+    edges
+        Measured crossings, see :func:`measure_edges`.
+    clip
+        The error, in pixels, beyond which a width counts as no worse.
+    """
+    model = predict_edges(footprints, edges)
+    measured = edges["position"].to_value(u.pix)
+    line = np.asarray(edges["line"])
+    side = np.asarray(edges["side"])
+    index = np.asarray(edges["index"])
+    errors = []
+    for low, high in ((0, 1), (2, 3)):
+        a = {(line[k], index[k]): k for k in np.where(side == low)[0]}
+        b = {(line[k], index[k]): k for k in np.where(side == high)[0]}
+        for key in a.keys() & b.keys():
+            i, j = a[key], b[key]
+            width_model = model[j] - model[i]
+            width_measured = measured[j] - measured[i]
+            if np.isfinite(width_model):
+                errors.append(width_model - width_measured)
+    if len(errors) < 10:
+        return float(clip)
+    clipped = np.minimum(np.abs(np.asarray(errors)), clip)
     return float(np.sqrt(np.mean(clipped**2)))
 
 

@@ -53,6 +53,17 @@ def test_measure_and_predict_edges():
     assert _outline.outline_residual([_octagon(300, 900, 120)], edges) == 3.0
 
 
+def test_width_residual():
+    footprint = _octagon(300, 200, 120)
+    edges = _outline.measure_edges(_frame(footprint), [footprint])
+    assert _outline.width_residual([footprint], edges) < 0.2
+    # a moved window has the same width, a larger one does not
+    assert _outline.width_residual([_octagon(303, 202, 120)], edges) < 0.2
+    larger = _outline.width_residual([_octagon(300, 200, 121)], edges)
+    assert 1.5 < larger < 2.5
+    assert _outline.width_residual([_octagon(900, 900, 120)], edges) == 3.0
+
+
 def test_edges_of_a_model_image(merit):  # noqa: F811
     # the edges measured on a channel's own image sit on the footprint of
     # the parameters that made it, up to the staircase of the coarse scene
