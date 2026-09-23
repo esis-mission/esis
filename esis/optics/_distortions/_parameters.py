@@ -92,11 +92,14 @@ class DistortionParameters(
 
     roll: u.Quantity | na.AbstractScalar
     """
-    The roll angle of the entire instrument.
+    The roll angle of the entire instrument about its optical axis.
 
-    In the flight-1 model this is defined per channel as the offset from that
-    channel's grating azimuth, so it is a grating placement term rather than
-    a quantity shared by the channels.
+    A roll turns the sky inside windows that stay put, since the field stop
+    turns with the optics, so it sets the angle between every window and
+    the sky.  That angle is one number for the whole instrument, the same
+    as a roll of the field stop with the opposite sign, and the reference
+    fit holds it at zero: one frame cannot tell the two apart, and neither
+    is measurable to better than a degree from the images.
     """
 
     z_sensor: u.Quantity | na.AbstractScalar = 0 * u.mm

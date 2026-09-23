@@ -5,6 +5,7 @@ from typing import Callable
 import copy
 import dataclasses
 import datetime
+import importlib.metadata
 import multiprocessing
 import pathlib
 import numpy as np
@@ -16,6 +17,7 @@ import esis
 from esis.optics._distortions import _fit
 
 __all__ = [
+    "measure_window_edges",
     "fit_distortion_reference",
     "fit_distortion_pointing",
 ]
@@ -24,6 +26,59 @@ _SHARED = ("displacement_primary", "roll_field_stop", "pitch", "yaw")
 
 # the fields that do not move the mapping, which the alignment cannot use
 _PHOTOMETRIC = ("degradation",)
+
+_FREE_ABSOLUTE = (
+    "yaw_grating",
+    "pitch_grating",
+    "spacing_rulings",
+    "pitch",
+    "yaw",
+    "z_sensor",
+    "roll_sensor",
+    "pitch_sensor",
+    "yaw_sensor",
+)
+"""
+The terms the absolute stage searches.
+
+One frame determines eight combinations of the parameters of a channel:
+two translations, the dispersion, two scales, a rotation, a shear and one
+more.  These nine terms span them with no null direction, which is what
+lets a global search land on the same solution from any seed; every
+larger set adds directions the frame cannot see and captures unreliably.
+"""
+
+_WINDOW = ("yaw_grating", "pitch_grating", "roll_sensor")
+"""
+The terms the outline stage fits to the window edges.
+
+They move the image of the field stop on the sensor without moving the
+sky within it, which the merit cannot see and the edges can.
+"""
+
+_SKY = ("spacing_rulings", "pitch", "yaw", "z_sensor", "yaw_sensor", "pitch_sensor")
+"""The terms the outline stage re-polishes against the merit."""
+
+_FREE_SHARED = (
+    "yaw_grating",
+    "pitch_grating",
+    "roll_grating",
+    "spacing_rulings",
+    "z_sensor",
+    "roll_sensor",
+    "pitch_sensor",
+    "yaw_sensor",
+    "x_sensor",
+    "y_sensor",
+)
+"""
+The terms of each channel polished with the shared optics fixed.
+
+The grating placement and the whole camera placement: what lets one
+channel's mapping differ from another's by a scale, an anisotropy and a
+rotation, which the internal alignment measures.  The instrument roll is
+not among them, see :attr:`esis.optics.DistortionParameters.roll`.
+"""
 """
 The parameters that belong to the instrument rather than to a channel.
 
@@ -219,6 +274,10 @@ def _polish_own(
         device=device,
         merit=merit,
     )
+    if merit.merit == "least_squares" and np.all(na.value(parameters.degradation) == 1):
+        # a start that knows nothing about the level of the frame
+        parameters = copy.copy(parameters)
+        parameters.degradation = merit.estimate_degradation(parameters)
     lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
     lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
     x_full = na.pack(parameters).ndarray
@@ -287,6 +346,231 @@ def _stack(
     return type(parameters[0])(**fields)
 
 
+def _outline_own(
+    job: tuple,
+) -> tuple[
+    esis.optics.DistortionParameters, float, float, list[str]
+]:  # pragma: nocover
+    """
+    Place one channel's windows on its measured edges.
+
+    A module-level function so that the channels can be sent to worker
+    processes.
+
+    Parameters
+    ----------
+    job
+        The channel, its parameters, the scene, its frame, the device, the
+        merit, its measured edges, and the window and sky terms.
+
+    Returns
+    -------
+    The parameters, their merit, the edge residual, and the log messages.
+    """
+    instrument, parameters, scene, observation, device, merit, edges, window, sky = job
+    objective = esis.optics.LinearMerit(
+        instrument=instrument,
+        parameters=parameters,
+        scene=scene,
+        observation=observation,
+        device=device,
+        merit=merit,
+    )
+    messages = []
+    result = esis.optics.fit_distortion_outline(
+        objective,
+        edges,
+        window=window,
+        sky=sky,
+        bounds=esis.flights.f1.optics.distortion_fit_bounds(parameters),
+        log=messages.append,
+    )
+    linear = objective.linearize(result.to_instrument(instrument))
+    wavelength = instrument.wavelength
+    footprints = [
+        linear.footprint(wavelength[dict(wavelength=i)])
+        for i in range(na.shape(wavelength)["wavelength"])
+    ]
+    residual = esis.optics.outline_residual(footprints, edges)
+    return result, -objective(na.pack(result).ndarray), residual, messages
+
+
+def _versions() -> dict[str, str]:
+    """Record the versions of the packages the fit ran on."""
+    result = {}
+    for name in (
+        "euv-snapshot-imaging-spectrograph",
+        "optika",
+        "named-arrays",
+        "regridding",
+    ):
+        try:
+            result[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            result[name] = "unknown"
+    return result
+
+
+def measure_window_edges(
+    parameters: list[esis.optics.DistortionParameters],
+    instrument: None | esis.optics.Instrument = None,
+    num_scene: int = 401,
+    frames: None | tuple[int, ...] = None,
+    threshold: float = 0.5,
+    lines: tuple[int, ...] = (0, 2),
+    error_max: u.Quantity = 1 * u.pix,
+    directory: None | str | pathlib.Path = None,
+    path: None | str | pathlib.Path = None,
+    path_drift: None | str | pathlib.Path = None,
+) -> tuple[astropy.table.QTable, astropy.table.QTable]:  # pragma: nocover
+    """
+    Measure the edges of every window in every frame of the flight.
+
+    The windows are the image of the field stop, and do not move with the
+    pointing, so the same edge is measured once per frame against a
+    different backdrop of solar structure each time and the median over the
+    frames is what the outline stage fits.  The per-frame departures from
+    that median are kept too, as the drift of the windows through the
+    flight.
+
+    Parameters
+    ----------
+    parameters
+        The parameters of every channel, which place the outlines the
+        edges are searched near.
+    instrument
+        The instrument model, see :func:`fit_distortion_reference`.
+    num_scene
+        The number of samples along each axis of the resampled scene, which
+        sets the grid the channel is linearized on.
+    frames
+        The frames to measure.  If :obj:`None`, every frame whose mean
+        signal exceeds `threshold` times the median over the flight.
+    threshold
+        The fraction of the flight's median signal below which a frame is
+        left out.
+    lines
+        The indices of the spectral lines whose windows are measured; the
+        middle window of ESIS-I sits on its neighbours and is left out.
+    error_max
+        Crossings with a larger formal error are left out of the median.
+    directory
+        The directory the log is written to.
+    path
+        Where to save the median edges, if anywhere.
+    path_drift
+        Where to save the per-frame drift, if anywhere.
+
+    Returns
+    -------
+    The median edges, one row per channel, line, side and row or column,
+    and the drift, one row per channel, frame and side.
+    """
+    instrument = _base(instrument)
+    num_channel = instrument.camera.channel.shape["channel"]
+    log = _logger(directory, "edges")
+    level_1 = esis.flights.f1.data.level_1()
+    axes = ("time", "channel", "detector_y", "detector_x")
+    data = np.asarray(na.value(level_1.outputs).ndarray_aligned(axes), dtype=float)
+    signal = data.mean(axis=(2, 3))
+    if frames is None:
+        kept = np.all(signal > threshold * np.median(signal, axis=0), axis=1)
+        frames = tuple(int(t) for t in np.where(kept)[0])
+    log(f"frames kept: {', '.join(str(t) for t in frames)}")
+    scene, observation = _frame(15, num_scene)
+    tables = []
+    for c in range(num_channel):
+        channel = instrument[dict(channel=c)]
+        merit = esis.optics.LinearMerit(
+            instrument=channel,
+            parameters=parameters[c],
+            scene=scene,
+            observation=observation[dict(channel=c)],
+        )
+        linear = merit.linearize(parameters[c].to_instrument(channel))
+        wavelength = channel.wavelength
+        footprints = [
+            linear.footprint(wavelength[dict(wavelength=i)])
+            for i in range(na.shape(wavelength)["wavelength"])
+        ]
+        for t in frames:
+            edges = esis.optics.measure_edges(data[t, c], footprints)
+            edges = edges[np.isin(edges["line"], lines)]
+            edges["frame"] = t
+            edges["channel"] = c
+            tables.append(edges)
+            log(f"frame {t} channel {c}: {len(edges)} crossings")
+    every = astropy.table.vstack(tables)
+    every = every[every["error"] < error_max]
+    keys = np.stack(
+        [np.asarray(every[k]) for k in ("channel", "line", "side", "index")],
+        axis=1,
+    )
+    unique, inverse = np.unique(keys, axis=0, return_inverse=True)
+    position = np.asarray(every["position"].to_value(u.pix))
+    order = np.argsort(inverse, kind="stable")
+    bounds = np.searchsorted(inverse[order], np.arange(len(unique) + 1))
+    rows = []
+    center = np.empty(len(every))
+    for g in range(len(unique)):
+        members = order[bounds[g] : bounds[g + 1]]
+        values = position[members]
+        median = float(np.median(values))
+        spread = 1.4826 * float(np.median(np.abs(values - median)))
+        rows.append((*unique[g], median, spread / np.sqrt(len(values)), len(values)))
+        center[members] = median
+    median_edges = astropy.table.QTable(
+        rows=rows,
+        names=("channel", "line", "side", "index", "position", "error", "num"),
+        dtype=(int, int, int, int, float, float, int),
+    )
+    median_edges["position"].unit = u.pix
+    median_edges["error"].unit = u.pix
+    departure = position - center
+    drift_rows = []
+    for c in range(num_channel):
+        for t in frames:
+            for side in range(4):
+                sel = (
+                    (np.asarray(every["channel"]) == c)
+                    & (np.asarray(every["frame"]) == t)
+                    & (np.asarray(every["side"]) == side)
+                )
+                if sel.any():
+                    drift_rows.append(
+                        (c, t, side, float(np.median(departure[sel])), int(sel.sum()))
+                    )
+    drift = astropy.table.QTable(
+        rows=drift_rows,
+        names=("channel", "frame", "side", "shift", "num"),
+        dtype=(int, int, int, float, int),
+    )
+    drift["shift"].unit = u.pix
+    meta = dict(
+        description=(
+            "Where the edges of each window cross the rows and columns of the "
+            "ESIS-I frames."
+        ),
+        frames=list(frames),
+        lines=list(lines),
+        error_max=float(error_max.to_value(u.pix)),
+        sides=list(esis.optics.SIDES),
+        date=datetime.datetime.now().isoformat(timespec="seconds"),
+        versions=_versions(),
+    )
+    median_edges.meta.update(meta)
+    drift.meta.update(meta)
+    drift.meta["description"] = (
+        "The departure of each window's edges from their flight median, per frame."
+    )
+    if path is not None:
+        median_edges.write(path, format="ascii.ecsv", overwrite=True)
+    if path_drift is not None:
+        drift.write(path_drift, format="ascii.ecsv", overwrite=True)
+    log(f"{len(median_edges)} median edges, {len(drift)} drift rows")
+    return median_edges, drift
+
+
 def fit_distortion_reference(
     instrument: None | esis.optics.Instrument = None,
     time: int = 15,
@@ -297,8 +581,16 @@ def fit_distortion_reference(
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
     parameters: None | list[esis.optics.DistortionParameters] = None,
-    free: None | tuple[str, ...] = None,
+    free_absolute: tuple[str, ...] = _FREE_ABSOLUTE,
+    free_shared: tuple[str, ...] = _FREE_SHARED,
+    edges: None | str | pathlib.Path | astropy.table.QTable = None,
+    window: tuple[str, ...] = _WINDOW,
+    sky: tuple[str, ...] = _SKY,
     merit: str = "correlation",
+    popsize: int = 15,
+    maxiter: int = 80,
+    tol: float = 0.0,
+    seed: int = 0,
 ) -> esis.optics.DistortionParameters:  # pragma: nocover
     """
     Fit the reference distortion parameters of ESIS-I from the as-built model.
@@ -349,15 +641,36 @@ def fit_distortion_reference(
     directory
         A directory where the progress of every stage is logged.
         If :obj:`None`, the fit is not logged.
-    free
-        The names of the fields fit per channel, in every stage.  If
-        :obj:`None`, every field is fit in the absolute stage and every
-        field but the shared optics afterwards.  A smaller set holds the
-        others at their values in the as-built model.
+    free_absolute
+        The names of the fields the absolute stage searches, per channel.
+        The default is the nine terms one frame determines.
+    free_shared
+        The names of the fields polished per channel with the shared optics
+        fixed, and refit by the alignment.  The default is the grating and
+        camera placement.  With the least-squares merit the degradation is
+        polished too.
+    edges
+        The measured edges of the windows, see :func:`measure_window_edges`,
+        or the path of their table.  If given, an outline stage places each
+        channel's windows on them between the absolute and shared stages.
+    window
+        The names of the fields the outline stage fits to the edges.
+    sky
+        The names of the fields the outline stage re-polishes against the
+        merit.
     merit
         The comparison every stage maximizes, see
         :class:`esis.optics.LinearMerit`: ``"correlation"`` or
         ``"least_squares"``.
+    popsize
+        The population of the capture of the absolute stage, per dimension.
+    maxiter
+        The number of generations of the capture.
+    tol
+        The tolerance at which the capture stops early; zero runs every
+        generation.
+    seed
+        The seed of the capture.
     parameters
         The result of the absolute stage for every channel, if it was run
         by separate jobs; the absolute stage is then skipped for those
@@ -410,16 +723,64 @@ def fit_distortion_reference(
             parameters=p0,
             bounds=esis.flights.f1.optics.distortion_fit_bounds(p0),
             workers=workers,
-            free=free if free is not None else _names_absolute(p0),
+            free=free_absolute,
+            popsize=popsize,
+            maxiter=maxiter,
+            tol=tol,
+            seed=seed,
             log=log,
         )
     if any(p is None for p in parameters):
         raise ValueError("every channel needs parameters before the shared stage")
+    scores = dict(absolute=[None] * num_channel)
+
+    # 1b. outline
+    residuals = None
+    if edges is not None:
+        if not isinstance(edges, astropy.table.QTable):
+            edges = astropy.table.QTable.read(edges, format="ascii.ecsv")
+        log(
+            "outline: "
+            + ", ".join(window)
+            + " on the edges; "
+            + ", ".join(sky)
+            + " on the merit"
+        )
+        jobs = [
+            (
+                instrument[dict(channel=c)],
+                parameters[c],
+                scene,
+                observation[dict(channel=c)],
+                device,
+                merit,
+                edges[np.asarray(edges["channel"]) == c],
+                window,
+                sky,
+            )
+            for c in range(num_channel)
+        ]
+        if workers > 1:
+            with multiprocessing.get_context("spawn").Pool(
+                min(workers, num_channel)
+            ) as pool:
+                results = pool.map(_outline_own, jobs)
+        else:
+            results = [_outline_own(job) for job in jobs]
+        residuals = []
+        for c, (parameters[c], rho, residual, messages) in enumerate(results):
+            for message in messages:
+                log(f"channel {c}: {message}")
+            log(f"channel {c}: {rho:.4f}, edge residual {residual:.2f} px")
+            residuals.append(residual)
+        scores["outline"] = dict(merit=[float(r[1]) for r in results], edges=residuals)
 
     # 2. shared
     parameters = enforce_shared(parameters)
     names = [f.name for f in dataclasses.fields(parameters[0])]
-    own = [n for n in names if n not in _SHARED and (free is None or n in free)]
+    own = [n for n in free_shared if n not in _SHARED]
+    if merit == "least_squares":
+        own = own + [n for n in _PHOTOMETRIC if n not in own]
     index_own = [names.index(n) for n in own]
     log("polish of every channel with the shared optics fixed: " + ", ".join(own))
     jobs = [
@@ -445,6 +806,7 @@ def fit_distortion_reference(
         results = [_polish_own(job) for job in jobs]
     for c, (parameters[c], rho, num) in enumerate(results):
         log(f"channel {c}: {rho:.4f} after {num} evaluations")
+    scores["shared"] = [float(r[1]) for r in results]
 
     # 3. internal
     log("internal alignment")
@@ -454,9 +816,10 @@ def fit_distortion_reference(
         frames=_frames_by_axis(observation, num_channel),
         scene_position=scene.inputs.position,
         wavelengths=_wavelengths_alignment(),
-        free=(None if free is None else tuple(n for n in own if n not in _PHOTOMETRIC)),
+        free=tuple(n for n in own if n not in _PHOTOMETRIC),
         log=log,
     )
+    scores["alignment"] = [float(m) for m in medians]
 
     result = _stack(parameters, axis="channel")
     if path is not None:
@@ -471,12 +834,42 @@ def fit_distortion_reference(
                 provenance=(
                     "esis.flights.f1.optics.fit_distortion_reference("
                     f"time={time}, num_scene={num_scene}): a seeded capture and "
-                    "polish of every channel against the AIA proxy scene, the "
-                    "shared optics set to their mean, and the channels aligned to "
-                    f"one another on the sky at {', '.join(_LINES_ALIGNMENT)} "
+                    "polish of every channel against the AIA proxy scene"
+                    + (
+                        ", its windows placed on the measured edges"
+                        if edges is not None
+                        else ""
+                    )
+                    + ", the shared optics set to their mean, and the channels "
+                    "aligned to one another on the sky at "
+                    f"{', '.join(_LINES_ALIGNMENT)} "
                     "(median shift vs channel 1: "
                     f"{', '.join(f'{m:.2f}' for m in medians)} px)"
                 ),
+                stages=dict(
+                    absolute=dict(
+                        free=list(free_absolute),
+                        popsize=popsize,
+                        maxiter=maxiter,
+                        tol=tol,
+                        seed=seed,
+                    ),
+                    outline=(
+                        dict(window=list(window), sky=list(sky), edges=residuals)
+                        if edges is not None
+                        else None
+                    ),
+                    shared=dict(free=list(own), fixed=list(_SHARED)),
+                    alignment=dict(
+                        free=[n for n in own if n not in _PHOTOMETRIC],
+                        lines=list(_LINES_ALIGNMENT),
+                        anchor=1,
+                    ),
+                ),
+                merit=merit,
+                scores=scores,
+                versions=_versions(),
+                date=datetime.datetime.now().isoformat(timespec="seconds"),
             ),
         )
     return result

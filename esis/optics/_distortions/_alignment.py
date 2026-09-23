@@ -342,7 +342,6 @@ def align_channels(
             "pitch_grating",
             "roll_grating",
             "spacing_rulings",
-            "roll",
             "z_sensor",
             "roll_sensor",
             "pitch_sensor",

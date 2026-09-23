@@ -809,11 +809,9 @@ def distortion_fit_bounds(
     exactly zero, and a purely relative bound around a zero guess would
     collapse to zero width and silently freeze the parameter (equal bounds
     are treated as fixed by :func:`scipy.optimize.differential_evolution`).
-    The roll angles and the primary-mirror displacement are instead given the
-    hand-tuned absolute bounds of the
-    ``ESISI_distortion_optimization_20260213_151715`` run, the best fit of the
-    ESIS-I flight data (and the source of the values in
-    :func:`distortion_fit`).
+    The roll angles and the primary-mirror displacement are instead given
+    absolute bounds sized to what the flight data have been seen to need,
+    and the sensor placement a build tolerance about wherever it starts.
 
     Every bound is broadcast against the shape of the corresponding parameter
     and expressed in the same units, so that flattening the bounds and the
@@ -858,7 +856,7 @@ def distortion_fit_bounds(
     displacement_primary = absolute(p.displacement_primary, -10 * u.mm, 0 * u.mm)
     pitch = relative(p.pitch, floor=60 * u.arcsec)
     yaw = relative(p.yaw, floor=60 * u.arcsec)
-    roll = absolute(p.roll, -4 * u.deg, 0 * u.deg)
+    roll = absolute(p.roll, -2 * u.deg, 2 * u.deg)
 
     def about(value, half):
         # a build tolerance about wherever the sensor is: its yaw, for one,
@@ -866,7 +864,7 @@ def distortion_fit_bounds(
         return value - half.to(na.unit(value)), value + half.to(na.unit(value))
 
     z_sensor = about(p.z_sensor, 10 * u.mm)
-    roll_sensor = about(p.roll_sensor, 1 * u.deg)
+    roll_sensor = about(p.roll_sensor, 2 * u.deg)
     pitch_sensor = about(p.pitch_sensor, 3 * u.deg)
     yaw_sensor = about(p.yaw_sensor, 3 * u.deg)
     x_sensor = about(p.x_sensor, 5 * u.mm)
