@@ -196,3 +196,32 @@ def test_distortion_fit_bounds():
     assert np.all(upper.yaw_sensor - parameters.yaw_sensor == 3 * u.deg)
     assert np.all(parameters.yaw_sensor - lower.yaw_sensor == 3 * u.deg)
     assert np.all(upper.z_sensor == parameters.z_sensor + 10 * u.mm)
+
+
+def test_distortion_fit_windows():
+    """
+    Check that the committed reference puts the windows where it says.
+
+    The reference table records the centre of every window as the fit
+    left it; a change in the optics library that moves the image, such as
+    the roll bug of optika 2.7, shows up here as a shift of every window.
+    """
+    import astropy.table
+    from esis.flights.f1.optics._instruments import _instruments
+
+    table = astropy.table.QTable.read(
+        _instruments._directory_data / "distortion_reference.ecsv",
+        format="ascii.ecsv",
+    )
+    if "windows" not in table.meta:
+        pytest.skip("the committed table predates the window record")
+    model = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+    for c, centers in enumerate(table.meta["windows"]):
+        channel = model[dict(channel=c)]
+        linear = channel.system.linearize(
+            wavelength=channel.wavelength, degree=2, field_stop=True
+        )
+        for i, (x, y) in enumerate(centers):
+            footprint = linear.footprint(channel.wavelength[dict(wavelength=i)])
+            assert abs(float(np.mean(na.value(footprint.x).ndarray)) - x) < 1
+            assert abs(float(np.mean(na.value(footprint.y).ndarray)) - y) < 1

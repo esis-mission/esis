@@ -572,6 +572,54 @@ def scan_primary(
     return [r[0] for r in results], best, errors
 
 
+def _window_centers(
+    instrument: esis.optics.Instrument,
+    parameters: list[esis.optics.DistortionParameters],
+    scene: na.FunctionArray,
+    observation: na.AbstractScalar,
+) -> list[list[list[float]]]:
+    """
+    Locate the centre of every window on the sensor, in pixels.
+
+    Parameters
+    ----------
+    instrument
+        The instrument model.
+    parameters
+        The parameters of every channel.
+    scene
+        The scene of the reference frame.
+    observation
+        The reference frame of every channel.
+
+    Returns
+    -------
+    A list indexed ``[channel][line]`` of ``[x, y]``.
+    """
+    result = []
+    for c, p in enumerate(parameters):
+        channel = instrument[dict(channel=c)]
+        merit = esis.optics.LinearMerit(
+            instrument=channel,
+            parameters=p,
+            scene=scene,
+            observation=observation[dict(channel=c)],
+        )
+        linear = merit.linearize(p.to_instrument(channel))
+        wavelength = channel.wavelength
+        centers = []
+        for i in range(na.shape(wavelength)["wavelength"]):
+            footprint = linear.footprint(wavelength[dict(wavelength=i)])
+            centers.append(
+                [
+                    float(np.mean(na.value(footprint.x).ndarray)),
+                    float(np.mean(na.value(footprint.y).ndarray)),
+                ]
+            )
+        result.append(centers)
+    return result
+
+
 def _versions() -> dict[str, str]:
     """Record the versions of the packages the fit ran on."""
     result = {}
@@ -1022,6 +1070,9 @@ def fit_distortion_reference(
     )
     scores["alignment"] = [float(m) for m in medians]
 
+    # where the windows land, for a regression test of the committed table
+    windows = _window_centers(instrument, parameters, scene, observation)
+
     result = _stack(parameters, axis="channel")
     if path is not None:
         result.to_file(
@@ -1077,6 +1128,7 @@ def fit_distortion_reference(
                 ),
                 merit=merit,
                 scores=scores,
+                windows=windows,
                 versions=_versions(),
                 date=datetime.datetime.now().isoformat(timespec="seconds"),
             ),
