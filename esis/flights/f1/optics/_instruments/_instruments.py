@@ -792,6 +792,20 @@ def distortion_fit(
             u.Quantity(pointing["roll"]),
             axes=axis_time,
         )
+        # the windows of each channel drift through the flight, which a
+        # per-frame offset of the grating reproduces
+        for name in ("yaw_grating", "pitch_grating"):
+            if name in pointing.colnames:
+                offset = na.ScalarArray(
+                    u.Quantity(pointing[name]),
+                    axes=(axis_time, axis_channel),
+                )
+                attribute = name.split("_")[0]
+                setattr(
+                    model.grating,
+                    attribute,
+                    getattr(model.grating, attribute) + offset,
+                )
 
     return model
 

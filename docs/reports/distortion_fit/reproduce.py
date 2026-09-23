@@ -12,6 +12,7 @@ stages are split across jobs.  Run, in order::
     python reproduce.py combine <directory>       # outline + shared + alignment
     python reproduce.py pointing <t> <directory>  # per-frame pointing of frame t
     python reproduce.py gather <directory>        # pointing rows -> ECSV
+    python reproduce.py accept <directory>        # score the fit on held-out frames
 
 Environment: ESIS_DEVICE (default ``cuda``; empty for the host),
 ESIS_WORKERS (default 6), ESIS_MERIT (``correlation`` or
@@ -141,11 +142,13 @@ def pointing(t: int, directory: pathlib.Path) -> None:
     parameters = esis.optics.DistortionParameters.from_file(
         directory / "distortion_reference.ecsv"
     )
+    path_drift = directory / "window_drift.ecsv"
     _fits.fit_distortion_pointing(
         instrument=parameters.to_instrument(_fits._base(None)),
         device=DEVICE,
         merit=MERIT,
         frames=(t,),
+        drift=path_drift if path_drift.exists() else None,
         path=directory / f"pointing_{t:02d}.ecsv",
         directory=directory,
     )
@@ -167,6 +170,28 @@ def gather(directory: pathlib.Path) -> None:
     print(f"{len(table)} frames -> {directory / 'distortion_pointing.ecsv'}")
 
 
+def accept(directory: pathlib.Path) -> None:
+    """Score the reference on frames across the flight, without an inversion."""
+    path_edges = directory / "window_edges.ecsv"
+    _fits.acceptance(
+        reference=esis.optics.DistortionParameters.from_file(
+            directory / "distortion_reference.ecsv"
+        ),
+        pointing=astropy.table.QTable.read(
+            directory / "distortion_pointing.ecsv", format="ascii.ecsv"
+        ),
+        edges=(
+            astropy.table.QTable.read(path_edges, format="ascii.ecsv")
+            if path_edges.exists()
+            else None
+        ),
+        device=DEVICE,
+        merit=MERIT,
+        path=directory / "acceptance.ecsv",
+        directory=directory,
+    )
+
+
 if __name__ == "__main__":
     command = sys.argv[1]
     if command == "channel":
@@ -179,5 +204,7 @@ if __name__ == "__main__":
         pointing(int(sys.argv[2]), pathlib.Path(sys.argv[3]))
     elif command == "gather":
         gather(pathlib.Path(sys.argv[2]))
+    elif command == "accept":
+        accept(pathlib.Path(sys.argv[2]))
     else:
         raise SystemExit(__doc__)
