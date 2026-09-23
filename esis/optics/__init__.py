@@ -24,6 +24,11 @@ from ._distortions import (
     sky_grid,
     sample_on_sky,
     measure_shifts,
+    SIDES,
+    measure_edges,
+    predict_edges,
+    outline_residual,
+    fit_distortion_outline,
 )
 
 num_interpolation = 32
@@ -65,6 +70,11 @@ __all__ = [
     "fit_distortion",
     "polish",
     "align_channels",
+    "SIDES",
+    "measure_edges",
+    "predict_edges",
+    "outline_residual",
+    "fit_distortion_outline",
     "sky_grid",
     "sample_on_sky",
     "measure_shifts",
