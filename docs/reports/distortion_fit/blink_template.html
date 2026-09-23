@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESIS-I Distortion Blink</title>
+<style>
+  :root {
+    --bg: #f3f2ee; --ink: #1d1c1a; --muted: #6b675f; --panel: #ffffff;
+    --accent: #b8541f; --rule: #d9d5cc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17181a; --ink: #ebe8e1; --muted: #a09b90; --panel: #202226;
+      --accent: #e08a55; --rule: #34373d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181a; --ink: #ebe8e1; --muted: #a09b90; --panel: #202226;
+    --accent: #e08a55; --rule: #34373d;
+  }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 "IBM Plex Sans", system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; letter-spacing: -0.01em; }
+  p.lead { margin: 0 0 16px; color: var(--muted); max-width: 65ch; }
+  .bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center;
+    padding: 10px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .bar label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .bar button { font: inherit; padding: 4px 10px; border: 1px solid var(--rule); background: var(--panel);
+    color: var(--ink); border-radius: 4px; cursor: pointer; }
+  .bar button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  .bar input[type=range] { width: 220px; }
+  .stage { margin-top: 16px; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 12px; }
+  .stage img { display: block; width: 100%; height: auto; image-rendering: auto; }
+  .status { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .status b { color: var(--ink); font-weight: 600; }
+  .which { font-size: 18px; font-weight: 600; color: var(--accent); }
+  kbd { font: 12px/1 ui-monospace, monospace; border: 1px solid var(--rule); border-bottom-width: 2px;
+    border-radius: 3px; padding: 1px 5px; background: var(--panel); }
+  .help { color: var(--muted); font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ESIS-I distortion fit, model against data</h1>
+  <p class="lead">Every Level-1 frame of the 2019 flight beside the AIA proxy scene imaged through the fitted channel,
+    with that frame's pointing and window drift applied. Both are standardized inside the windows and block-averaged 4×4.</p>
+  <div class="bar">
+    <label>Channel</label>
+    <span id="channels"></span>
+    <label for="frame">Frame</label>
+    <input id="frame" type="range" min="0" max="29" value="15">
+    <span id="frameLabel" style="font-variant-numeric: tabular-nums;">15</span>
+    <button id="auto" aria-pressed="true">Auto blink</button>
+  </div>
+  <div class="stage">
+    <img id="view" alt="model or data image of the selected channel and frame">
+    <div class="status">
+      <span class="which" id="which">model</span>
+      <span>pointing offset <b id="pointing"></b></span>
+    </div>
+  </div>
+  <p class="help"><kbd>space</kbd> toggle model / data · <kbd>←</kbd> <kbd>→</kbd> frame · <kbd>1</kbd>–<kbd>4</kbd> channel · <kbd>a</kbd> auto blink</p>
+</main>
+<script>
+const FRAMES = /*FRAMES*/;
+const keys = Object.keys(FRAMES).map(Number).sort((a, b) => a - b);
+let frame = keys.includes(15) ? 15 : keys[0], channel = 0, showModel = true, auto = true;
+const view = document.getElementById("view"), which = document.getElementById("which");
+const slider = document.getElementById("frame"), frameLabel = document.getElementById("frameLabel");
+const pointing = document.getElementById("pointing"), autoButton = document.getElementById("auto");
+slider.min = keys[0]; slider.max = keys[keys.length - 1]; slider.value = frame;
+const channels = document.getElementById("channels");
+const numChannel = FRAMES[keys[0]].model.length;
+for (let c = 0; c < numChannel; c++) {
+  const b = document.createElement("button"); b.textContent = "ch" + c; b.setAttribute("aria-pressed", c === channel);
+  b.addEventListener("click", () => { channel = c; draw(); });
+  channels.appendChild(b);
+}
+function nearest(t) { return keys.reduce((p, k) => Math.abs(k - t) < Math.abs(p - t) ? k : p, keys[0]); }
+function draw() {
+  const f = FRAMES[frame];
+  view.src = "data:image/jpeg;base64," + (showModel ? f.model[channel] : f.data[channel]);
+  which.textContent = showModel ? "model" : "data";
+  frameLabel.textContent = frame;
+  const p = f.pointing;
+  pointing.textContent = `pitch ${p[0].toFixed(2)}″, yaw ${p[1].toFixed(2)}″, roll ${(p[2] * 3600).toFixed(1)}″`;
+  [...channels.children].forEach((b, c) => b.setAttribute("aria-pressed", c === channel));
+  autoButton.setAttribute("aria-pressed", auto);
+}
+slider.addEventListener("input", () => { frame = nearest(Number(slider.value)); draw(); });
+autoButton.addEventListener("click", () => { auto = !auto; draw(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === " ") { e.preventDefault(); showModel = !showModel; auto = false; draw(); }
+  else if (e.key === "ArrowRight") { frame = keys[Math.min(keys.indexOf(frame) + 1, keys.length - 1)]; slider.value = frame; draw(); }
+  else if (e.key === "ArrowLeft") { frame = keys[Math.max(keys.indexOf(frame) - 1, 0)]; slider.value = frame; draw(); }
+  else if (e.key >= "1" && e.key <= String(numChannel)) { channel = Number(e.key) - 1; draw(); }
+  else if (e.key === "a") { auto = !auto; draw(); }
+});
+setInterval(() => { if (auto) { showModel = !showModel; draw(); } }, 700);
+draw();
+</script>
+</body>
+</html>
