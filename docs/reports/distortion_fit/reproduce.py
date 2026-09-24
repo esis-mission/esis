@@ -17,7 +17,8 @@ stages are split across jobs.  Run, in order::
 Environment: ESIS_DEVICE (default ``cuda``; empty for the host),
 ESIS_WORKERS (default 6), ESIS_MERIT (``correlation`` or
 ``least_squares``), and to depart from the committed configuration,
-ESIS_FREE_ABSOLUTE and ESIS_FREE_SHARED (colon-separated field names).
+ESIS_FREE_ABSOLUTE and ESIS_FREE_SHARED (colon-separated field names) and
+ESIS_PRIMARY=0 to hold the primary at nominal.
 """
 
 import logging
@@ -40,6 +41,9 @@ WORKERS = int(os.environ.get("ESIS_WORKERS", "6"))
 # ESIS_MERIT selects the comparison the fit maximizes: "correlation" (the
 # default) or "least_squares", which also fits the degradation of each channel
 MERIT = os.environ.get("ESIS_MERIT", "correlation")
+
+# ESIS_PRIMARY=0 holds the primary at nominal instead of scanning the window widths
+PRIMARY = os.environ.get("ESIS_PRIMARY", "1") not in ("0", "false", "no")
 
 
 def _names(variable: str, default: tuple[str, ...]) -> tuple[str, ...]:
@@ -132,6 +136,7 @@ def combine(directory: pathlib.Path) -> None:
         free_absolute=FREE_ABSOLUTE,
         free_shared=FREE_SHARED,
         edges=path_edges if path_edges.exists() else None,
+        primary=PRIMARY,
         path=directory / "distortion_reference.ecsv",
         directory=directory,
     )
