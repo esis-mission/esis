@@ -5,6 +5,7 @@ from typing import Callable
 import copy
 import dataclasses
 import datetime
+import importlib
 import importlib.metadata
 import multiprocessing
 import pathlib
@@ -621,18 +622,40 @@ def _window_centers(
 
 
 def _versions() -> dict[str, str]:
-    """Record the versions of the packages the fit ran on."""
+    """
+    Record the versions of the packages the fit ran on.
+
+    An editable install reports the version its metadata was built with,
+    which can lag the checkout, so the commit of a package that lives in a
+    git checkout is recorded beside it.
+    """
+    import subprocess
+
     result = {}
-    for name in (
-        "euv-snapshot-imaging-spectrograph",
-        "optika",
-        "named-arrays",
-        "regridding",
-    ):
+    modules = dict(
+        esis="euv-snapshot-imaging-spectrograph",
+        optika="optika",
+        named_arrays="named-arrays",
+        regridding="regridding",
+    )
+    for module, name in modules.items():
         try:
-            result[name] = importlib.metadata.version(name)
+            version = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
-            result[name] = "unknown"
+            version = "unknown"
+        try:
+            path = pathlib.Path(importlib.import_module(module).__file__).parent
+            commit = subprocess.run(
+                ["git", "-C", str(path), "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if commit.returncode == 0:
+                version = f"{version} @ {commit.stdout.strip()}"
+        except Exception:
+            pass
+        result[name] = version
     return result
 
 
