@@ -215,7 +215,13 @@ def test_distortion_fit_windows():
     )
     if "windows" not in table.meta:
         pytest.skip("the committed table predates the window record")
-    model = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+    from esis.flights.f1.optics._fits import _fits
+
+    # the fit traces the idealized as-built model, whose uncertain ruling
+    # coefficients are stripped; the committed parameters go back onto it
+    model = esis.optics.DistortionParameters.from_file(
+        _instruments._directory_data / "distortion_reference.ecsv"
+    ).to_instrument(_fits._base(None))
     for c, centers in enumerate(table.meta["windows"]):
         channel = model[dict(channel=c)]
         linear = channel.system.linearize(

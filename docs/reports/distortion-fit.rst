@@ -162,41 +162,64 @@ for the pointing.
 Results
 -------
 
-The tables committed at the time of writing are provisional: they come
-from the same stages run as scratch scripts on 2026-09-21, before the
-stages were brought into the package, and are marked so in their headers.
-The chain described above is running on the cluster and its output
-replaces them as soon as it completes.  The correlation of each channel
-with its frame after each stage of that provisional chain:
+The correlation of each channel with its frame after each stage of the
+committed chain, run on the cluster on 2026-09-24 (the as-built row is the
+starting model, the absolute row the capture of the four channel jobs):
 
-============  ======  ======  ======  ======
-stage          ch0     ch1     ch2     ch3
-============  ======  ======  ======  ======
-as-built      0.350   0.419   0.404   0.379
-absolute      0.759   0.827   0.763   0.807
-outline       0.762   0.824   0.763   0.805
-shared        0.805   0.837   0.792   0.820
-aligned [px]  0.31    0.00    0.18    0.28
-============  ======  ======  ======  ======
+=============  ======  ======  ======  ======
+stage             ch0     ch1     ch2     ch3
+=============  ======  ======  ======  ======
+as-built        0.350   0.419   0.404   0.379
+absolute        0.799   0.840   0.794   0.816
+outline         0.799   0.839   0.794   0.815
+edges [px]       2.43    2.18    1.90    2.35
+shared          0.805   0.843   0.793   0.820
+aligned [px]     0.16    0.00    0.20    0.24
+=============  ======  ======  ======  ======
 
-The absolute stage of the committed chain, run on 2026-09-24 with the
-polygon mask and the widened sensor-roll box, reaches 0.799, 0.840,
-0.794 and 0.816 before the outline stage, which is where the provisional
-chain ended after its shared polish.
+The merit is the correlation.  The primary displacement is held at nominal, the field-stop roll and the instrument roll at zero,
+and the pointing is shared: pitch -21.8, yaw -17.5 arcsec
+from the as-built model.  The free set of every stage, the seed and
+schedule of the capture, the per-stage scores, the package commits and
+where the windows land are in the table's header.
 
 Acceptance
 ----------
 
-The acceptance of the committed chain is written by ``reproduce.py accept``
-into ``acceptance.ecsv`` and summarized here once the chain completes.
-For the provisional tables the MART inversion was run instead, against
-the baseline mapping of the 2022 analysis: the chi-squared of the
-inversion falls by 1.2, 2.7 and 7.3 percent on channels 0 to 2 and is
-unchanged on channel 3, and the Doppler ramp across the field at O V 630
-falls from 5.2 to 2.7 km/s.
+The reference scored on frames it was not fit to, with each frame's
+pointing applied: the correlation of every channel, and the median
+tile shift of every channel against channel 1 at each aligned line in
+pixels, He I first then O V.
+
+=====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
+frame  corr 0  corr 1  corr 2  corr 3  He I 0  He I 1  He I 2  He I 3   O V 0   O V 1   O V 2   O V 3
+=====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
+    9   0.788   0.842   0.792   0.816    0.27    0.00    0.31    0.41    0.20    0.00    0.20    0.32
+   12   0.794   0.837   0.786   0.811    0.22    0.00    0.27    0.37    0.18    0.00    0.16    0.29
+   15   0.801   0.843   0.789   0.813    0.23    0.00    0.32    0.36    0.17    0.00    0.14    0.26
+   18   0.797   0.838   0.788   0.815    0.13    0.00    0.38    0.30    0.23    0.00    0.17    0.18
+   21   0.797   0.837   0.788   0.812    0.20    0.00    0.41    0.41    0.22    0.00    0.27    0.25
+   24   0.794   0.833   0.786   0.806    0.24    0.00    0.42    0.44    0.34    0.00    0.25    0.32
+=====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
+
+The residual of the window outlines against the flight-median edges is 2.5, 2.5, 2.4, 2.0 px on channels 0 to 3, and of the window widths 2.7, 3.0, 2.8, 3.0 px: the modelled windows are about two pixels too large on every
+side, which the primary cannot fix, see below.
 
 What remains open
 -----------------
+
+The primary scan did not discriminate on the flight data: the width
+error was the same to a hundredth of a pixel at every displacement,
+because two channels' widths sit beyond the residual's clip and the
+re-polish of the sensor terms at each trial was too weak to restore the
+scale of the sky.  The committed tables therefore hold the primary at
+nominal, and the stage stays in the package with ``primary=False`` as
+the driver's ``ESIS_PRIMARY=0``; a wider clip and a stronger inner
+polish are the fix to try.  The modelled windows are two to three
+pixels too large on every side against the measured edges, on every
+channel, which is the same mismatch seen from the other direction and
+is not yet explained: the field stop's clear width, the penumbra of an
+f/90 beam, or the sensor's placement are the candidates.
 
 The fit model traces ideal materials, and its photometry is about ten
 times brighter than the V&R radiance and the effective area predict, so
