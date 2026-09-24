@@ -1384,6 +1384,33 @@ def fit_distortion_pointing(
     return table
 
 
+def _channel(
+    parameters: esis.optics.DistortionParameters,
+    channel: int,
+    axis: str = "channel",
+) -> esis.optics.DistortionParameters:
+    """
+    Take one channel's parameters out of a stacked set.
+
+    Parameters
+    ----------
+    parameters
+        Parameters with a logical axis over the channels, as
+        :meth:`esis.optics.DistortionParameters.from_file` loads them.
+    channel
+        The index along that axis.
+    axis
+        The name of that axis.
+    """
+    fields = {}
+    for field in dataclasses.fields(parameters):
+        value = getattr(parameters, field.name)
+        if isinstance(value, na.AbstractArray) and axis in value.shape:
+            value = value[{axis: channel}]
+        fields[field.name] = value
+    return type(parameters)(**fields)
+
+
 def acceptance(
     reference: esis.optics.DistortionParameters,
     pointing: astropy.table.QTable,
@@ -1465,8 +1492,7 @@ def acceptance(
         row = row[0]
         merits, distortions = [], []
         for c in range(num_channel):
-            p = reference[dict(channel=c)]
-            p = copy.copy(p)
+            p = _channel(reference, c)
             p.pitch = p.pitch + row["pitch"]
             p.yaw = p.yaw + row["yaw"]
             p.roll = p.roll + row["roll"]
@@ -1536,7 +1562,7 @@ def acceptance(
         scene, observation = _frame(15, num_scene)
         outline = []
         for c in range(num_channel):
-            p = reference[dict(channel=c)]
+            p = _channel(reference, c)
             channel = instrument[dict(channel=c)]
             m = esis.optics.LinearMerit(
                 instrument=channel,

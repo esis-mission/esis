@@ -12,7 +12,6 @@ JPEGs and blinks between model and data under the keyboard.
 """
 
 import base64
-import copy
 import io
 import json
 import logging
@@ -57,7 +56,7 @@ def render(directory: pathlib.Path, device: None | str) -> None:
         scene, observation = _fits._frame(t, 401)
         model, data, lit = [], [], []
         for c in range(num_channel):
-            p = copy.copy(reference[dict(channel=c)])
+            p = _fits._channel(reference, c)
             p.pitch = p.pitch + row["pitch"]
             p.yaw = p.yaw + row["yaw"]
             p.roll = p.roll + row["roll"]

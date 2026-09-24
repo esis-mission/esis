@@ -132,3 +132,18 @@ def test_frames_by_axis():
     assert len(frames) == 2
     assert frames[1].shape == (4, 3)
     assert frames[1][0, 0] == 12
+
+
+def test_channel():
+    from esis.flights.f1.optics._instruments import _instruments
+
+    stacked = esis.optics.DistortionParameters.from_file(
+        _instruments._directory_data / "distortion_reference.ecsv"
+    )
+    one = _fits._channel(stacked, 2)
+    assert "channel" not in na.shape(one.yaw_grating)
+    assert one.yaw_grating == stacked.yaw_grating[dict(channel=2)]
+    assert one.pitch == stacked.pitch[dict(channel=2)]
+    # a scalar field is passed through
+    scalar = dataclasses.replace(stacked, degradation=1 * u.dimensionless_unscaled)
+    assert _fits._channel(scalar, 0).degradation == 1
