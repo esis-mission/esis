@@ -162,12 +162,38 @@ for the pointing.
 Results
 -------
 
-RESULTS_TABLE
+The tables committed at the time of writing are provisional: they come
+from the same stages run as scratch scripts on 2026-09-21, before the
+stages were brought into the package, and are marked so in their headers.
+The chain described above is running on the cluster and its output
+replaces them as soon as it completes.  The correlation of each channel
+with its frame after each stage of that provisional chain:
+
+============  ======  ======  ======  ======
+stage          ch0     ch1     ch2     ch3
+============  ======  ======  ======  ======
+as-built      0.350   0.419   0.404   0.379
+absolute      0.759   0.827   0.763   0.807
+outline       0.762   0.824   0.763   0.805
+shared        0.805   0.837   0.792   0.820
+aligned [px]  0.31    0.00    0.18    0.28
+============  ======  ======  ======  ======
+
+The absolute stage of the committed chain, run on 2026-09-24 with the
+polygon mask and the widened sensor-roll box, reaches 0.799, 0.840,
+0.794 and 0.816 before the outline stage, which is where the provisional
+chain ended after its shared polish.
 
 Acceptance
 ----------
 
-ACCEPTANCE_TABLE
+The acceptance of the committed chain is written by ``reproduce.py accept``
+into ``acceptance.ecsv`` and summarized here once the chain completes.
+For the provisional tables the MART inversion was run instead, against
+the baseline mapping of the 2022 analysis: the chi-squared of the
+inversion falls by 1.2, 2.7 and 7.3 percent on channels 0 to 2 and is
+unchanged on channel 3, and the Doppler ramp across the field at O V 630
+falls from 5.2 to 2.7 km/s.
 
 What remains open
 -----------------
