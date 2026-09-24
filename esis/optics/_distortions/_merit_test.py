@@ -213,3 +213,20 @@ def test_background_removed(merit):
     assert lifted.estimate_degradation(truth).value == pytest.approx(1, abs=1e-3)
     faint = dataclasses.replace(truth, degradation=0.5 * u.dimensionless_unscaled)
     assert lifted.estimate_degradation(faint).value == pytest.approx(1, abs=1e-3)
+
+
+def test_score_with_an_array_degradation(merit):
+    """A degradation loaded from a table is a named array, not a float."""
+    m, truth = merit
+    dim = _merit.LinearMerit(
+        m.instrument,
+        m.parameters,
+        m.scene,
+        observation=m.observation,
+        merit="least_squares",
+    )
+    faint = dataclasses.replace(
+        truth,
+        degradation=na.ScalarArray(np.array(1.0), axes=()) * u.dimensionless_unscaled,
+    )
+    assert dim.score(faint) == pytest.approx(dim.score(truth))

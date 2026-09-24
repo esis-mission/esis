@@ -95,6 +95,11 @@ def least_squares(
     return 1 - residual / np.where(power == 0, 1, power)
 
 
+def _scalar(a: float | u.Quantity | na.AbstractScalar) -> float:
+    """Read a dimensionless scalar out of whatever array type carries it."""
+    return float(np.asarray(na.value(na.as_named_array(a)).ndarray).ravel()[0])
+
+
 def _host(a: na.AbstractScalar) -> na.ScalarArray:
     """Bring an array that may live on a device back to the host."""
     ndarray = a.ndarray
@@ -374,7 +379,7 @@ class LinearMerit:
         parameters
             The distortion parameters to apply to the channel.
         """
-        image = self.image(parameters) * float(na.value(parameters.degradation))
+        image = self.image(parameters) * _scalar(parameters.degradation)
         result = least_squares(image, self.observation, self.axis_field)
         return float(na.value(result).ndarray)
 
