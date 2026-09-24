@@ -108,10 +108,10 @@ class TestLinearMerit:
         # the scene: part of the field is inside it and part outside
         m, truth = merit
         linear = m.linearize(truth.to_instrument(m.instrument))
-        assert isinstance(linear.field_stop, optika.apertures.PolygonalAperture)
+        assert isinstance(linear.field_stop, optika.radiometry.AbstractFieldStopModel)
         centers = m.field_centers
         inside = linear.field_stop(
-            na.Cartesian3dVectorArray(x=centers.x, y=centers.y, z=0 * centers.x)
+            na.SpectralPositionalVectorArray(m.instrument.wavelength, centers)
         )
         fraction = float(np.asarray(na.value(inside).ndarray).mean())
         assert 0.3 < fraction < 0.9
