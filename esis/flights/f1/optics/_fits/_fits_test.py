@@ -147,3 +147,43 @@ def test_channel():
     # a scalar field is passed through
     scalar = dataclasses.replace(stacked, degradation=1 * u.dimensionless_unscaled)
     assert _fits._channel(scalar, 0).degradation == 1
+
+
+def test_drift_smooth():
+    """
+    Follow a smooth motion through the jitter of the single-frame measurements.
+
+    Outside the measured frames the nearest measured value is held.
+    """
+    frames = np.arange(0, 20)
+    rng = np.random.default_rng(0)
+    rows = []
+    for c in range(2):
+        for t in frames:
+            truth_x = 0.05 * (t - 10) + 0.002 * (t - 10) ** 2 * c
+            truth_y = -0.08 * (t - 10)
+            for side, truth in ((0, truth_x), (1, truth_x), (2, truth_y), (3, truth_y)):
+                rows.append((c, int(t), side, truth + rng.normal(0, 0.1), 10))
+    drift = astropy.table.QTable(
+        rows=rows,
+        names=("channel", "frame", "side", "shift", "num"),
+    )
+    drift["shift"] = drift["shift"] * u.pix
+
+    shift = _fits._drift_smooth(drift, num_channel=2, degree=3)
+
+    for c in range(2):
+        for t in (5, 10, 15):
+            truth_x = 0.05 * (t - 10) + 0.002 * (t - 10) ** 2 * c
+            truth_y = -0.08 * (t - 10)
+            x, y = shift(c, t)
+            # the mean of two sides with 0.1 px noise leaves 0.07 px per frame;
+            # a cubic through twenty frames does better than that
+            assert abs(x - truth_x) < 0.1
+            assert abs(y - truth_y) < 0.1
+    # outside the measured frames the nearest measured value is held
+    assert np.allclose(shift(0, 25), shift(0, 19))
+    assert np.allclose(shift(0, -5), shift(0, 0))
+    # the raw reading of a frame nobody measured is zero, which is the
+    # jump the smoothing exists to remove
+    assert np.allclose(_fits._drift_shift(drift, 0, 25), 0)

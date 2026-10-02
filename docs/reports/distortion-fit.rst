@@ -27,20 +27,35 @@ Two things break the degeneracies the frame leaves.  The edges of the
 windows are the image of the field stop through the optics, and do not move
 when the pointing does, so they say where the grating and sensor put the
 image and leave the pointing to explain the rest.  Measured in every frame
-of the flight, they move by less than half a pixel in :math:`x` while the
-pointing sweeps seven arcseconds, and drift smoothly by two pixels in
-:math:`y` end to end, top and bottom together, which is the optics moving
-and is carried per frame.  And the channels compared with one another on
-the sky resolve a tenth of a pixel where the proxy scene resolves one.
+of the flight, they move by up to a pixel and a half end to end while the
+pointing sweeps seven arcseconds, or nine pixels, and the motion of all
+four channels' windows is one rigid translation of the field stop of a few
+microns, smooth through the flight, which is carried per frame.  And the
+channels compared with one another on the sky resolve a tenth of a pixel
+where the proxy scene resolves one.
+
+One more motion is visible only in the channels against one another.
+Each channel views the solar image through its own sector of the primary,
+so if that image is not exactly at the field stop, each channel sees it
+shifted along its own dispersion by the sector's offset times the
+defocus, while the stop's edge, an aperture in the plane the grating
+images, stays put: 1.6 pixels per 0.1 mm for ESIS-I.  A slow change of the
+primary's focus through the flight therefore separates the channels'
+skies without moving their windows, in a pattern no pointing or grating
+motion can make, and the model carries it as one shared term per frame,
+:attr:`esis.optics.DistortionParameters.z_primary`.
 
 What the data do not determine is stated rather than fit.  The angle
 between the windows and the sky, which a roll of the instrument or of the
 field stop would set, changes the merit by less than three thousandths over
 four degrees and is held at the design.  The instrument roll is one number
-for the whole instrument and is held at zero; a per-channel value would be
-the azimuth of that channel's arm, which turns the window and the sky
-together and is the sensor's roll by another name.  The primary's
-displacement is the one shared quantity the windows do measure, see below.
+for the whole instrument and is held at zero, in the reference and in
+every frame: the merit cannot measure a roll to an arcminute, and a polish
+left free in it settles on its first step rather than on a value.  A
+per-channel value would be the azimuth of that channel's arm, which turns
+the window and the sky together and is the sensor's roll by another name.
+The primary's displacement is the one shared quantity the windows do
+measure, see below.
 
 The merit
 ---------
@@ -112,22 +127,45 @@ writes.
 
 6.  **Internal.**  :func:`esis.optics.align_channels` samples every
     channel's frame on a common sky grid through its own distortion at
-    He I 584 and O V 630, measures the tile shifts against channel 1, and
-    solves for the increments of the same terms whose change of the mapping
-    reproduces the shifts.  Using two lines separates a geometric error
-    from a dispersion error.
+    He I 584 and O V 630, reading only the window each line illuminates
+    (:func:`esis.optics.window_mask`; outside it the frame holds the
+    neighbouring lines, which through this line's distortion land on the
+    sky as structure that belongs elsewhere), measures the tile shifts
+    against channel 1, and solves for the increments of the same terms
+    whose change of the mapping reproduces the shifts.  Using two lines
+    separates a geometric error from a dispersion error.
 
-7.  **Pointing.**  :func:`esis.flights.f1.optics.fit_distortion_pointing`
-    polishes the pitch, yaw and roll of every frame on the mean merit of
-    the four channels, with each channel's grating offset by that frame's
-    measured window drift first; both ride along in the pointing table for
+7.  **Defocus.**  :func:`esis.flights.f1.optics.fit_defocus_history`
+    measures every channel's sky against channel 1 in every frame, with
+    the windows placed by the smoothed drift, and solves the one defocus
+    of the primary that reproduces the shifts through the model's pattern;
+    a line in the frame index, zero at the reference frame, smooths it
+    through the flight.  The proxy scene takes no part: it cannot tell a
+    defocus from the internal alignment, but the channels can, to a few
+    microns.
+
+8.  **Pointing.**  :func:`esis.flights.f1.optics.fit_distortion_pointing`
+    polishes the pitch and yaw of every frame on the mean merit of the four
+    channels, with the roll held, each channel's grating offset by that
+    frame's window drift and the primary defocused by that frame's
+    measured value first.  The drift of a single frame is measured to a
+    few tenths of a pixel and the darkest frames have no edges at all, so
+    a cubic in the frame index smooths it through the flight and holds its
+    end value where nothing was measured; the offsets and the defocus ride
+    along in the pointing table for
     :func:`esis.flights.f1.optics.distortion_fit` to apply.
 
-8.  **Acceptance.**  :func:`esis.flights.f1.optics.acceptance` scores the
-    result on frames it was not fit to: the merit with each frame's
-    pointing applied, the median tile shift of every channel against
-    channel 1 at each aligned line, and the residual of the window outlines
-    and widths against the measured edges.  No inversion is involved.
+9.  **Acceptance.**  :func:`esis.flights.f1.optics.acceptance` scores the
+    result on frames across the flight, the reference frame among them:
+    the merit with each frame's pointing applied on six of them, and in
+    every frame the coalignment metric: the length of the median tile
+    shift of each channel's sky against channel 1 at each aligned line,
+    its component along the channel's dispersion, which is the part a
+    velocity is charged for and is given in km/s as well as pixels, the
+    scatter of the tiles about the median, and the decomposition of the
+    tiles into the linear distortion modes; with the residual of the
+    window outlines and widths against the measured edges.  No inversion
+    is involved.
 
 Reproducing the committed fit
 -----------------------------
@@ -138,17 +176,31 @@ Slurm cluster, in this order::
     sbatch --job-name=dist-channel --array=0-3 reproduce.sbatch channel <dir>
     sbatch --job-name=dist-edges reproduce.sbatch edges <dir>
     sbatch --job-name=dist-combine reproduce.sbatch combine <dir>
+    sbatch --job-name=dist-defocus reproduce.sbatch defocus <dir>
     sbatch --job-name=dist-pointing --array=0-29 reproduce.sbatch pointing <dir>
     sbatch --job-name=dist-gather reproduce.sbatch gather <dir>
     sbatch --job-name=dist-accept reproduce.sbatch accept <dir>
     sbatch --job-name=dist-blink reproduce.sbatch blink <dir>
+    sbatch --job-name=dist-coalign reproduce.sbatch coalign <dir>
 
 The first produces one ECSV per channel; ``edges`` the median edges and
 the drift; ``combine`` runs the outline, primary, shared and internal
 stages into the committed ``distortion_reference.ecsv``; ``pointing`` and
 ``gather`` the committed ``distortion_pointing.ecsv``; ``accept`` the
-acceptance table; and ``blink`` renders every frame beside its model for
-``blink.py page`` to bind into a page that blinks between them.  The
+acceptance table; ``blink`` renders every frame beside its model for
+``blink.py page`` to bind into a page that blinks between them; and
+``coalign`` reads every channel's frame onto the alignment's sky grid
+through its fitted distortion at He I and O V, inside the window each
+line illuminates, for ``coalign.py page`` to bind into a page that blinks
+any two channels and shows their difference, with the median tile shift
+of every pair.  The blink page judges the model against the data; the
+coalignment page judges the channels against one another, which is what
+the internal stage sets, and it is the view in which a residual of a tenth
+of a pixel is visible.  Two more commands repeat late stages on a saved
+reference without the capture: ``polish`` reruns the shared polish and the
+alignment from ``start_reference.ecsv`` in the directory, for instance at
+a finer scene (``ESIS_NUM_SCENE``), and ``align`` reruns only the
+alignment in place.  The
 environment needs the ``optika`` that carries the field of view on a
 linearized system and moves the optics rather than the object under a
 roll, ``named_arrays`` and ``regridding`` with device support, and a
@@ -163,23 +215,24 @@ Results
 -------
 
 The correlation of each channel with its frame after each stage of the
-committed chain, run on the cluster on 2026-09-24 (the as-built row is the
+committed chain, run on the cluster on 2026-10-02 (the as-built row is the
 starting model, the absolute row the capture of the four channel jobs):
 
 =============  ======  ======  ======  ======
 stage             ch0     ch1     ch2     ch3
 =============  ======  ======  ======  ======
 as-built        0.350   0.419   0.404   0.379
-absolute        0.799   0.840   0.794   0.816
-outline         0.799   0.839   0.794   0.815
-edges [px]       2.43    2.18    1.90    2.35
-shared          0.805   0.843   0.793   0.820
-aligned [px]     0.16    0.00    0.20    0.24
+absolute        0.799   0.837   0.794   0.816
+outline         0.798   0.835   0.795   0.816
+edges [px]       2.44    2.36    2.05    2.31
+shared          0.804   0.847   0.793   0.820
+aligned [px]     0.02    0.00    0.02    0.04
 =============  ======  ======  ======  ======
 
 The merit is the correlation.  The primary displacement is held at nominal, the field-stop roll and the instrument roll at zero,
-and the pointing is shared: pitch -21.8, yaw -17.5 arcsec
-from the as-built model.  The free set of every stage, the seed and
+and the pointing is shared: pitch -21.5, yaw -17.6 arcsec
+from the as-built model; the aligned row is the length of the median tile shift of each channel
+against channel 1 after the internal alignment.  The free set of every stage, the seed and
 schedule of the capture, the per-stage scores, the package commits and
 where the windows land are in the table's header.
 
@@ -194,32 +247,79 @@ pixels, He I first then O V.
 =====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
 frame  corr 0  corr 1  corr 2  corr 3  He I 0  He I 1  He I 2  He I 3   O V 0   O V 1   O V 2   O V 3
 =====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
-    9   0.788   0.842   0.792   0.816    0.27    0.00    0.31    0.41    0.20    0.00    0.20    0.32
-   12   0.794   0.837   0.786   0.811    0.22    0.00    0.27    0.37    0.18    0.00    0.16    0.29
-   15   0.801   0.843   0.789   0.813    0.23    0.00    0.32    0.36    0.17    0.00    0.14    0.26
-   18   0.797   0.838   0.788   0.815    0.13    0.00    0.38    0.30    0.23    0.00    0.17    0.18
-   21   0.797   0.837   0.788   0.812    0.20    0.00    0.41    0.41    0.22    0.00    0.27    0.25
-   24   0.794   0.833   0.786   0.806    0.24    0.00    0.42    0.44    0.34    0.00    0.25    0.32
+    0     nan     nan     nan     nan    0.48    0.00    0.62    0.25    0.43    0.00    0.48    0.12
+    1     nan     nan     nan     nan    0.36    0.00    0.46    0.16    0.36    0.00    0.39    0.11
+    2     nan     nan     nan     nan    0.41    0.00    0.44    0.05    0.32    0.00    0.34    0.08
+    3     nan     nan     nan     nan    0.34    0.00    0.42    0.09    0.24    0.00    0.23    0.10
+    4     nan     nan     nan     nan    0.30    0.00    0.28    0.08    0.22    0.00    0.17    0.09
+    5     nan     nan     nan     nan    0.27    0.00    0.22    0.10    0.21    0.00    0.13    0.13
+    6     nan     nan     nan     nan    0.24    0.00    0.24    0.09    0.16    0.00    0.08    0.14
+    7     nan     nan     nan     nan    0.28    0.00    0.15    0.14    0.13    0.00    0.05    0.08
+    8     nan     nan     nan     nan    0.25    0.00    0.15    0.13    0.12    0.00    0.04    0.11
+    9   0.793   0.846   0.795   0.820    0.18    0.00    0.13    0.11    0.12    0.00    0.03    0.07
+   10     nan     nan     nan     nan    0.17    0.00    0.12    0.09    0.08    0.00    0.03    0.03
+   11     nan     nan     nan     nan    0.12    0.00    0.16    0.07    0.07    0.00    0.03    0.09
+   12   0.799   0.840   0.790   0.816    0.14    0.00    0.09    0.08    0.07    0.00    0.03    0.11
+   13     nan     nan     nan     nan    0.13    0.00    0.07    0.13    0.03    0.00    0.03    0.05
+   14     nan     nan     nan     nan    0.11    0.00    0.07    0.09    0.02    0.00    0.03    0.07
+   15   0.804   0.847   0.794   0.820    0.09    0.00    0.09    0.10    0.04    0.00    0.03    0.07
+   16     nan     nan     nan     nan    0.09    0.00    0.08    0.05    0.04    0.00    0.03    0.05
+   17     nan     nan     nan     nan    0.01    0.00    0.12    0.04    0.07    0.00    0.05    0.07
+   18   0.801   0.842   0.792   0.818    0.06    0.00    0.09    0.04    0.06    0.00    0.04    0.11
+   19     nan     nan     nan     nan    0.05    0.00    0.09    0.06    0.11    0.00    0.05    0.12
+   20     nan     nan     nan     nan    0.09    0.00    0.08    0.08    0.15    0.00    0.07    0.17
+   21   0.802   0.841   0.791   0.815    0.10    0.00    0.09    0.12    0.17    0.00    0.10    0.18
+   22     nan     nan     nan     nan    0.13    0.00    0.14    0.06    0.20    0.00    0.12    0.18
+   23     nan     nan     nan     nan    0.16    0.00    0.11    0.04    0.24    0.00    0.10    0.14
+   24   0.798   0.837   0.789   0.808    0.25    0.00    0.16    0.18    0.28    0.00    0.14    0.18
+   25     nan     nan     nan     nan    0.21    0.00    0.13    0.18    0.33    0.00    0.16    0.24
+   26     nan     nan     nan     nan    0.29    0.00    0.17    0.14    0.35    0.00    0.18    0.22
+   27     nan     nan     nan     nan    0.29    0.00    0.07    0.12    0.39    0.00    0.19    0.19
+   28     nan     nan     nan     nan    0.56    0.00    0.02    0.22    0.37    0.00    0.16    0.26
+   29     nan     nan     nan     nan    0.41    0.00    0.20    0.15    0.47    0.00    0.31    0.09
 =====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
 
-The residual of the window outlines against the flight-median edges is 2.5, 2.5, 2.4, 2.0 px on channels 0 to 3, and of the window widths 2.7, 3.0, 2.8, 3.0 px: the modelled windows are about two pixels too large on every
+The coalignment metric over 30 frames of the flight, every channel but channel 1: the rms and the
+largest of the whole-channel shifts against channel 1, and the mean scatter of the tiles about them,
+in detector pixels (about 17 km/s per pixel along the dispersion):
+
+=====  =======  =======  =======  ==============  ==============  ==============
+line   rms      max      scatter  along disp.     rms velocity    max velocity
+=====  =======  =======  =======  ==============  ==============  ==============
+He I     0.207    0.623    0.326    0.185 px        3.5 km/s       11.2 km/s
+O V      0.185    0.475    0.243    0.157 px        2.7 km/s        8.0 km/s
+=====  =======  =======  =======  ==============  ==============  ==============
+
+A pixel along the dispersion is 18.9 km/s at He I and 17.4 km/s at O V; only the component of a shift along a channel's dispersion is a velocity error.
+
+The residual of the window outlines against the flight-median edges is 2.4, 2.0, 2.3, 2.0 px on channels 0 to 3, and of the window widths 2.6, 2.7, 2.6, 2.7 px: the modelled windows are about two pixels too large on every
 side, which the primary cannot fix, see below.
 
 What remains open
 -----------------
 
-The primary scan did not discriminate on the flight data: the width
-error was the same to a hundredth of a pixel at every displacement,
-because two channels' widths sit beyond the residual's clip and the
-re-polish of the sensor terms at each trial was too weak to restore the
-scale of the sky.  The committed tables therefore hold the primary at
-nominal, and the stage stays in the package with ``primary=False`` as
-the driver's ``ESIS_PRIMARY=0``; a wider clip and a stronger inner
-polish are the fix to try.  The modelled windows are two to three
+The primary scan did not discriminate on the flight data, and an audit
+of the stage shows why it could not as written.  Its logic is sound: a
+displacement of the primary scales the sky and not the windows, while a
+change of a channel's magnification scales both, so the sky's scale from
+the merit and the windows' width from the edges together fix the focal
+length and the magnification.  But the inner re-polish at each trial
+frees only the sensor's distance and angles, and the sensor's distance
+also translates the image by five pixels per millimetre on a sensor yawed
+twelve degrees; with no lateral term to undo that, the merit refuses the
+move that would restore the sky's scale, the widths never change, and the
+width error is flat to a hundredth of a pixel at every displacement,
+which is what was observed.  The committed tables therefore hold the
+primary at nominal, and the stage stays in the package with
+``primary=False`` as the driver's ``ESIS_PRIMARY=0``.  The fix is a
+direct two-observable solve, or a re-polish that frees a lateral term and
+a residual without the clip.  The modelled windows are two to three
 pixels too large on every side against the measured edges, on every
-channel, which is the same mismatch seen from the other direction and
-is not yet explained: the field stop's clear width, the penumbra of an
-f/90 beam, or the sensor's placement are the candidates.
+channel, which is a magnification excess of about a third of a percent;
+a longer focal length of the primary with every channel's sensor a few
+millimetres closer would produce exactly that at a fixed sky scale and is
+the first candidate, ahead of the field stop's clear width or the sensor's
+placement.
 
 The fit model traces ideal materials, and its photometry is about ten
 times brighter than the V&R radiance and the effective area predict, so

@@ -849,3 +849,14 @@ class Instrument(
 
     kwargs_plot: None | dict = None
     """Extra keyword arguments used to plot the optical system."""
+
+    placement_design: None | dict[str, u.Quantity | na.AbstractScalar] = None
+    """
+    The placements the instrument was built with, before any fitted term.
+
+    :meth:`esis.optics.DistortionParameters.to_instrument` records here the
+    sensor and grating positions and the nominal focal length of the
+    primary that its terms are measured from, so that the terms can be read
+    back and applied again from the same origin, whether or not the
+    instrument has since been indexed by channel.
+    """

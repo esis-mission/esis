@@ -406,10 +406,11 @@ class LinearMerit:
             return -self.correlation(parameters)
         except (ValueError, np.linalg.LinAlgError, FloatingPointError):
             # a trial that cannot be imaged (off the sensor, a singular
-            # linearization) is the worst possible; anything else, such as
-            # a device that cannot run the regrid, is a fault and propagates
+            # linearization) is the worst possible, whatever the merit's
+            # range; anything else, such as a device that cannot run the
+            # regrid, is a fault and propagates
             self.num_failed += 1
-            return 1.0
+            return np.inf
 
 
 def correlation_raytraced(

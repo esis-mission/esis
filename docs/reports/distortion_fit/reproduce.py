@@ -10,6 +10,9 @@ stages are split across jobs.  Run, in order::
     python reproduce.py channel <c> <directory>   # absolute fit of channel c
     python reproduce.py edges <directory>         # window edges of every frame
     python reproduce.py combine <directory>       # outline + shared + alignment
+    python reproduce.py polish <directory>        # shared + alignment, saved start
+    python reproduce.py align <directory>         # alignment only, in place
+    python reproduce.py defocus <directory>       # defocus history from the channels
     python reproduce.py pointing <t> <directory>  # per-frame pointing of frame t
     python reproduce.py gather <directory>        # pointing rows -> ECSV
     python reproduce.py accept <directory>        # score the fit on held-out frames
@@ -17,8 +20,16 @@ stages are split across jobs.  Run, in order::
 Environment: ESIS_DEVICE (default ``cuda``; empty for the host),
 ESIS_WORKERS (default 6), ESIS_MERIT (``correlation`` or
 ``least_squares``), and to depart from the committed configuration,
-ESIS_FREE_ABSOLUTE and ESIS_FREE_SHARED (colon-separated field names) and
-ESIS_PRIMARY=0 to hold the primary at nominal.
+ESIS_FREE_ABSOLUTE and ESIS_FREE_SHARED (colon-separated field names),
+ESIS_PRIMARY=0 to hold the primary at nominal, ESIS_SEED for the capture's
+seed (default 0), ESIS_NUM_SCENE for the
+sampling of the AIA scene (default 401) and ESIS_DRIFT_DEGREE for the
+polynomial that smooths the window drift (default 3; empty for none).
+
+``polish`` starts from ``start_reference.ecsv`` in the directory, a saved
+reference whose windows are already placed, and reruns only the shared
+polish and the internal alignment, for instance at a finer scene; the
+outline record of the start is carried into the result.
 """
 
 import logging
@@ -45,6 +56,17 @@ MERIT = os.environ.get("ESIS_MERIT", "correlation")
 # ESIS_PRIMARY=0 holds the primary at nominal instead of scanning the window widths
 PRIMARY = os.environ.get("ESIS_PRIMARY", "1") not in ("0", "false", "no")
 
+# ESIS_NUM_SCENE samples the AIA scene; 401 is 2.1 arcsec, about 2.8 ESIS pixels
+NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
+
+# ESIS_SEED seeds the capture of the absolute stage; a second seed is the
+# repeatability test
+SEED = int(os.environ.get("ESIS_SEED", "0"))
+
+# ESIS_DRIFT_DEGREE smooths the measured window drift through the flight
+DRIFT_DEGREE = os.environ.get("ESIS_DRIFT_DEGREE", "3")
+DRIFT_DEGREE = int(DRIFT_DEGREE) if DRIFT_DEGREE else None
+
 
 def _names(variable: str, default: tuple[str, ...]) -> tuple[str, ...]:
     """Read a colon-separated list of field names from the environment."""
@@ -69,7 +91,7 @@ def _channels(directory: pathlib.Path) -> list[esis.optics.DistortionParameters]
 def channel(c: int, directory: pathlib.Path) -> None:
     """Fit one channel absolutely and save it as a one-row ECSV."""
     instrument = _fits._base(None)
-    scene, observation = _fits._frame(15, 401)
+    scene, observation = _fits._frame(15, NUM_SCENE)
     log = _fits._logger(directory, f"channel_{c}")
     channel = instrument[dict(channel=c)]
     p0 = esis.optics.DistortionParameters.from_instrument(channel)
@@ -91,7 +113,7 @@ def channel(c: int, directory: pathlib.Path) -> None:
         popsize=15,
         maxiter=80,
         tol=0.0,
-        seed=0,
+        seed=SEED,
         log=log,
     )
     fitted.to_file(
@@ -104,7 +126,7 @@ def channel(c: int, directory: pathlib.Path) -> None:
             popsize=15,
             maxiter=80,
             tol=0.0,
-            seed=0,
+            seed=SEED,
             versions=_fits._versions(),
         ),
     )
@@ -128,6 +150,7 @@ def combine(directory: pathlib.Path) -> None:
     """Run the outline, shared and internal stages from the saved per-channel fits."""
     path_edges = directory / "window_edges.ecsv"
     _fits.fit_distortion_reference(
+        num_scene=NUM_SCENE,
         device=DEVICE,
         workers=WORKERS,
         merit=MERIT,
@@ -142,18 +165,83 @@ def combine(directory: pathlib.Path) -> None:
     )
 
 
+def polish(directory: pathlib.Path) -> None:
+    """Rerun the shared polish and the alignment from a saved reference."""
+    path_start = directory / "start_reference.ecsv"
+    start = astropy.table.QTable.read(path_start, format="ascii.ecsv")
+    parameters = esis.optics.DistortionParameters.from_file(path_start)
+    path = directory / "distortion_reference.ecsv"
+    _fits.fit_distortion_reference(
+        num_scene=NUM_SCENE,
+        device=DEVICE,
+        workers=WORKERS,
+        merit=MERIT,
+        channels=(),
+        parameters=[_fits._channel(parameters, c) for c in range(4)],
+        free_absolute=FREE_ABSOLUTE,
+        free_shared=FREE_SHARED,
+        edges=None,
+        primary=False,
+        path=path,
+        directory=directory,
+    )
+    # the windows were placed by the start's outline stage: carry its record
+    result = astropy.table.QTable.read(path, format="ascii.ecsv")
+    for key in ("absolute", "outline"):
+        result.meta["stages"][key] = start.meta.get("stages", {}).get(key)
+        result.meta["scores"][key] = start.meta.get("scores", {}).get(key)
+    result.meta["stages"]["primary"] = start.meta.get("stages", {}).get("primary")
+    result.meta["start"] = dict(
+        provenance=start.meta.get("provenance"),
+        date=start.meta.get("date"),
+        commits=start.meta.get("commits"),
+        polish=f"shared polish and alignment rerun at num_scene={NUM_SCENE}",
+    )
+    result.write(path, format="ascii.ecsv", overwrite=True)
+
+
+def align(directory: pathlib.Path) -> None:
+    """Rerun only the internal alignment of the directory's reference, in place."""
+    path = directory / "distortion_reference.ecsv"
+    _fits.realign_distortion_reference(
+        reference=path,
+        num_scene=NUM_SCENE,
+        free_shared=FREE_SHARED,
+        path=path,
+        directory=directory,
+    )
+
+
+def defocus(directory: pathlib.Path) -> None:
+    """Measure the defocus of the primary through the flight from the channels."""
+    path_drift = directory / "window_drift.ecsv"
+    _fits.fit_defocus_history(
+        reference=directory / "distortion_reference.ecsv",
+        num_scene=NUM_SCENE,
+        drift=path_drift if path_drift.exists() else None,
+        drift_degree=DRIFT_DEGREE,
+        path=directory / "defocus.ecsv",
+        directory=directory,
+    )
+
+
 def pointing(t: int, directory: pathlib.Path) -> None:
     """Fit the pointing of one frame and save it as a one-row ECSV."""
     parameters = esis.optics.DistortionParameters.from_file(
         directory / "distortion_reference.ecsv"
     )
     path_drift = directory / "window_drift.ecsv"
+    path_defocus = directory / "defocus.ecsv"
     _fits.fit_distortion_pointing(
         instrument=parameters.to_instrument(_fits._base(None)),
+        num_scene=NUM_SCENE,
         device=DEVICE,
         merit=MERIT,
         frames=(t,),
         drift=path_drift if path_drift.exists() else None,
+        drift_degree=DRIFT_DEGREE,
+        defocus=path_defocus if path_defocus.exists() else None,
+        relative=False,
         path=directory / f"pointing_{t:02d}.ecsv",
         directory=directory,
     )
@@ -190,6 +278,7 @@ def accept(directory: pathlib.Path) -> None:
             if path_edges.exists()
             else None
         ),
+        num_scene=NUM_SCENE,
         device=DEVICE,
         merit=MERIT,
         path=directory / "acceptance.ecsv",
@@ -205,6 +294,12 @@ if __name__ == "__main__":
         edges(pathlib.Path(sys.argv[2]))
     elif command == "combine":
         combine(pathlib.Path(sys.argv[2]))
+    elif command == "polish":
+        polish(pathlib.Path(sys.argv[2]))
+    elif command == "align":
+        align(pathlib.Path(sys.argv[2]))
+    elif command == "defocus":
+        defocus(pathlib.Path(sys.argv[2]))
     elif command == "pointing":
         pointing(int(sys.argv[2]), pathlib.Path(sys.argv[3]))
     elif command == "gather":

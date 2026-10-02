@@ -792,6 +792,13 @@ def distortion_fit(
             u.Quantity(pointing["roll"]),
             axes=axis_time,
         )
+        # the focus of the primary at the field stop drifts through the
+        # flight, which moves every channel's sky without moving its windows
+        if "z_primary" in pointing.colnames:
+            model.primary_mirror.translation.z = (
+                model.primary_mirror.translation.z
+                + na.ScalarArray(u.Quantity(pointing["z_primary"]), axes=axis_time)
+            )
         # the windows of each channel drift through the flight, which a
         # per-frame offset of the grating reproduces
         for name in ("yaw_grating", "pitch_grating"):
@@ -868,6 +875,9 @@ def distortion_fit_bounds(
     roll_field_stop = absolute(p.roll_field_stop, -4 * u.deg, 4 * u.deg)
     spacing_rulings = relative(p.spacing_rulings, floor=2e-3 * u.um)
     displacement_primary = absolute(p.displacement_primary, -10 * u.mm, 0 * u.mm)
+    # a defocus of the primary at the field stop; beyond a few tenths of a
+    # millimetre the blur would exceed the cross-dispersion resolution
+    z_primary = absolute(p.z_primary, -0.3 * u.mm, 0.3 * u.mm)
     pitch = relative(p.pitch, floor=60 * u.arcsec)
     yaw = relative(p.yaw, floor=60 * u.arcsec)
     roll = absolute(p.roll, -2 * u.deg, 2 * u.deg)
@@ -894,6 +904,7 @@ def distortion_fit_bounds(
         roll_field_stop=roll_field_stop[0],
         spacing_rulings=spacing_rulings[0],
         displacement_primary=displacement_primary[0],
+        z_primary=z_primary[0],
         pitch=pitch[0],
         yaw=yaw[0],
         roll=roll[0],
@@ -913,6 +924,7 @@ def distortion_fit_bounds(
         roll_field_stop=roll_field_stop[1],
         spacing_rulings=spacing_rulings[1],
         displacement_primary=displacement_primary[1],
+        z_primary=z_primary[1],
         pitch=pitch[1],
         yaw=yaw[1],
         roll=roll[1],

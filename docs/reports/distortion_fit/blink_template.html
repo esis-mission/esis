@@ -60,6 +60,7 @@
     <img id="view" alt="model or data image of the selected channel and frame">
     <div class="status">
       <span class="which" id="which">model</span>
+      <span><b id="time"></b></span>
       <span>pointing offset <b id="pointing"></b></span>
     </div>
   </div>
@@ -88,6 +89,7 @@ function draw() {
   frameLabel.textContent = frame;
   const p = f.pointing;
   pointing.textContent = `pitch ${p[0].toFixed(2)}″, yaw ${p[1].toFixed(2)}″, roll ${(p[2] * 3600).toFixed(1)}″`;
+  document.getElementById("time").textContent = f.time ? `${f.time.start.replace("T", " ").slice(0, 19)} UTC, ${f.time.exposure.toFixed(1)} s` : "";
   [...channels.children].forEach((b, c) => b.setAttribute("aria-pressed", c === channel));
   autoButton.setAttribute("aria-pressed", auto);
 }

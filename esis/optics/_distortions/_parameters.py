@@ -102,6 +102,21 @@ class DistortionParameters(
     is measurable to better than a degree from the images.
     """
 
+    z_primary: u.Quantity | na.AbstractScalar = 0 * u.mm
+    """
+    The displacement of the primary mirror along the optic axis at a fixed
+    focal length: a defocus of the solar image at the field stop.
+
+    Unlike :attr:`displacement_primary`, this moves the focal plane off the
+    field stop.  Each channel views the defocused image through its own
+    sector of the primary, so the image shifts on the sky by the sector's
+    offset times the defocus, differently in every channel, while the
+    field stop and hence the window edges stay put: about 1.6 pixels along
+    the dispersion of every channel per 0.1 mm for ESIS-I.  It is the one
+    term that moves the sky without moving the windows, and it is bounded
+    by the blur the defocus would put in the cross-dispersion image.
+    """
+
     z_sensor: u.Quantity | na.AbstractScalar = 0 * u.mm
     """
     The displacement of the sensor along its normal, with the grating
@@ -162,13 +177,16 @@ class DistortionParameters(
         """
         primary_mirror = instrument.primary_mirror
         sensor = instrument.camera.sensor
+        focal_length_nominal = _design(instrument, "focal_length")
+        displacement_primary = primary_mirror.sag.focal_length - focal_length_nominal
         return cls(
             yaw_grating=instrument.grating.yaw.to(u.arcmin),
             pitch_grating=instrument.grating.pitch.to(u.arcmin),
             roll_grating=instrument.grating.roll.to(u.deg),
             roll_field_stop=instrument.field_stop.roll.to(u.deg),
             spacing_rulings=instrument.grating.rulings.spacing.coefficients[0].to(u.um),
-            displacement_primary=-primary_mirror.translation.z.to(u.mm),
+            displacement_primary=displacement_primary.to(u.mm),
+            z_primary=(primary_mirror.translation.z + displacement_primary).to(u.mm),
             pitch=instrument.pitch.to(u.arcsec),
             yaw=instrument.yaw.to(u.arcsec),
             roll=instrument.roll.to(u.deg),
@@ -191,10 +209,10 @@ class DistortionParameters(
         system on the result is discarded so that it is rebuilt with the
         new parameters.
 
-        The nominal focal length of the primary mirror is recovered from the
-        invariant ``focal_length + translation.z``, which is unchanged by
-        applying a :attr:`displacement_primary`, so this method may be applied
-        repeatedly to the results of previous applications.
+        The nominal focal length of the primary mirror is the one the
+        instrument was built with, remembered on the result like the sensor's
+        placement, so this method may be applied repeatedly to the results of
+        previous applications.
 
         Parameters
         ----------
@@ -215,9 +233,7 @@ class DistortionParameters(
         p = copy.deepcopy(self)
 
         primary_mirror = result.primary_mirror
-        focal_length_nominal = (
-            primary_mirror.sag.focal_length + primary_mirror.translation.z
-        )
+        focal_length_nominal = _design(instrument, "focal_length")
 
         result.grating.yaw = p.yaw_grating
         result.grating.pitch = p.pitch_grating
@@ -225,7 +241,7 @@ class DistortionParameters(
         result.field_stop.roll = p.roll_field_stop
         result.grating.rulings.spacing.coefficients[0] = p.spacing_rulings
         primary_mirror.sag.focal_length = focal_length_nominal + p.displacement_primary
-        primary_mirror.translation.z = -p.displacement_primary
+        primary_mirror.translation.z = -p.displacement_primary + p.z_primary
         result.pitch = p.pitch
         result.yaw = p.yaw
         result.roll = p.roll
@@ -243,8 +259,11 @@ class DistortionParameters(
         sensor.yaw = p.yaw_sensor
         sensor.translation.x = p.x_sensor
         sensor.translation.y = p.y_sensor
-        for name in ("z_sensor", "z_grating"):
-            result.__dict__[f"_design_{name}"] = _design(instrument, name)
+        # remembered on a field, which survives indexing by channel
+        result.placement_design = {
+            name: _design(instrument, name)
+            for name in ("z_sensor", "z_grating", "focal_length")
+        }
 
         return result
 
@@ -363,10 +382,16 @@ def _design(instrument: esis.optics.abc.AbstractInstrument, name: str):
     ValueError
         If `name` is not a placement this function knows.
     """
-    if f"_design_{name}" in instrument.__dict__:
-        return instrument.__dict__[f"_design_{name}"]
+    remembered = getattr(instrument, "placement_design", None)
+    if remembered is not None and name in remembered:
+        return remembered[name]
     if name == "z_sensor":
         return instrument.camera.sensor.translation.z
     if name == "z_grating":
         return instrument.grating.translation.z
+    if name == "focal_length":
+        # before any term is applied the primary is focused on the field
+        # stop, and the invariant is the nominal focal length
+        primary_mirror = instrument.primary_mirror
+        return primary_mirror.sag.focal_length + primary_mirror.translation.z
     raise ValueError(name)  # pragma: nocover

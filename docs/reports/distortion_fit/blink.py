@@ -15,6 +15,7 @@ import base64
 import io
 import json
 import logging
+import os
 import pathlib
 import sys
 
@@ -27,6 +28,9 @@ logging.getLogger("numba").setLevel(logging.WARNING)
 
 BLOCK = 4
 """The block-averaging factor of the rendered images."""
+
+NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
+"""The sampling of the AIA scene, as in the fit."""
 
 
 def _standardize(a: np.ndarray, mask: np.ndarray) -> np.ndarray:
@@ -51,15 +55,18 @@ def render(directory: pathlib.Path, device: None | str) -> None:
     instrument = _fits._base(None)
     num_channel = instrument.camera.channel.shape["channel"]
     axes = ("detector_y", "detector_x")
+    times = _fits._frame_times()
     for row in pointing:
         t = int(row["frame"])
-        scene, observation = _fits._frame(t, 401)
+        scene, observation = _fits._frame(t, NUM_SCENE)
         model, data, lit = [], [], []
         for c in range(num_channel):
             p = _fits._channel(reference, c)
             p.pitch = p.pitch + row["pitch"]
             p.yaw = p.yaw + row["yaw"]
             p.roll = p.roll + row["roll"]
+            if "z_primary" in pointing.colnames:
+                p.z_primary = p.z_primary + row["z_primary"]
             for name in ("yaw_grating", "pitch_grating"):
                 if name in pointing.colnames:
                     setattr(p, name, getattr(p, name) + row[name][c])
@@ -89,6 +96,7 @@ def render(directory: pathlib.Path, device: None | str) -> None:
                     row["roll"].to_value("deg"),
                 ]
             ),
+            time=json.dumps(times[t]),
         )
         print(f"frame {t}: rendered", flush=True)
 
@@ -108,6 +116,7 @@ def _jpeg(a: np.ndarray, inside: np.ndarray, limit: float = 3.0) -> str:
 def page(directory: pathlib.Path, out: pathlib.Path) -> None:
     """Write a self-contained page that blinks the model against the data."""
     frames = {}
+    times = None  # the Level-1 frames are loaded only for renders that lack the times
     for path in sorted(directory.glob("blink_*.npz")):
         t = int(path.stem.split("_")[1])
         with np.load(path) as f:
@@ -115,8 +124,13 @@ def page(directory: pathlib.Path, out: pathlib.Path) -> None:
             data = f["data"].astype(float)
             inside = f["inside"].astype(float)
             pointing = f["pointing"].tolist()
+            time = json.loads(str(f["time"])) if "time" in f else None
+        if time is None:
+            times = _fits._frame_times() if times is None else times
+            time = times[t]
         frames[t] = dict(
             pointing=pointing,
+            time=time,
             model=[_jpeg(model[c], inside[c]) for c in range(model.shape[0])],
             data=[_jpeg(data[c], inside[c]) for c in range(data.shape[0])],
         )
@@ -133,7 +147,10 @@ def page(directory: pathlib.Path, out: pathlib.Path) -> None:
 if __name__ == "__main__":
     command = sys.argv[1]
     if command == "render":
-        render(pathlib.Path(sys.argv[2]), sys.argv[3] if len(sys.argv) > 3 else None)
+        render(
+            pathlib.Path(sys.argv[2]),
+            (sys.argv[3] if len(sys.argv) > 3 else "") or None,
+        )
     elif command == "page":
         page(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))
     else:

@@ -26,7 +26,7 @@ def test_pack_round_trip():
     instrument = _channel()
     parameters = esis.optics.DistortionParameters.from_instrument(instrument)
     x = na.pack(parameters).ndarray
-    assert x.shape == (16,)
+    assert x.shape == (17,)
     result = na.unpack(x, parameters)
     for name in ("yaw_grating", "pitch", "z_sensor", "yaw_sensor"):
         assert getattr(result, name) == getattr(parameters, name)
@@ -72,6 +72,109 @@ def test_to_instrument_repeated():
     assert twice.grating.translation.z == once.grating.translation.z
     again = esis.optics.DistortionParameters.from_instrument(twice)
     assert np.isclose(again.z_sensor.to_value(u.mm), 2)
+
+
+def test_z_primary():
+    """
+    Defocus the primary: it moves at a fixed focal length, and repeatedly.
+
+    The displacement term moves the primary and lengthens its focus
+    together; the defocus term moves it alone.
+    """
+    instrument = _channel()
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    assert parameters.z_primary == 0 * u.mm
+    focal_length = instrument.primary_mirror.sag.focal_length
+    parameters.z_primary = 0.2 * u.mm
+    parameters.displacement_primary = -3 * u.mm
+    once = parameters.to_instrument(instrument)
+    assert once.primary_mirror.sag.focal_length == focal_length - 3 * u.mm
+    assert np.isclose(
+        once.primary_mirror.translation.z.to_value(u.mm),
+        (instrument.primary_mirror.translation.z + 3.2 * u.mm).to_value(u.mm),
+    )
+    again = esis.optics.DistortionParameters.from_instrument(once)
+    assert np.isclose(again.z_primary.to_value(u.mm), 0.2)
+    assert np.isclose(again.displacement_primary.to_value(u.mm), -3)
+    twice = parameters.to_instrument(once)
+    assert twice.primary_mirror.translation.z == once.primary_mirror.translation.z
+    assert twice.primary_mirror.sag.focal_length == once.primary_mirror.sag.focal_length
+
+
+def test_z_primary_moves_the_sky_not_the_windows():
+    """
+    A defocus shifts where the sky lands but not where the window edges land.
+
+    The field stop is an aperture in the plane the grating images, so the
+    grating puts its edge in the same place whatever the primary does; the
+    solar image, defocused, is seen through the channel's sector of the
+    primary and shifts by the sector's offset times the defocus.
+    """
+    from esis.flights.f1.optics._fits._fits import _idealized, _wavelength_lines
+
+    instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
+    instrument.wavelength = _wavelength_lines()
+    channel = instrument[dict(channel=0)]
+    p = esis.optics.DistortionParameters.from_instrument(channel)
+    wavelength = channel.wavelength[dict(wavelength=1)]
+    sky = na.Cartesian2dVectorArray(
+        x=na.ScalarArray(np.zeros(1) * u.arcsec, axes="s"),
+        y=na.ScalarArray(np.zeros(1) * u.arcsec, axes="s"),
+    )
+
+    def where(q):
+        linear = q.to_instrument(channel).system.linearize(
+            wavelength=channel.wavelength, degree=2, field_stop=True
+        )
+        footprint = linear.footprint(wavelength)
+        edge = np.array(
+            [
+                float(np.mean(na.value(footprint.x).ndarray)),
+                float(np.mean(na.value(footprint.y).ndarray)),
+            ]
+        )
+        centre = linear.distortion.distort(
+            na.SpectralPositionalVectorArray(wavelength=wavelength, position=sky)
+        ).position
+        return edge, np.array(
+            [float(na.value(centre.x).ndarray[0]), float(na.value(centre.y).ndarray[0])]
+        )
+
+    edge_0, sky_0 = where(p)
+    p.z_primary = 0.1 * u.mm
+    edge_1, sky_1 = where(p)
+    assert np.all(np.abs(edge_1 - edge_0) < 0.15)
+    assert np.hypot(*(sky_1 - sky_0)) > 1.0
+
+
+def test_from_instrument_after_indexing():
+    """
+    Read the terms back from an indexed channel of an instrument they were applied to.
+
+    The placements the terms are measured from must survive the indexing,
+    or a defocus reads back as a focal length and a sensor shift as zero.
+    """
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    p = esis.optics.DistortionParameters.from_instrument(instrument)
+    p.z_sensor = 2 * u.mm
+    p.z_primary = 0.1 * u.mm
+    p.displacement_primary = -3 * u.mm
+    applied = p.to_instrument(instrument)
+    channel = applied[dict(channel=0)]
+    again = esis.optics.DistortionParameters.from_instrument(channel)
+    assert np.isclose(again.z_sensor.to_value(u.mm), 2)
+    assert np.isclose(again.z_primary.to_value(u.mm), 0.1)
+    assert np.isclose(again.displacement_primary.to_value(u.mm), -3)
+    # and applying them to the indexed channel does not accumulate
+    twice = again.to_instrument(channel)
+    assert np.isclose(
+        twice.primary_mirror.translation.z.to_value(u.mm),
+        channel.primary_mirror.translation.z.to_value(u.mm),
+    )
+    assert np.isclose(
+        twice.camera.sensor.translation.z.to_value(u.mm),
+        channel.camera.sensor.translation.z.to_value(u.mm),
+    )
 
 
 def test_file_round_trip(tmp_path: pathlib.Path):

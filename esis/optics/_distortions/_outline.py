@@ -89,6 +89,9 @@ def _fit_edge(
         return np.nan, np.nan
     if abs(p[3]) > 12 or abs(p[2] - guess) > half / 2 or abs(p[1]) < 0.2 * abs(p[0]):
         return np.nan, np.nan
+    # the crossing in optika's sensor coordinates, where pixel i spans
+    # [i, i + 1) and the sample of index i sits at i + 1/2
+    p[2] = p[2] + 0.5
     error = np.sqrt(cov[2, 2]) if np.all(np.isfinite(cov)) else np.nan
     return float(p[2]), float(error)
 
@@ -250,11 +253,12 @@ def predict_edges(
     index = np.asarray(edges["index"])
     for k in range(len(edges)):
         px, py = polygons[line[k]]
+        # the row or column of index i is centred at i + 1/2
         if side[k] < 2:
-            left, right = _crossings(px, py, index[k])
+            left, right = _crossings(px, py, index[k] + 0.5)
             result[k] = right if side[k] == 1 else left
         else:
-            top, bottom = _crossings(py, px, index[k])
+            top, bottom = _crossings(py, px, index[k] + 0.5)
             result[k] = bottom if side[k] == 3 else top
     return result
 

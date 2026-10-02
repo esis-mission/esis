@@ -100,7 +100,7 @@ class TestLinearMerit:
         x = na.pack(truth).ndarray.copy()
         names = [f.name for f in __import__("dataclasses").fields(truth)]
         x[names.index("pitch")] += 3000  # arcsec: off the sensor
-        assert m(x) == 1.0
+        assert np.isinf(m(x))
         assert m.num_failed >= 1
 
     def test_field_stop(self, merit):
@@ -163,7 +163,7 @@ def test_merit_propagates_faults(merit, monkeypatch):
 
     failed = m.num_failed
     monkeypatch.setattr(m, "correlation", off)
-    assert m(x) == 1.0
+    assert np.isinf(m(x))
     assert m.num_failed == failed + 1
 
 

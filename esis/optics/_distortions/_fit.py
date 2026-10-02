@@ -248,13 +248,14 @@ def fit_distortion(
         raise ValueError("`free` needs one element per field of `parameters`")
     index = np.array([i for i, n in enumerate(names) if n in free])
     x_full = x0.copy()
+    merit = objective
     objective = _Subset(objective, x_full, index)
     x0, lb, ub = x0[index], lb[index], ub[index]
 
     time_start = time.perf_counter()
-    failed_before = getattr(objective, "num_failed", 0)
+    failed_before = getattr(merit, "num_failed", 0)
     fun_start = objective(x0)
-    if getattr(objective, "num_failed", 0) > failed_before:
+    if getattr(merit, "num_failed", 0) > failed_before:
         raise RuntimeError(
             "the objective fails at the starting point; nothing can be fit from it"
         )

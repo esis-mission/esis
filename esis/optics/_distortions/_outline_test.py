@@ -20,7 +20,8 @@ def _octagon(cx: float, cy: float, radius: float) -> na.Cartesian2dVectorArray:
 def _frame(footprint: na.Cartesian2dVectorArray, shape=(400, 600), sigma=1.5):
     """Make a frame lit inside the footprint, with soft edges and a gradient."""
     px, py = _outline._polygon(footprint)
-    y, x = np.mgrid[: shape[0], : shape[1]]
+    # the value of pixel i sits at i + 1/2 in the coordinates of the outline
+    y, x = np.mgrid[: shape[0], : shape[1]] + 0.5
     inside = np.ones(shape, dtype=float)
     # the signed distance to each edge of the convex polygon
     distance = np.full(shape, np.inf)
