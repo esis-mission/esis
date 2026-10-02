@@ -10,6 +10,8 @@ authors = [
 description = "A Python library for modeling and interpreting data from the EUV Snapshot Imaging Spectrograph (ESIS)."
 readme = "README.md"
 requires-python = ">=3.12"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
