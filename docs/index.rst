@@ -204,18 +204,41 @@ as part of this library.
 
 |
 
+Citation
+========
+If you use :mod:`esis` in your research, please cite both the package and the
+ESIS mission paper, :cite:t:`Parker2022`.
+
+The citation metadata for the package is kept in
+`CITATION.cff <https://github.com/esis-mission/esis/blob/main/CITATION.cff>`_,
+which the "Cite this repository" button on the
+`GitHub page <https://github.com/esis-mission/esis>`_
+can export as BibTeX or APA.
+Please include the version of :mod:`esis` that you used,
+which is given by ``importlib.metadata.version("euv-snapshot-imaging-spectrograph")``.
+
+.. code-block:: bibtex
+
+    @software{esis,
+      author = {Smart, Roy T. and Parker, Jacob D. and Kankelborg, Charles C.},
+      title = {esis},
+      version = {X.Y.Z},
+      url = {https://github.com/esis-mission/esis},
+    }
+
+The Level-0 flight data is archived separately and should be cited alongside
+them:
+`doi:10.5281/zenodo.21997280 <https://doi.org/10.5281/zenodo.21997280>`_
+(also available as ``esis.flights.f1.data.doi``).
+
+|
+
 Publications
 ============
 The instrument and the results of the first flight are described in the mission
 paper, :cite:t:`Parker2022`
 (`publisher <https://iopscience.iop.org/article/10.3847/1538-4357/ac8eaa/meta>`_,
 `doi:10.3847/1538-4357/ac8eaa <https://doi.org/10.3847/1538-4357/ac8eaa>`_).
-Please cite this paper if you use this package in your research.
-
-The Level-0 flight data is archived separately and should be cited alongside
-it:
-`doi:10.5281/zenodo.21997280 <https://doi.org/10.5281/zenodo.21997280>`_
-(also available as ``esis.flights.f1.data.doi``).
 
 |
 
