@@ -1,8 +1,29 @@
+import dataclasses
 import pytest
 import numpy as np
 import astropy.units as u
 import named_arrays as na
 import esis
+
+
+def _is_uncertain(a, seen: None | set[int] = None) -> bool:
+    """Whether any part of a (possibly nested) object is an uncertain array."""
+    if seen is None:
+        seen = set()
+    if id(a) in seen:
+        return False
+    seen.add(id(a))
+    if isinstance(a, na.AbstractUncertainScalarArray):
+        return True
+    if isinstance(a, dict):
+        return any(_is_uncertain(v, seen) for v in a.values())
+    if isinstance(a, (list, tuple)):
+        return any(_is_uncertain(v, seen) for v in a)
+    if dataclasses.is_dataclass(a) and not isinstance(a, type):
+        return any(
+            _is_uncertain(getattr(a, f.name), seen) for f in dataclasses.fields(a)
+        )
+    return False
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -11,6 +32,7 @@ def test_design_full(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+    assert _is_uncertain(result) == (num_distribution != 0)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -19,6 +41,7 @@ def test_design(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+    assert _is_uncertain(result) == (num_distribution != 0)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -27,6 +50,7 @@ def test_design_single(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+    assert _is_uncertain(result) == (num_distribution != 0)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -35,6 +59,7 @@ def test_as_built_unfocused(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+    assert _is_uncertain(result) == (num_distribution != 0)
 
 
 def test_design_focus_grating():

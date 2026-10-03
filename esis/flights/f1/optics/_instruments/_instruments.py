@@ -7,6 +7,7 @@ from esis.flights.f1.spectrum import He_I, Mg_X, O_V
 from .. import primaries
 from .. import gratings
 from .. import filters
+from .._uncertainty import uniform
 
 __all__ = [
     "design_full",
@@ -88,12 +89,12 @@ def design_full(
         width_border=(83.7 * u.mm - radius_primary_clear) * cos_per_channel,
         material=primaries.materials.multilayer_design(),
         translation=na.Cartesian3dVectorArray(
-            x=na.UniformUncertainScalarArray(
+            x=uniform(
                 nominal=0 * u.mm,
                 width=1 * u.mm,
                 num_distribution=num_distribution,
             ),
-            y=na.UniformUncertainScalarArray(
+            y=uniform(
                 nominal=0 * u.mm,
                 width=1 * u.mm,
                 num_distribution=num_distribution,
@@ -145,7 +146,7 @@ def design_full(
         angle_input=1.301 * u.deg,
         angle_output=8.057 * u.deg,
         sag=optika.sags.SphericalSag(
-            radius=na.UniformUncertainScalarArray(
+            radius=uniform(
                 nominal=-radius_grating,
                 width=radius_grating * error_radius_grating,
                 num_distribution=num_distribution,
@@ -176,24 +177,24 @@ def design_full(
         distance_radial=2.074999998438000e1 * u.mm,
         azimuth=angle_channel.copy(),
         translation=na.Cartesian3dVectorArray(
-            x=na.UniformUncertainScalarArray(
+            x=uniform(
                 nominal=0 * u.mm,
                 width=1 * u.mm,
                 num_distribution=num_distribution,
             ),
-            y=na.UniformUncertainScalarArray(
+            y=uniform(
                 nominal=0 * u.mm,
                 width=1 * u.mm,
                 num_distribution=num_distribution,
             ),
-            z=na.UniformUncertainScalarArray(
+            z=uniform(
                 nominal=primary.sag.focal_length - 374.7 * u.mm,
                 width=error_grating_z,
                 num_distribution=num_distribution,
             ),
         ),
         yaw=-4.469567242792327 * u.deg,
-        roll=na.UniformUncertainScalarArray(
+        roll=uniform(
             nominal=0 * u.deg,
             width=1.3e-2 * u.rad,
             num_distribution=num_distribution,
@@ -209,7 +210,8 @@ def design_full(
         translation=na.Cartesian3dVectorArray(
             x=0 * u.mm,
             y=0 * u.mm,
-            z=grating.translation.z.nominal + 1.301661998854058 * u.m,
+            # placed relative to where the grating is designed to be
+            z=na.nominal(grating.translation.z) + 1.301661998854058 * u.m,
         ),
         yaw=-3.45 * u.deg,
         roll=45 * u.deg,
@@ -276,24 +278,6 @@ def design_full(
                 centers=True,
             ),
         )
-
-    if num_distribution == 0:
-        primary.translation = na.nominal(primary.translation)
-        field_stop.translation = na.nominal(field_stop.translation)
-        grating.sag.radius = na.nominal(grating.sag.radius)
-        grating.rulings.spacing.coefficients[0] = na.nominal(
-            grating.rulings.spacing.coefficients[0]
-        )
-        grating.rulings.spacing.coefficients[1] = na.nominal(
-            grating.rulings.spacing.coefficients[1]
-        )
-        grating.rulings.spacing.coefficients[2] = na.nominal(
-            grating.rulings.spacing.coefficients[2]
-        )
-        grating.rulings.depth = na.nominal(grating.rulings.depth)
-        grating.rulings.ratio_duty = na.nominal(grating.rulings.ratio_duty)
-        grating.translation = na.nominal(grating.translation)
-        grating.roll = na.nominal(grating.roll)
 
     return esis.optics.Instrument(
         name="ESIS 1 final design (all channels)",
@@ -622,7 +606,6 @@ def as_built(
     .. jupyter-execute::
 
         import astropy.units as u
-        import named_arrays as na
         import esis
 
         instrument = esis.flights.f1.optics.as_built(num_distribution=0)
@@ -631,7 +614,7 @@ def as_built(
             esis.flights.f1.spectrum.O_V.wavelength,
         ) - instrument.camera.sensor.position_image
 
-        na.nominal(error.length.to(u.um))
+        error.length.to(u.um)
     """
     result = as_built_unfocused(
         grid=grid,
