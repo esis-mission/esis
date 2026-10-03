@@ -125,7 +125,24 @@ hosted at [esis-mission.github.io](https://esis-mission.github.io).
 
 ## Citation
 
-If you use this package in your research, please cite the ESIS mission paper:
+If you use this package in your research, please cite both the package and
+the ESIS mission paper.
+
+The citation metadata for the package is kept in [`CITATION.cff`](https://github.com/esis-mission/esis/blob/main/CITATION.cff),
+which the "Cite this repository" button on GitHub can export as BibTeX or APA.
+Please include the version of the package that you used,
+which is given by `importlib.metadata.version("euv-snapshot-imaging-spectrograph")`.
+
+```bibtex
+@software{esis,
+  author = {Smart, Roy T. and Parker, Jacob D. and Kankelborg, Charles C.},
+  title = {esis},
+  version = {X.Y.Z},
+  url = {https://github.com/esis-mission/esis},
+}
+```
+
+The mission paper describes the instrument and the results of the first flight:
 
 > Parker, J. D., Smart, R. T., Kankelborg, C., Winebarger, A., and
 > Goldsworth, N. 2022, "First Flight of the EUV Snapshot Imaging Spectrograph
