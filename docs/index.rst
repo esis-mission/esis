@@ -214,8 +214,17 @@ The citation metadata for the package is kept in
 which the "Cite this repository" button on the
 `GitHub page <https://github.com/esis-mission/esis>`_
 can export as BibTeX or APA.
+
+Every release of :mod:`esis` is archived on Zenodo with its own DOI.
+The concept DOI,
+`10.5281/zenodo.23113153 <https://doi.org/10.5281/zenodo.23113153>`_,
+always resolves to the latest version,
+and the Zenodo page lists the DOI of every version.
 Please include the version of :mod:`esis` that you used,
 which is given by ``importlib.metadata.version("euv-snapshot-imaging-spectrograph")``.
+The BibTeX entry below uses the concept DOI.
+To cite a specific version instead,
+replace ``doi`` with the DOI of that version.
 
 .. code-block:: bibtex
 
@@ -223,6 +232,7 @@ which is given by ``importlib.metadata.version("euv-snapshot-imaging-spectrograp
       author = {Smart, Roy T. and Parker, Jacob D. and Kankelborg, Charles C.},
       title = {esis},
       version = {X.Y.Z},
+      doi = {10.5281/zenodo.23113153},
       url = {https://github.com/esis-mission/esis},
     }
 
