@@ -15,6 +15,7 @@ stages are split across jobs.  Run, in order::
     python reproduce.py defocus <directory>       # defocus history from the channels
     python reproduce.py pointing <t> <directory>  # per-frame pointing of frame t
     python reproduce.py gather <directory>        # pointing rows -> ECSV
+    python reproduce.py coregister <directory>    # channels against one another
     python reproduce.py accept <directory>        # score the fit on held-out frames
 
 Environment: ESIS_DEVICE (default ``cuda``; empty for the host),
@@ -66,6 +67,9 @@ SEED = int(os.environ.get("ESIS_SEED", "0"))
 # ESIS_DRIFT_DEGREE smooths the measured window drift through the flight
 DRIFT_DEGREE = os.environ.get("ESIS_DRIFT_DEGREE", "3")
 DRIFT_DEGREE = int(DRIFT_DEGREE) if DRIFT_DEGREE else None
+
+# ESIS_COREGISTRATION_DEGREE is the polynomial through the channels' offsets
+COREGISTRATION_DEGREE = int(os.environ.get("ESIS_COREGISTRATION_DEGREE", "2"))
 
 
 def _names(variable: str, default: tuple[str, ...]) -> tuple[str, ...]:
@@ -263,6 +267,24 @@ def gather(directory: pathlib.Path) -> None:
     print(f"{len(table)} frames -> {directory / 'distortion_pointing.ecsv'}")
 
 
+def coregister(directory: pathlib.Path) -> None:
+    """Register the channels with one another, into the pointing table."""
+    path = directory / "distortion_pointing.ecsv"
+    pointing = astropy.table.QTable.read(path, format="ascii.ecsv")
+    table = _fits.fit_coregistration(
+        reference=directory / "distortion_reference.ecsv",
+        pointing=pointing,
+        num_scene=NUM_SCENE,
+        degree=COREGISTRATION_DEGREE,
+        path=directory / "coregistration.ecsv",
+        directory=directory,
+    )
+    _fits.apply_coregistration(pointing, table).write(
+        path, format="ascii.ecsv", overwrite=True
+    )
+    print(f"channel offsets -> {path}")
+
+
 def accept(directory: pathlib.Path) -> None:
     """Score the reference on frames across the flight, without an inversion."""
     path_edges = directory / "window_edges.ecsv"
@@ -304,6 +326,8 @@ if __name__ == "__main__":
         pointing(int(sys.argv[2]), pathlib.Path(sys.argv[3]))
     elif command == "gather":
         gather(pathlib.Path(sys.argv[2]))
+    elif command == "coregister":
+        coregister(pathlib.Path(sys.argv[2]))
     elif command == "accept":
         accept(pathlib.Path(sys.argv[2]))
     else:

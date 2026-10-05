@@ -61,15 +61,7 @@ def render(directory: pathlib.Path, device: None | str) -> None:
         scene, observation = _fits._frame(t, NUM_SCENE)
         model, data, lit = [], [], []
         for c in range(num_channel):
-            p = _fits._channel(reference, c)
-            p.pitch = p.pitch + row["pitch"]
-            p.yaw = p.yaw + row["yaw"]
-            p.roll = p.roll + row["roll"]
-            if "z_primary" in pointing.colnames:
-                p.z_primary = p.z_primary + row["z_primary"]
-            for name in ("yaw_grating", "pitch_grating"):
-                if name in pointing.colnames:
-                    setattr(p, name, getattr(p, name) + row[name][c])
+            p = _fits.frame_parameters(reference, pointing, t, c)
             channel = instrument[dict(channel=c)]
             merit = esis.optics.LinearMerit(
                 instrument=channel,

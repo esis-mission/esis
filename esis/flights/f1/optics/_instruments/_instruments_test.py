@@ -168,6 +168,16 @@ def test_distortion_fit_axis_time():
     assert np.all(delta[dict(time=0, channel=0)] > 0 * u.arcsec)
     assert np.all(delta[dict(time=~0, channel=0)] < 0 * u.arcsec)
     assert np.all(np.abs(delta[dict(time=15)]) < 0.01 * u.arcsec)
+    # each channel carries an offset of its own on top of the payload's
+    # pointing, which registers the channels with one another: zero at the
+    # reference frame and in the mean over the channels
+    own = delta - delta.mean("channel")
+    assert np.all(np.abs(own[dict(time=0)]).max() > 0.05 * u.arcsec)
+    assert np.all(np.abs(own[dict(time=15)]) < 1e-6 * u.arcsec)
+    pitch = result.pitch - reference.pitch
+    assert np.all(
+        np.abs((pitch - pitch.mean("channel"))[dict(time=0)]).max() > 0.05 * u.arcsec
+    )
 
 
 def test_distortion_fit_sensor_terms():

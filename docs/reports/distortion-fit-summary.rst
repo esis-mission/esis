@@ -6,8 +6,7 @@ Calibrating the ESIS-I optics against the flight: a summary
    A two-page account of the distortion fit for a publication, with the
    minimum set of figures.  The full description of every stage, the
    committed numbers and the reproduction recipe are in
-   :doc:`distortion-fit`.  The numbers below are placeholders until the
-   committed chain lands; each is marked ``TBD``.
+   :doc:`distortion-fit`.  The numbers are those of the committed tables.
 
 Why a fit is needed
 -------------------
@@ -91,9 +90,18 @@ The pipeline
    does exactly that, because each channel views the defocused image
    through its own sector of the primary and sees it shifted along its own
    dispersion.  The defocus is measured from the channels against one
-   another in every frame, TBD µm end to end, and applied.
+   another in every frame, 40 µm end to end, and applied.
 
-6. **Acceptance.**  The fit is scored on frames it was not fit to, and the
+6. **Co-registration.**  What the channels still show against one another
+   after that is a translation of each channel's whole image inside its
+   window, up to half a pixel at the ends of the flight, the same at both
+   lines and smooth in time.  No term of the model produces it and we do
+   not know its cause.  It is measured the same way, in every frame, and
+   removed as an offset of each channel's own pointing, a quadratic in
+   time that is zero at the reference frame: twelve numbers for the
+   flight, labelled as empirical.
+
+7. **Acceptance.**  The fit is scored on frames it was not fit to, and the
    coalignment metric is measured in every frame: the whole-channel shift
    of each channel against channel 1, and the scatter of the tiles about
    it, in pixels.
@@ -103,10 +111,12 @@ Results
 
 The committed tables come from the chain run from scratch on the cluster
 on 2026-10-02 with the final code, from the seed-0 captures, in 6.3 hours
-of wall time.  The correlation with the reference frame after the capture
+of wall time, with the co-registration and the acceptance run over it
+on 2026-10-05.  The correlation with the reference frame after the capture
 is 0.799, 0.837, 0.794, 0.816 on channels 0 to 3, after the shared polish
-0.804, 0.847, 0.793, 0.820, and over all thirty frames of the flight with
-each frame's pointing applied a mean of 0.799, 0.842, 0.792, 0.816.  The
+0.804, 0.847, 0.793, 0.820, and on six frames across the flight that the
+fit never saw, with each frame's pointing applied, a mean of 0.799,
+0.842, 0.792, 0.816.  The
 internal alignment leaves the channels 0.02, 0.00, 0.02, 0.04 px from
 channel 1 at the reference frame.  The defocus of the primary drifts by
 -16 to +25 µm over the flight, a line with 1.9 µm of scatter.  A second
@@ -114,29 +124,34 @@ run of the same chain from a different seed, and the candidate run that
 preceded this one, reproduce every one of these numbers to 0.01 in
 correlation and 0.02 px in coalignment.
 
-The coalignment metric over all thirty frames, every channel but the
-anchor:
+The coalignment metric, every channel but the anchor, over the
+twenty-seven frames bright enough to measure, before and after the
+empirical co-registration:
 
-=====  ============  ============  ============  ====================
-line   rms shift     max shift     tile scatter  rms, frames 6 to 24
-=====  ============  ============  ============  ====================
-He I   0.207 px      0.623 px      0.326 px      0.128 px
-O V    0.185 px      0.475 px      0.243 px      0.110 px
-=====  ============  ============  ============  ====================
+=====  ================  ================  ====================  ============
+line   rms shift         max shift         rms along dispersion  tile scatter
+=====  ================  ================  ====================  ============
+He I   0.20 to 0.09 px   0.62 to 0.21 px   3.3 to 1.5 km/s       0.33 px
+O V    0.17 to 0.07 px   0.48 to 0.13 px   2.5 to 0.7 km/s       0.24 px
+=====  ================  ================  ====================  ============
 
 Only the part of a misregistration along a channel's dispersion is a
 velocity error, and a pixel along the dispersion is 18.9 km/s at He I
-and 17.4 km/s at O V.  Projected that way the channels agree, over the
-frames from the second to the fourth minute of the flight, to 0.11 px or
-2.1 km/s rms at He I and 0.09 px or 1.5 km/s at O V, and the worst single
-channel and frame in that span is 5 km/s.  Over the whole flight the rms
-is 3.5 and 2.7 km/s and the worst 11.2 km/s, at the dark last frames and
-in the first minute, where the windows drift fastest; those frames are
-the open item, and the metric is what would exclude them from an
-inversion.  For scale, the quiet-Sun velocities ESIS measures are of
-order 10 km/s, and the tile-to-tile scatter along the dispersion over the
-same mid-flight frames, which contains the real Doppler structure of the
-scene as well as noise, is 3.4 and 2.3 km/s per 105″ tile.  In the
+and 17.4 km/s at O V.  With the pointing, the window drift and the
+defocus alone the channels agree to a fifth of a pixel, 3 km/s, and
+part by up to 0.6 px in the first minute of the flight.  The
+co-registration brings them to 0.09 and 0.07 px, 1.5 and 0.7 km/s, with
+the worst single channel and frame at 4 km/s; a length taken from two
+components each measured to 0.05 px cannot come out below 0.07 px, so
+that is what the measurement resolves.  The three dark frames that
+close the flight are extrapolated, and He I is measured there only to
+0.8 px in the worst channel; the metric is what would exclude them from
+an inversion.  For scale, the quiet-Sun velocities ESIS measures are of
+order 10 km/s, and the tile-to-tile scatter along the dispersion, which
+contains the real Doppler structure of the scene as well as noise, is 3.4
+and 2.3 km/s per 105″ tile through the middle of the flight.  The
+co-registration is an empirical term: twelve numbers that remove a motion
+we measured and could not explain, described under the lessons below.  In the
 candidate run that preceded the committed one, dropping the defocus term
 from an otherwise identical chain raised the rms over the flight from
 0.226 to 0.285 px at He I and from 0.180 to 0.233 px at O V, so the term
@@ -171,13 +186,26 @@ stop would anchor the sky absolutely and to a few hundredths of a pixel,
 where the AIA proxy scene anchors it to half a pixel, and would separate
 a common Doppler shift from a focus change outright.
 
-*The field stop's edge was the calibration source.*  The octagon's image
-is what separated the pointing from the grating, measured the drift of
-the optics through the flight to a tenth of a pixel, and placed the
-windows; an edge with deliberate fiducial features, a notch or a step in
-each side, would fix the rotation and the scale of every window as well
-as its position, and would settle the field-stop roll that the images
-cannot.
+*The field stop's edge was the calibration source, and its weak point.*
+The octagon's image is what separated the pointing from the grating,
+followed the drift of the optics through the flight and placed the
+windows.  But the fit takes the edges for a rigid outline, and measured
+side by side they are not one.  The He I window runs off the detector on
+one side in every channel, and two channels lack an edge in the other
+direction, so several windows are placed along an axis by a single edge.
+The edges differ in sharpness from 0.7 to over 4 px, several sharpen or
+soften by a pixel through the flight, their profiles are skewed, and the
+two lines, which share one field stop and one grating, disagree on the
+motion of the same side by up to 0.3 px over half the flight.  The
+placement of a window from its edges is therefore uncertain by 0.2 to
+0.3 px over half the flight, which is the size of the motion the
+co-registration stage removes without explaining: we cannot tell whether
+the image moved inside a fixed window or the edges' apparent positions
+moved over a fixed image.  A field stop imaged whole, with margin on
+every side of every window, with edges verified sharp on the ground and a
+deliberate fiducial, a notch or a step, in each side, would have decided
+it, and would fix the rotation and the scale of every window as well as
+its position.
 
 *Microns matter.*  The primary's focus drifted 40 µm over the flight and
 the field stop moved 7 µm, and each moved the images by a few tenths of a
@@ -192,10 +220,14 @@ buys velocity precision until the Doppler smearing of the scene, half a
 pixel per 10 km/s here, blurs the structure the correlation relies on;
 the ESIS dispersion sits comfortably on the right side of that trade.
 The channels' point spread functions differ with their gratings and
-focus, but a correlation locates a symmetric blur without bias, and the
-asymmetric part of an off-axis grating's image is a fraction of its
-width, below the floor above; modelling the point spread would sharpen
-the inversion more than the coalignment.
+focus.  A correlation locates a symmetric blur without bias, but not a
+skewed one: image structure follows the centroid of the blur and an edge
+its median, so a skewed point spread that changes through the flight
+moves the image against the window edges, differently in each channel.
+The edge profiles are skewed and several change, which makes this the
+leading candidate for the unexplained motion; it is not established.
+Measuring the point spread of each channel on the ground, through focus,
+is what would test it.
 
 Figures
 -------

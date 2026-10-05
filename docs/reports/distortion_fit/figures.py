@@ -34,15 +34,16 @@ def _read(directory: pathlib.Path, name: str) -> None | astropy.table.QTable:
 
 
 def flight(directory: pathlib.Path, out: pathlib.Path) -> None:
-    """Draw the pointing, window drift, defocus and coalignment through the flight."""
+    """Draw the pointing, drift, defocus, channel offsets and coalignment in flight."""
     pointing = _read(directory, "distortion_pointing.ecsv")
     defocus = _read(directory, "defocus.ecsv")
     acceptance = _read(directory, "acceptance.ecsv")
+    coregistration = _read(directory, "coregistration.ecsv")
     frames = np.asarray(pointing["frame"])
     t = 10 * (frames - frames[0]) / 60  # minutes from the first frame, 10 s cadence
 
     fig, axes = plt.subplots(
-        4, 1, figsize=(3.5, 6.2), sharex=True, constrained_layout=True
+        5, 1, figsize=(3.5, 7.6), sharex=True, constrained_layout=True
     )
 
     ax = axes[0]
@@ -78,6 +79,29 @@ def flight(directory: pathlib.Path, out: pathlib.Path) -> None:
     ax.set_ylabel("primary defocus\n[µm]")
 
     ax = axes[3]
+    if "pitch_channel" in pointing.colnames:
+        for c in range(pointing["pitch_channel"].shape[1]):
+            kwargs = dict(color=CHANNEL_COLORS[c], lw=1.2)
+            ax.plot(t, pointing["pitch_channel"][:, c].to_value(u.arcsec), **kwargs)
+            ax.plot(
+                t, pointing["yaw_channel"][:, c].to_value(u.arcsec), ls="--", **kwargs
+            )
+        ax.plot([], [], color="k", lw=1.2, label="pitch")
+        ax.plot([], [], color="k", lw=1.2, ls="--", label="yaw")
+        ax.legend(frameon=False, fontsize=7, ncol=2, loc="upper center")
+    ax.set_ylabel("channel offset\n[arcsec]")
+
+    ax = axes[4]
+    if coregistration is not None:
+        # the channels as the stages before the co-registration left them
+        tt = 10 * (np.asarray(coregistration["frame"]) - frames[0]) / 60
+        before = np.hypot(
+            coregistration["shift_x"].to_value(u.pix),
+            coregistration["shift_y"].to_value(u.pix),
+        )
+        for c in range(before.shape[1]):
+            if np.any(before[:, c] > 0):
+                ax.plot(tt, before[:, c], color=CHANNEL_COLORS[c], lw=0.8, ls="--")
     if acceptance is not None:
         anchor = acceptance.meta.get("anchor", 1)
         for c in sorted(set(int(v) for v in acceptance["channel"])):
@@ -143,7 +167,7 @@ def frame(directory: pathlib.Path, out: pathlib.Path, t: int = 15) -> None:
             (
                 (d, "data", "gray", (-2.5, 2.5)),
                 (m, "model", "gray", (-2.5, 2.5)),
-                (residual, "data − model, detail", "RdBu_r", (-1.5, 1.5)),
+                (residual, "data − model\ndetail", "RdBu_r", (-1.5, 1.5)),
             )
         ):
             ax = axes[k, c]
@@ -160,7 +184,7 @@ def frame(directory: pathlib.Path, out: pathlib.Path, t: int = 15) -> None:
             if k == 0:
                 ax.set_title(f"channel {c}", fontsize=9)
             if c == 0:
-                ax.set_ylabel(title, fontsize=9)
+                ax.set_ylabel(title, fontsize=8)
     fig.savefig(out, dpi=300)
     print(f"-> {out}")
 
@@ -230,7 +254,7 @@ def tiles(directory: pathlib.Path, out: pathlib.Path, frames=(0, 15)) -> None:
                 if len(m):
                     m = m[0]
                     ax.set_title(
-                        f"ch{c} vs ch{anchor}, {line}, frame {t}; "
+                        f"ch{c} vs ch{anchor}, {line}, frame {t}\n"
                         f"shift {float(m['translation'].value):.2f}, "
                         f"mag {float(m['magnification'].value):.2f}, "
                         f"rot {float(m['rotation'].value):.2f}, "

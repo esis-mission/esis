@@ -155,7 +155,21 @@ writes.
     along in the pointing table for
     :func:`esis.flights.f1.optics.distortion_fit` to apply.
 
-9.  **Acceptance.**  :func:`esis.flights.f1.optics.acceptance` scores the
+9.  **Co-registration.**  :func:`esis.flights.f1.optics.fit_coregistration`
+    measures every channel's sky against channel 1 once more in every
+    frame, now with that frame's pointing, drift and defocus applied.  What
+    is left is a translation of each channel's whole image, the same at
+    both lines and smooth in time, which the stages above have no term
+    for and which is not understood (see below).  It is taken out as what
+    it looks like, an offset of each channel's own pitch and yaw: a
+    quadratic in the frame index, zero at the reference frame, through the
+    offsets that remove each frame's shifts, taken about the mean of the
+    channels so that the payload's pointing against the scene stays where
+    the previous stage put it.  The channels are measured a second time
+    with the fit applied, which checks its sign and size and corrects it.
+    The offsets join the pointing table.
+
+10. **Acceptance.**  :func:`esis.flights.f1.optics.acceptance` scores the
     result on frames across the flight, the reference frame among them:
     the merit with each frame's pointing applied on six of them, and in
     every frame the coalignment metric: the length of the median tile
@@ -179,6 +193,7 @@ Slurm cluster, in this order::
     sbatch --job-name=dist-defocus reproduce.sbatch defocus <dir>
     sbatch --job-name=dist-pointing --array=0-29 reproduce.sbatch pointing <dir>
     sbatch --job-name=dist-gather reproduce.sbatch gather <dir>
+    sbatch --job-name=dist-coregister reproduce.sbatch coregister <dir>
     sbatch --job-name=dist-accept reproduce.sbatch accept <dir>
     sbatch --job-name=dist-blink reproduce.sbatch blink <dir>
     sbatch --job-name=dist-coalign reproduce.sbatch coalign <dir>
@@ -186,8 +201,9 @@ Slurm cluster, in this order::
 The first produces one ECSV per channel; ``edges`` the median edges and
 the drift; ``combine`` runs the outline, primary, shared and internal
 stages into the committed ``distortion_reference.ecsv``; ``pointing`` and
-``gather`` the committed ``distortion_pointing.ecsv``; ``accept`` the
-acceptance table; ``blink`` renders every frame beside its model for
+``gather`` the committed ``distortion_pointing.ecsv``, to which
+``coregister`` adds each channel's own offsets, with their measurements in
+``coregistration.ecsv``; ``accept`` the acceptance table; ``blink`` renders every frame beside its model for
 ``blink.py page`` to bind into a page that blinks between them; and
 ``coalign`` reads every channel's frame onto the alignment's sky grid
 through its fitted distortion at He I and O V, inside the window each
@@ -209,7 +225,8 @@ tables were made with are in their headers.  Loading the Level-1 frames
 peaks above 100 GB of memory, which the job script asks for.  End to end
 the chain is about a working day on the cluster: three to five hours for
 the capture, an hour for the edges, two to three for the combine, an hour
-for the pointing.
+for the pointing.  The stages from the co-registration on need no cluster:
+a workstation with 128 GB of memory runs them in about three hours.
 
 Results
 -------
@@ -247,36 +264,36 @@ pixels, He I first then O V.
 =====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
 frame  corr 0  corr 1  corr 2  corr 3  He I 0  He I 1  He I 2  He I 3   O V 0   O V 1   O V 2   O V 3
 =====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
-    0     nan     nan     nan     nan    0.48    0.00    0.62    0.25    0.43    0.00    0.48    0.12
-    1     nan     nan     nan     nan    0.36    0.00    0.46    0.16    0.36    0.00    0.39    0.11
-    2     nan     nan     nan     nan    0.41    0.00    0.44    0.05    0.32    0.00    0.34    0.08
-    3     nan     nan     nan     nan    0.34    0.00    0.42    0.09    0.24    0.00    0.23    0.10
-    4     nan     nan     nan     nan    0.30    0.00    0.28    0.08    0.22    0.00    0.17    0.09
-    5     nan     nan     nan     nan    0.27    0.00    0.22    0.10    0.21    0.00    0.13    0.13
-    6     nan     nan     nan     nan    0.24    0.00    0.24    0.09    0.16    0.00    0.08    0.14
-    7     nan     nan     nan     nan    0.28    0.00    0.15    0.14    0.13    0.00    0.05    0.08
-    8     nan     nan     nan     nan    0.25    0.00    0.15    0.13    0.12    0.00    0.04    0.11
-    9   0.793   0.846   0.795   0.820    0.18    0.00    0.13    0.11    0.12    0.00    0.03    0.07
-   10     nan     nan     nan     nan    0.17    0.00    0.12    0.09    0.08    0.00    0.03    0.03
-   11     nan     nan     nan     nan    0.12    0.00    0.16    0.07    0.07    0.00    0.03    0.09
-   12   0.799   0.840   0.790   0.816    0.14    0.00    0.09    0.08    0.07    0.00    0.03    0.11
-   13     nan     nan     nan     nan    0.13    0.00    0.07    0.13    0.03    0.00    0.03    0.05
-   14     nan     nan     nan     nan    0.11    0.00    0.07    0.09    0.02    0.00    0.03    0.07
+    0     nan     nan     nan     nan    0.08    0.00    0.21    0.21    0.05    0.00    0.06    0.03
+    1     nan     nan     nan     nan    0.02    0.00    0.11    0.16    0.00    0.00    0.01    0.03
+    2     nan     nan     nan     nan    0.10    0.00    0.10    0.08    0.02    0.00    0.03    0.03
+    3     nan     nan     nan     nan    0.04    0.00    0.11    0.10    0.07    0.00    0.07    0.01
+    4     nan     nan     nan     nan    0.06    0.00    0.03    0.04    0.04    0.00    0.10    0.05
+    5     nan     nan     nan     nan    0.04    0.00    0.05    0.14    0.08    0.00    0.12    0.08
+    6     nan     nan     nan     nan    0.02    0.00    0.03    0.09    0.11    0.00    0.12    0.10
+    7     nan     nan     nan     nan    0.08    0.00    0.09    0.12    0.09    0.00    0.13    0.06
+    8     nan     nan     nan     nan    0.09    0.00    0.04    0.10    0.12    0.00    0.12    0.09
+    9   0.793   0.846   0.795   0.820    0.04    0.00    0.01    0.09    0.06    0.00    0.10    0.04
+   10     nan     nan     nan     nan    0.05    0.00    0.02    0.09    0.11    0.00    0.11    0.03
+   11     nan     nan     nan     nan    0.07    0.00    0.08    0.07    0.08    0.00    0.09    0.09
+   12   0.799   0.840   0.790   0.815    0.09    0.00    0.04    0.07    0.06    0.00    0.08    0.12
+   13     nan     nan     nan     nan    0.08    0.00    0.04    0.12    0.04    0.00    0.07    0.06
+   14     nan     nan     nan     nan    0.09    0.00    0.05    0.08    0.03    0.00    0.05    0.07
    15   0.804   0.847   0.794   0.820    0.09    0.00    0.09    0.10    0.04    0.00    0.03    0.07
-   16     nan     nan     nan     nan    0.09    0.00    0.08    0.05    0.04    0.00    0.03    0.05
-   17     nan     nan     nan     nan    0.01    0.00    0.12    0.04    0.07    0.00    0.05    0.07
-   18   0.801   0.842   0.792   0.818    0.06    0.00    0.09    0.04    0.06    0.00    0.04    0.11
-   19     nan     nan     nan     nan    0.05    0.00    0.09    0.06    0.11    0.00    0.05    0.12
-   20     nan     nan     nan     nan    0.09    0.00    0.08    0.08    0.15    0.00    0.07    0.17
-   21   0.802   0.841   0.791   0.815    0.10    0.00    0.09    0.12    0.17    0.00    0.10    0.18
-   22     nan     nan     nan     nan    0.13    0.00    0.14    0.06    0.20    0.00    0.12    0.18
-   23     nan     nan     nan     nan    0.16    0.00    0.11    0.04    0.24    0.00    0.10    0.14
-   24   0.798   0.837   0.789   0.808    0.25    0.00    0.16    0.18    0.28    0.00    0.14    0.18
-   25     nan     nan     nan     nan    0.21    0.00    0.13    0.18    0.33    0.00    0.16    0.24
-   26     nan     nan     nan     nan    0.29    0.00    0.17    0.14    0.35    0.00    0.18    0.22
-   27     nan     nan     nan     nan    0.29    0.00    0.07    0.12    0.39    0.00    0.19    0.19
-   28     nan     nan     nan     nan    0.56    0.00    0.02    0.22    0.37    0.00    0.16    0.26
-   29     nan     nan     nan     nan    0.41    0.00    0.20    0.15    0.47    0.00    0.31    0.09
+   16     nan     nan     nan     nan    0.12    0.00    0.09    0.04    0.04    0.00    0.02    0.05
+   17     nan     nan     nan     nan    0.06    0.00    0.13    0.06    0.03    0.00    0.02    0.05
+   18   0.801   0.842   0.791   0.818    0.07    0.00    0.11    0.07    0.03    0.00    0.01    0.08
+   19     nan     nan     nan     nan    0.08    0.00    0.11    0.06    0.02    0.00    0.02    0.08
+   20     nan     nan     nan     nan    0.06    0.00    0.11    0.09    0.02    0.00    0.01    0.12
+   21   0.802   0.841   0.791   0.815    0.06    0.00    0.11    0.09    0.03    0.00    0.02    0.11
+   22     nan     nan     nan     nan    0.10    0.00    0.15    0.12    0.02    0.00    0.04    0.10
+   23     nan     nan     nan     nan    0.08    0.00    0.11    0.08    0.02    0.00    0.01    0.03
+   24   0.798   0.837   0.789   0.808    0.10    0.00    0.13    0.18    0.05    0.00    0.03    0.05
+   25     nan     nan     nan     nan    0.03    0.00    0.06    0.09    0.06    0.00    0.06    0.08
+   26     nan     nan     nan     nan    0.04    0.00    0.05    0.09    0.06    0.00    0.07    0.05
+   27     nan     nan     nan     nan    0.03    0.00    0.08    0.19    0.03    0.00    0.10    0.10
+   28     nan     nan     nan     nan    0.14    0.00    0.11    0.38    0.03    0.00    0.17    0.11
+   29     nan     nan     nan     nan    0.84    0.00    0.13    0.40    0.10    0.00    0.20    0.13
 =====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
 
 The coalignment metric over 30 frames of the flight, every channel but channel 1: the rms and the
@@ -286,14 +303,127 @@ in detector pixels (about 17 km/s per pixel along the dispersion):
 =====  =======  =======  =======  ==============  ==============  ==============
 line   rms      max      scatter  along disp.     rms velocity    max velocity
 =====  =======  =======  =======  ==============  ==============  ==============
-He I     0.207    0.623    0.326    0.185 px        3.5 km/s       11.2 km/s
-O V      0.185    0.475    0.243    0.157 px        2.7 km/s        8.0 km/s
+He I     0.141    0.843    0.325    0.120 px        2.3 km/s       15.3 km/s
+O V      0.074    0.196    0.243    0.051 px        0.9 km/s        3.4 km/s
 =====  =======  =======  =======  ==============  ==============  ==============
 
 A pixel along the dispersion is 18.9 km/s at He I and 17.4 km/s at O V; only the component of a shift along a channel's dispersion is a velocity error.
 
 The residual of the window outlines against the flight-median edges is 2.4, 2.0, 2.3, 2.0 px on channels 0 to 3, and of the window widths 2.6, 2.7, 2.6, 2.7 px: the modelled windows are about two pixels too large on every
 side, which the primary cannot fix, see below.
+
+The motion that is not explained
+--------------------------------
+
+With every frame's pointing, window drift and defocus applied, the
+channels still slide against one another through the flight: by 0.20 px
+rms at He I and 0.17 px at O V over the frames bright enough to measure,
+and by 0.6 px at the first.
+It is a translation of the whole image, with a tenth of a pixel of
+magnification and rotation at most on top; He I and O V agree on it to a
+tenth of a pixel, so it is not a matter of dispersion; and it is smooth in
+time, a quadratic in the frame index following it to 0.05 px.  Two
+measurements on the Level-1 frames alone, with no model in them but each
+channel's Jacobian, say what it is and is not
+(``docs/reports/distortion_fit/diagnostics.py``).
+
+*The image against the window.*  Against frame 15, on each detector: the
+motion of the image, from correlating the interior of the He I and O V
+windows with the same pixels at frame 15, thirty pixels in from the edges
+so that the edge takes no part; and the motion of the window, from the edge
+table.  Taken to the sky and differenced against channel 1, the pointing
+drops out, as does any rigid motion of the field stop, and a grating or a
+camera that moved would carry its image and its window together.  The
+trends over the measured frames, in pixels on the sky per fifteen frames:
+
+=======  ==============  ==============  ==============
+channel  image           window          image - window
+=======  ==============  ==============  ==============
+0        -0.38, +0.31    -0.48, -0.12    +0.10, +0.43
+2        -0.02, +0.02    -0.37, -0.24    +0.35, +0.26
+3        +0.28, +0.41    -0.17, +0.16    +0.45, +0.25
+=======  ==============  ==============  ==============
+
+The image does not ride with the window: channel 2's image stays on
+channel 1's to 0.02 px while its window moves 0.4 px, and channel 3's image
+and window move apart.  The windows do move against one another, by 0.2 to
+0.5 px, and the grating offsets of the pointing stage follow them.  The last
+column, less the fitted defocus, reproduces the tile shifts of the
+alignment to 0.02 px, so the two methods agree and the residual is the
+image moving inside the window as the edges place it.  The measurement
+recovers a known shift of (-0.70, +1.30) px as (-0.71, +1.29), the two
+lines agree to 0.05 px, and the part common to the channels follows the
+fitted pointing.
+
+*What it is not.*  One defocus of the primary leaves 0.19 px rms of the
+0.33 in the six trend components; adding an astigmatism, a coma or a
+trefoil of the primary, three parameters against six numbers, still leaves
+0.13 to 0.16 px, against a measurement good to 0.03.  A plate-scale or
+roll error in a channel's mapping would need eight percent or five degrees
+to turn the four-pixel pointing drift into this, which the tile fields
+exclude.  The signal rises and falls through the flight while the motion
+is monotonic, which excludes an effect of the detector's signal level.
+And it is not the motion of a grating or a camera, which the edges would
+follow.
+
+*The edges as fiducials.*  The conclusion rests on the window edges
+marking a rigid outline, and they do not do so cleanly.  Measured side by
+side and line by line in every frame:
+
+- The He I window has no left edge on any detector, where the image runs
+  off the sensor; channel 0 has no bottom edge and channel 3 no top edge.
+  Channel 1, the anchor of the alignment, is placed in :math:`x` by the
+  right edge of its He I window and the left edge of its O V window alone,
+  both soft, both following a curve that departs from a straight line
+  by 0.4 px where the other edges hold to 0.1 or 0.2, and 0.4 px per
+  fifteen frames apart in their motion.
+- The edges differ in sharpness from 0.7 to over 4 px in the width of
+  the fitted step, with a median of 1.6, and their profiles are skewed,
+  the dark half of the step wider than the lit by 0.8 px in the median.
+  An edge three pixels soft is not the field stop in focus.
+- Several edges change through the flight: the top edge of channel 0
+  sharpens from 3.8 to 1.9 px at O V, the left edge of channel 2 from 4.3
+  to 2.5 px, and the right edge of channel 0 softens from 1.8 to 2.5 px at
+  He I, while most hold to a tenth of a pixel.
+- The two lines, which share one field stop and one grating, disagree on
+  the motion of the same side by up to 0.3 px per fifteen frames.
+
+The crossing of a skewed step moves when its width changes, by a fraction
+of the change, so an edge that sharpens by a pixel appears to move by
+tenths of one.  The placement of a window from its edges is therefore
+uncertain by 0.2 to 0.3 px over half the flight, which is the size of the
+motion in question.  The data do not say whether the image moves inside a
+fixed window or the edges' apparent positions move over a fixed image, and
+either way the cause is not identified.  A point-spread function that is
+skewed and changes through the flight would do it, since image structure
+follows the kernel's centroid and an edge its median; that is a
+hypothesis, not a finding.
+
+*What is done about it.*  The co-registration stage removes the motion
+empirically, as twelve numbers for the flight, and labels it as such in
+the pointing table.  The offsets reach 0.2 arcsec, three tenths of a pixel,
+at the ends of the flight.  With them applied, over the twenty-seven
+frames bright enough to measure:
+
+=====  ==================  ==================  ====================
+line   rms shift           largest shift       rms along dispersion
+=====  ==================  ==================  ====================
+He I   0.20 to 0.09 px     0.62 to 0.21 px     3.3 to 1.5 km/s
+O V    0.17 to 0.07 px     0.48 to 0.13 px     2.5 to 0.7 km/s
+=====  ==================  ==================  ====================
+
+Each entry is before and after.  A length taken from two components each
+measured to 0.05 px cannot come out below about 0.07 px, so the channels
+are registered to what the measurement resolves.  In the three dark
+frames that close the flight He I is measured poorly, up to 0.8 px in
+one channel, while O V stays within 0.2 px; those frames are extrapolated
+by the fit rather than constrained by it.  The correlation against the
+proxy scene is unchanged in every channel, as it should be for a term
+taken about the mean of the channels.  An inversion sees the channels
+registered; the physics of the term is open.  The lesson for the next flight is that the
+edges of the field stop are fiducials only where they are sharp and seen
+whole: a field stop imaged with margin on every side of every window, and
+its edges checked for sharpness on the ground, would have decided this.
 
 What remains open
 -----------------

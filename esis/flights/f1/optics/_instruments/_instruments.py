@@ -799,6 +799,15 @@ def distortion_fit(
                 model.primary_mirror.translation.z
                 + na.ScalarArray(u.Quantity(pointing["z_primary"]), axes=axis_time)
             )
+        # each channel's sky slides against the others' through the flight,
+        # inside its window, which an offset of its own pointing takes out
+        for name in ("pitch", "yaw"):
+            if f"{name}_channel" in pointing.colnames:
+                offset = na.ScalarArray(
+                    u.Quantity(pointing[f"{name}_channel"]),
+                    axes=(axis_time, axis_channel),
+                )
+                setattr(model, name, getattr(model, name) + offset)
         # the windows of each channel drift through the flight, which a
         # per-frame offset of the grating reproduces
         for name in ("yaw_grating", "pitch_grating"):

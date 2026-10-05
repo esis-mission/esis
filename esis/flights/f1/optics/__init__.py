@@ -20,6 +20,9 @@ from ._fits import (
     realign_distortion_reference,
     fit_distortion_pointing,
     fit_defocus_history,
+    frame_parameters,
+    fit_coregistration,
+    apply_coregistration,
     acceptance,
 )
 
@@ -40,5 +43,8 @@ __all__ = [
     "realign_distortion_reference",
     "fit_distortion_pointing",
     "fit_defocus_history",
+    "frame_parameters",
+    "fit_coregistration",
+    "apply_coregistration",
     "acceptance",
 ]

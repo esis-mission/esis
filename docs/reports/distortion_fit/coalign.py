@@ -94,22 +94,9 @@ def _parameters(
     c: int,
 ) -> esis.optics.DistortionParameters:
     """Apply a frame's pointing and drift to one channel's reference parameters."""
-    p = _fits._channel(reference, c)
-    if pointing is None:
-        return p
-    rows = pointing[np.asarray(pointing["frame"]) == t]
-    if len(rows) == 0:
-        return p
-    row = rows[0]
-    p.pitch = p.pitch + row["pitch"]
-    p.yaw = p.yaw + row["yaw"]
-    p.roll = p.roll + row["roll"]
-    if "z_primary" in pointing.colnames:
-        p.z_primary = p.z_primary + row["z_primary"]
-    for name in ("yaw_grating", "pitch_grating"):
-        if name in pointing.colnames:
-            setattr(p, name, getattr(p, name) + row[name][c])
-    return p
+    if pointing is None or t not in np.asarray(pointing["frame"]):
+        return _fits._channel(reference, c)
+    return _fits.frame_parameters(reference, pointing, t, c)
 
 
 def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:

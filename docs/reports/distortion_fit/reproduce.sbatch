@@ -17,6 +17,7 @@
 #   sbatch --job-name=dist-coalign reproduce.sbatch coalign <dir>  # channels on the sky, ESIS_FRAMES
 #   sbatch --job-name=dist-pointing --array=0-29 reproduce.sbatch pointing <dir>
 #   sbatch --job-name=dist-gather reproduce.sbatch gather <dir>
+#   sbatch --job-name=dist-coregister reproduce.sbatch coregister <dir>
 #   sbatch --job-name=dist-accept reproduce.sbatch accept <dir>
 #   sbatch --job-name=dist-blink reproduce.sbatch blink <dir>
 #
@@ -38,7 +39,7 @@ mkdir -p "$DIRECTORY"
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
 case "$COMMAND" in
   channel|pointing) python reproduce.py "$COMMAND" "${SLURM_ARRAY_TASK_ID:-0}" "$DIRECTORY" ;;
-  edges|combine|polish|align|defocus|gather|accept) python reproduce.py "$COMMAND" "$DIRECTORY" ;;
+  edges|combine|polish|align|defocus|gather|coregister|accept) python reproduce.py "$COMMAND" "$DIRECTORY" ;;
   blink)            python blink.py render "$DIRECTORY" "$ESIS_DEVICE" ;;
   coalign)          python coalign.py render "$DIRECTORY" ${ESIS_FRAMES:-15} ;;
   *) echo "unknown command $COMMAND"; exit 1 ;;
