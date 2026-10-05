@@ -9,6 +9,11 @@ from ._fits import (
     apply_coregistration,
     acceptance,
 )
+from ._plots import (
+    distortion_fit_table,
+    plot_distortion_flight,
+    plot_coalignment_tiles,
+)
 
 __all__ = [
     "measure_window_edges",
@@ -20,4 +25,7 @@ __all__ = [
     "fit_coregistration",
     "apply_coregistration",
     "acceptance",
+    "distortion_fit_table",
+    "plot_distortion_flight",
+    "plot_coalignment_tiles",
 ]

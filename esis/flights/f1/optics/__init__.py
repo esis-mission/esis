@@ -24,6 +24,9 @@ from ._fits import (
     fit_coregistration,
     apply_coregistration,
     acceptance,
+    distortion_fit_table,
+    plot_distortion_flight,
+    plot_coalignment_tiles,
 )
 
 __all__ = [
@@ -47,4 +50,7 @@ __all__ = [
     "fit_coregistration",
     "apply_coregistration",
     "acceptance",
+    "distortion_fit_table",
+    "plot_distortion_flight",
+    "plot_coalignment_tiles",
 ]
