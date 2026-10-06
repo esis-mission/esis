@@ -126,7 +126,7 @@ def plot_distortion_flight(
         dx = pointing["drift_x"][:, c].to_value(u.pix)
         dy = pointing["drift_y"][:, c].to_value(u.pix)
         ax.plot(t, np.hypot(dx, dy), color=colors[c], label=f"ch{c}")
-    ax.set_ylabel("window drift\n[px]")
+    ax.set_ylabel("window drift\n[pix]")
 
     ax = axes[2]
     ax.plot(
@@ -178,7 +178,7 @@ def plot_distortion_flight(
         )
     if threshold is not None:
         ax.axhline(threshold.to_value(u.pix), color="0.6", lw=0.8, ls=":")
-    ax.set_ylabel("channel shift\n[px]")
+    ax.set_ylabel("channel shift\n[pix]")
     ax.set_ylim(bottom=0)
     ax.set_xlabel("time since first frame [min]")
     return axes
