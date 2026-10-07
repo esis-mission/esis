@@ -5,23 +5,30 @@ import named_arrays as na
 import esis
 
 
-def _assert_rulings_centered(instrument: esis.optics.abc.AbstractInstrument):
+def _assert_grating_certain(
+    instrument: esis.optics.abc.AbstractInstrument,
+    radius: bool = True,
+) -> None:
     """
-    Assert that the ruling coefficients are centered on their nominal values.
+    Assert that the rulings of the grating, and optionally its radius, are certain.
 
-    The samples of each coefficient should be distributed around its nominal
-    value, not around a value that it replaced.
+    Their uncertainty is not known yet,
+    so they should not carry over the uncertainty of the ESIS-I gratings.
+
+    Parameters
+    ----------
+    instrument
+        The instrument whose grating is checked.
+    radius
+        Whether to check the radius of curvature of the grating as well.
     """
     coefficients = instrument.grating.rulings.spacing.coefficients
     for power in coefficients:
-        c = coefficients[power]
-        if not isinstance(c, na.AbstractUncertainScalarArray):
-            continue
-        assert not isinstance(c.nominal, na.AbstractUncertainScalarArray)
-        axis = c.axis_distribution
-        offset = np.abs(np.mean(c.distribution, axis=axis) - c.nominal)
-        spread = np.max(c.distribution, axis=axis) - np.min(c.distribution, axis=axis)
-        assert np.all(offset <= spread)
+        assert not isinstance(coefficients[power], na.AbstractUncertainScalarArray)
+    if radius:
+        assert not isinstance(
+            instrument.grating.sag.radius, na.AbstractUncertainScalarArray
+        )
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -30,7 +37,7 @@ def test_design_proposed(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
-    _assert_rulings_centered(result)
+    _assert_grating_certain(result, radius=False)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -39,7 +46,23 @@ def test_design_guess(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
-    _assert_rulings_centered(result)
+    _assert_grating_certain(result)
+
+
+def test_design_guess_nominal_geometry():
+    """
+    Check that the grating of an uncertain instrument fits its nominal geometry.
+
+    The nominal geometry is the geometry of the instrument without samples.
+    """
+    certain = esis.flights.f2.optics.design_guess(num_distribution=0)
+    uncertain = esis.flights.f2.optics.design_guess(num_distribution=11)
+    coefficients = uncertain.grating.rulings.spacing.coefficients
+    coefficients_certain = certain.grating.rulings.spacing.coefficients
+    for power in coefficients:
+        assert np.all(np.isclose(coefficients[power], coefficients_certain[power]))
+    radius = uncertain.grating.sag.radius
+    assert np.all(np.isclose(radius, certain.grating.sag.radius))
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -48,7 +71,7 @@ def test_design_single(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
-    _assert_rulings_centered(result)
+    _assert_grating_certain(result)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -57,7 +80,7 @@ def test_design(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
-    _assert_rulings_centered(result)
+    _assert_grating_certain(result)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -77,9 +100,4 @@ def test_design_visible(num_distribution: int):
     coefficients = result.grating.rulings.spacing.coefficients
     coefficients_euv = euv.grating.rulings.spacing.coefficients
     for power in coefficients:
-        coefficient = coefficients[power]
-        coefficient_euv = coefficients_euv[power]
-        if num_distribution != 0:
-            coefficient = coefficient.nominal
-            coefficient_euv = coefficient_euv.nominal
-        assert np.all(np.isclose(coefficient, ratio * coefficient_euv))
+        assert np.all(np.isclose(coefficients[power], ratio * coefficients_euv[power]))

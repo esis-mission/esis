@@ -28,32 +28,6 @@ def _blaze_rulings(grating: esis.optics.Grating) -> None:
     )
 
 
-def _recentered(
-    a: u.Quantity | na.AbstractScalar,
-    nominal: u.Quantity | na.AbstractScalar,
-) -> u.Quantity | na.AbstractScalar:
-    """
-    Move the nominal value of a parameter, carrying its samples along.
-
-    The parameter may be uncertain or not.
-    This keeps the spread of the distribution, which assigning to the
-    ``nominal`` attribute only does for implicit arrays like
-    :class:`named_arrays.UniformUncertainScalarArray`, since an explicit
-    array keeps its samples where they were.
-
-    Parameters
-    ----------
-    a
-        The parameter to move.
-    nominal
-        The new nominal value of the parameter.
-        If this value is uncertain, like one computed from the uncertain
-        geometry of the instrument, only its nominal value is used,
-        since a parameter is designed once, for the nominal geometry.
-    """
-    return a - na.nominal(a) + na.nominal(nominal)
-
-
 def design_proposed(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
@@ -138,10 +112,12 @@ def design_proposed(
     c1 = -2.852e-5 * (u.um / u.mm)
     c2 = -2.112e-7 * (u.um / u.mm**2)
 
+    # The uncertainty of the new rulings is not known yet,
+    # so they are exactly as designed.
     coefficients = result.grating.rulings.spacing.coefficients
-    coefficients[0] = _recentered(coefficients[0], c0)
-    coefficients[1] = _recentered(coefficients[1], c1)
-    coefficients[2] = _recentered(coefficients[2], c2)
+    coefficients[0] = c0
+    coefficients[1] = c1
+    coefficients[2] = c2
 
     # The filter is placed relative to where the grating is designed to be,
     # not relative to each of its possible positions.
@@ -425,11 +401,14 @@ def design_guess(
 
     grating.yaw = yaw_grating
 
+    # The uncertainty of the new grating is not known yet, so it is exactly
+    # what the nominal geometry calls for, rather than what each sample of
+    # the geometry would call for.
     coefficients = result.grating.rulings.spacing.coefficients
-    coefficients[0] = _recentered(coefficients[0], c0)
-    coefficients[1] = _recentered(coefficients[1], c1)
-    coefficients[2] = _recentered(coefficients[2], c2)
-    result.grating.sag.radius = _recentered(result.grating.sag.radius, radius_grating)
+    coefficients[0] = na.nominal(c0)
+    coefficients[1] = na.nominal(c1)
+    coefficients[2] = c2
+    result.grating.sag.radius = na.nominal(radius_grating)
 
     filt.yaw = b
 
@@ -524,11 +503,13 @@ def design_single(
 
     result.grating.yaw = yaw_grating
 
+    # The uncertainty of the new grating is not known yet,
+    # so it is exactly as designed.
     coefficients = result.grating.rulings.spacing.coefficients
-    coefficients[0] = _recentered(coefficients[0], c0)
-    coefficients[1] = _recentered(coefficients[1], c1)
-    coefficients[2] = _recentered(coefficients[2], c2)
-    result.grating.sag.radius = _recentered(result.grating.sag.radius, radius_grating)
+    coefficients[0] = c0
+    coefficients[1] = c1
+    coefficients[2] = c2
+    result.grating.sag.radius = radius_grating
 
     # refresh the groove depth so the blaze angle tracks the new ruling spacing
     _blaze_rulings(result.grating)
