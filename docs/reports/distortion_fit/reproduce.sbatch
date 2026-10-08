@@ -30,7 +30,8 @@ DIRECTORY=$2
 export PYTHONHASHSEED=0
 export MPLBACKEND=Agg
 export NUMBA_CUDA_LOG_LEVEL=CRITICAL
-export ESIS_DEVICE=${ESIS_DEVICE:-cuda}
+# "cpu" runs on the host; an unset variable means cuda, an empty one is kept
+export ESIS_DEVICE=${ESIS_DEVICE-cuda}
 export ESIS_WORKERS=${ESIS_WORKERS:-6}
 source ${ESIS_VENV:-$HOME/venvs/linfit}/bin/activate
 export CUDA_HOME=${CUDA_HOME:-$HOME/linfit/cuda}

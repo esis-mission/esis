@@ -44,6 +44,11 @@ def _block(a: np.ndarray, block: int) -> np.ndarray:
     return a[:ny, :nx].reshape(ny // block, block, nx // block, block).mean(axis=(1, 3))
 
 
+def _device(name: str) -> None | str:
+    """Read the device the way ``reproduce.py`` does: cpu, none or empty is the host."""
+    return None if name.strip().lower() in ("", "cpu", "none") else name
+
+
 def render(directory: pathlib.Path, device: None | str) -> None:
     """Image every frame through the fit and save it beside the data."""
     reference = esis.optics.DistortionParameters.from_file(
@@ -141,7 +146,7 @@ if __name__ == "__main__":
     if command == "render":
         render(
             pathlib.Path(sys.argv[2]),
-            (sys.argv[3] if len(sys.argv) > 3 else "") or None,
+            _device(sys.argv[3] if len(sys.argv) > 3 else "cuda"),
         )
     elif command == "page":
         page(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))

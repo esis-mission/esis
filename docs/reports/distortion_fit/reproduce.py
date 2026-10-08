@@ -47,7 +47,11 @@ from esis.flights.f1.optics._fits import _fits
 # every device allocation
 logging.getLogger("numba").setLevel(logging.WARNING)
 
-DEVICE = os.environ.get("ESIS_DEVICE", "cuda") or None
+# ESIS_DEVICE is the device the regridding weights are built on: "cuda" by
+# default, or "cpu" (also "", "none") for the host, which the released
+# libraries support
+DEVICE = os.environ.get("ESIS_DEVICE", "cuda")
+DEVICE = None if DEVICE.strip().lower() in ("", "cpu", "none") else DEVICE
 WORKERS = int(os.environ.get("ESIS_WORKERS", "6"))
 
 # ESIS_MERIT selects the comparison the fit maximizes: "correlation" (the
