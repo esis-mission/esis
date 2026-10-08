@@ -176,14 +176,15 @@ def plot_distortion_flight(
     # measurement where that stage ran, else the defocus stage's, which is
     # made before any focus is applied
     source = coregistration if coregistration is not None else defocus
-    before = np.hypot(
-        source["shift_x"].to_value(u.pix),
-        source["shift_y"].to_value(u.pix),
-    )
-    tt = _minutes(source["frame"], first)
-    for c in range(before.shape[1]):
-        if c != anchor:
-            ax.plot(tt, before[:, c], color=colors[c], ls="--", lw=0.8)
+    if "shift_x" in source.colnames:
+        before = np.hypot(
+            source["shift_x"].to_value(u.pix),
+            source["shift_y"].to_value(u.pix),
+        )
+        tt = _minutes(source["frame"], first)
+        for c in range(before.shape[1]):
+            if c != anchor:
+                ax.plot(tt, before[:, c], color=colors[c], ls="--", lw=0.8)
     for c in sorted(set(int(v) for v in acceptance["channel"])):
         if c == anchor:
             continue

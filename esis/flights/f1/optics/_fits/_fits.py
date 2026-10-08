@@ -691,7 +691,7 @@ def _environment() -> dict:
         python=sys.version.split()[0],
         platform=platform.platform(),
         packages=dict(sorted(packages.items(), key=lambda kv: kv[0].lower())),
-        environment=_environment(),
+        checkouts=_versions(),
     )
 
 

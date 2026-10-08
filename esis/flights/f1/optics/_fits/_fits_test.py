@@ -1,4 +1,5 @@
 import dataclasses
+import io
 import pathlib
 import astropy.table
 import pytest
@@ -335,3 +336,19 @@ def test_pointing_pattern():
         # per arcsecond
         assert abs(np.linalg.det(pattern[c])) == pytest.approx(1.7, abs=0.2)
         assert np.abs(pattern[c] - pattern[1]).max() < 0.05
+
+
+def test_environment():
+    environment = _fits._environment()
+    assert environment["python"]
+    assert environment["platform"]
+    assert "optika" in environment["packages"]
+    assert "optika" in environment["checkouts"]
+    assert "euv-snapshot-imaging-spectrograph" in environment["checkouts"]
+    # it rides in the metadata of every committed table, so it has to survive
+    # a trip through ECSV
+    table = astropy.table.QTable(dict(a=[1, 2]), meta=dict(environment=environment))
+    buffer = io.StringIO()
+    table.write(buffer, format="ascii.ecsv")
+    back = astropy.table.QTable.read(buffer.getvalue(), format="ascii.ecsv")
+    assert back.meta["environment"]["packages"] == environment["packages"]
