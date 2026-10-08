@@ -71,6 +71,9 @@ DRIFT_DEGREE = int(DRIFT_DEGREE) if DRIFT_DEGREE else None
 # ESIS_COREGISTRATION_DEGREE is the polynomial through the channels' offsets
 COREGISTRATION_DEGREE = int(os.environ.get("ESIS_COREGISTRATION_DEGREE", "2"))
 
+# ESIS_DEFOCUS_DEGREE is the polynomial through the focus of each sector
+DEFOCUS_DEGREE = int(os.environ.get("ESIS_DEFOCUS_DEGREE", "2"))
+
 
 def _names(variable: str, default: tuple[str, ...]) -> tuple[str, ...]:
     """Read a colon-separated list of field names from the environment."""
@@ -224,6 +227,7 @@ def defocus(directory: pathlib.Path) -> None:
         num_scene=NUM_SCENE,
         drift=path_drift if path_drift.exists() else None,
         drift_degree=DRIFT_DEGREE,
+        degree=DEFOCUS_DEGREE,
         path=directory / "defocus.ecsv",
         directory=directory,
     )

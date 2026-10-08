@@ -731,6 +731,10 @@ class AbstractInstrument(
 
                 position_x = na.nominal(position_i.x[where_i]).ndarray
                 position_y = na.nominal(position_i.y[where_i]).ndarray
+                # a vignetted ray may carry no position at all
+                finite = np.isfinite(position_x) & np.isfinite(position_y)
+                position_x = position_x[finite]
+                position_y = position_y[finite]
 
                 position = np.stack(
                     arrays=[

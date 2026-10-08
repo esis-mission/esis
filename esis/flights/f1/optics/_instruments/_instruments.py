@@ -795,9 +795,13 @@ def distortion_fit(
         # the focus of the primary at the field stop drifts through the
         # flight, which moves every channel's sky without moving its windows
         if "z_primary" in pointing.colnames:
+            z_primary = u.Quantity(pointing["z_primary"])
+            # one focus per channel's sector of the primary, or one for the
+            # whole primary in a table from before the sectors were told apart
+            axes = (axis_time, axis_channel) if z_primary.ndim == 2 else (axis_time,)
             model.primary_mirror.translation.z = (
                 model.primary_mirror.translation.z
-                + na.ScalarArray(u.Quantity(pointing["z_primary"]), axes=axis_time)
+                + na.ScalarArray(z_primary, axes=axes)
             )
         # each channel's sky slides against the others' through the flight,
         # inside its window, which an offset of its own pointing takes out

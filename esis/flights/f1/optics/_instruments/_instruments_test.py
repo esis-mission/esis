@@ -239,5 +239,6 @@ def test_distortion_fit_windows():
         )
         for i, (x, y) in enumerate(centers):
             footprint = linear.footprint(channel.wavelength[dict(wavelength=i)])
-            assert abs(float(np.mean(na.value(footprint.x).ndarray)) - x) < 1
-            assert abs(float(np.mean(na.value(footprint.y).ndarray)) - y) < 1
+            cx, cy = _fits._center(footprint)
+            assert abs(cx - x) < 1
+            assert abs(cy - y) < 1

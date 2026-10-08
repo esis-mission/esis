@@ -240,6 +240,12 @@ def test_frame_parameters():
     s = _fits.frame_parameters(reference, pointing, frame=15, channel=0)
     assert s.pitch == _fits._channel(reference, 0).pitch
 
+    # one focus per channel's sector of the primary
+    sectors = pointing.copy()
+    sectors["z_primary"] = np.array([[0.01, 0.02, 0.03, 0.04], [0, 0, 0, 0]]) * u.mm
+    v = _fits.frame_parameters(reference, sectors, frame=3, channel=2)
+    assert np.isclose(v.z_primary - base.z_primary, 0.03 * u.mm)
+
     with pytest.raises(ValueError):
         _fits.frame_parameters(reference, pointing, frame=7, channel=0)
 

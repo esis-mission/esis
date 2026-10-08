@@ -24,7 +24,6 @@ _tables = dict(
     window_edges="window_edges.ecsv",
     window_drift="window_drift.ecsv",
     defocus="defocus.ecsv",
-    coregistration="coregistration.ecsv",
 )
 """The tables the distortion fit committed, by the name this module reads them under."""
 
@@ -48,9 +47,8 @@ def distortion_fit_table(
         coalignment metric of every frame), ``acceptance_modes`` and
         ``acceptance_tiles`` (the decomposition of the tile shifts and the
         tiles themselves), ``window_edges`` and ``window_drift`` (the
-        measured edges and their motion), ``defocus`` (the defocus of the
-        primary through the flight) or ``coregistration`` (the channels
-        against one another, and the offsets that register them).
+        measured edges and their motion) or ``defocus`` (the focus of each
+        sector of the primary through the flight).
     directory
         The directory to read from.  If :obj:`None`, the committed tables.
 
@@ -83,10 +81,11 @@ def plot_distortion_flight(
 
     Five panels against time since the first frame: the pointing of the
     payload; the drift of each channel's windows; the measured and the
-    applied defocus of the primary; the offset of each channel's own
-    pointing from the co-registration; and the shift of every channel's sky
-    against the anchor's, before the co-registration dashed and after it
-    solid.
+    applied defocus of the primary, the mean over its sectors; the focus of
+    each channel's sector about that mean (or, for a run that used the
+    co-registration instead, the offset of each channel's own pointing);
+    and the shift of every channel's sky against the anchor's, before the
+    per-channel term dashed and after it solid.
 
     Parameters
     ----------
@@ -108,7 +107,13 @@ def plot_distortion_flight(
     pointing = distortion_fit_table("pointing", directory)
     acceptance = distortion_fit_table("acceptance", directory)
     defocus = distortion_fit_table("defocus", directory)
-    coregistration = distortion_fit_table("coregistration", directory)
+    # a run that registered the channels empirically, before the sectors of
+    # the primary were told apart, carries that stage's table beside these
+    directory = _directory_data if directory is None else pathlib.Path(directory)
+    path = directory / "coregistration.ecsv"
+    coregistration = (
+        astropy.table.QTable.read(path, format="ascii.ecsv") if path.exists() else None
+    )
     frames = np.asarray(pointing["frame"])
     first = int(frames[0])
     t = _minutes(frames, first)
@@ -129,36 +134,53 @@ def plot_distortion_flight(
     ax.set_ylabel("window drift\n[pix]")
 
     ax = axes[2]
-    ax.plot(
-        _minutes(defocus["frame"], first),
-        defocus["z_primary_measured"].to_value(u.um),
-        ".",
-        color="0.4",
-        label="per frame",
-    )
-    ax.plot(t, pointing["z_primary"].to_value(u.um), color="k", label="applied")
+    measured = defocus["z_primary_measured"].to_value(u.um)
+    applied = pointing["z_primary"].to_value(u.um)
+    td = _minutes(defocus["frame"], first)
+    if applied.ndim == 2:
+        # one focus per channel's sector; the mean over them is the primary's
+        ax.plot(td, measured.mean(axis=1), ".", color="0.4", label="per frame")
+        ax.plot(t, applied.mean(axis=1), color="k", label="applied")
+    else:
+        ax.plot(td, measured, ".", color="0.4", label="per frame")
+        ax.plot(t, applied, color="k", label="applied")
     ax.set_ylabel("primary defocus\n[µm]")
 
     ax = axes[3]
-    for c in range(pointing["pitch_channel"].shape[1]):
-        ax.plot(t, pointing["pitch_channel"][:, c].to_value(u.arcsec), color=colors[c])
-        ax.plot(
-            t,
-            pointing["yaw_channel"][:, c].to_value(u.arcsec),
-            color=colors[c],
-            ls="--",
-        )
-    ax.plot([], [], color="k", label="pitch")
-    ax.plot([], [], color="k", ls="--", label="yaw")
-    ax.set_ylabel("channel offset\n[arcsec]")
+    if applied.ndim == 2:
+        for c in range(applied.shape[1]):
+            about = measured[:, c] - measured.mean(axis=1)
+            ax.plot(td, about, ".", color=colors[c], ms=3)
+            ax.plot(
+                t, applied[:, c] - applied.mean(axis=1), color=colors[c], label=f"ch{c}"
+            )
+        ax.set_ylabel("sector focus\nabout the mean [µm]")
+    elif "pitch_channel" in pointing.colnames:
+        for c in range(pointing["pitch_channel"].shape[1]):
+            ax.plot(
+                t, pointing["pitch_channel"][:, c].to_value(u.arcsec), color=colors[c]
+            )
+            ax.plot(
+                t,
+                pointing["yaw_channel"][:, c].to_value(u.arcsec),
+                color=colors[c],
+                ls="--",
+            )
+        ax.plot([], [], color="k", label="pitch")
+        ax.plot([], [], color="k", ls="--", label="yaw")
+        ax.set_ylabel("channel offset\n[arcsec]")
 
     ax = axes[4]
     anchor = int(acceptance.meta.get("anchor", 1))
+    # the channels before the per-channel term: the co-registration's first
+    # measurement where that stage ran, else the defocus stage's, which is
+    # made before any focus is applied
+    source = coregistration if coregistration is not None else defocus
     before = np.hypot(
-        coregistration["shift_x"].to_value(u.pix),
-        coregistration["shift_y"].to_value(u.pix),
+        source["shift_x"].to_value(u.pix),
+        source["shift_y"].to_value(u.pix),
     )
-    tt = _minutes(coregistration["frame"], first)
+    tt = _minutes(source["frame"], first)
     for c in range(before.shape[1]):
         if c != anchor:
             ax.plot(tt, before[:, c], color=colors[c], ls="--", lw=0.8)
