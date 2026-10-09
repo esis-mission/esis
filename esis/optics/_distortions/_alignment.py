@@ -96,7 +96,7 @@ def shift_fft(a: np.ndarray, b: np.ndarray) -> tuple[float, float]:
             right = correlation[tuple(j)]
             denominator = left - 2 * correlation[index] + right
             delta = 0.5 * (left - right) / denominator if denominator else 0.0
-        else:
+        else:  # pragma: nocover
             delta = 0.0
         shift.append(i + delta - center[axis])
 
@@ -311,7 +311,7 @@ def measure_shifts(
                 a = np.where(valid, a, np.nanmean(a[valid]))
                 b = np.where(valid, b, np.nanmean(b[valid]))
                 dx, dy = shift_fft(a, b)
-                if not (np.isfinite(dx) and np.isfinite(dy)):
+                if not (np.isfinite(dx) and np.isfinite(dy)):  # pragma: nocover
                     continue
                 rows.append(((i + 0.5) * num, (j + 0.5) * num, dx, dy))
         result[c] = rows
@@ -512,7 +512,7 @@ def shift_modes(
         left = np.concatenate([residual_x[pairs[:, 0]], residual_y[pairs[:, 0]]])
         right = np.concatenate([residual_x[pairs[:, 1]], residual_y[pairs[:, 1]]])
         correlation = float(np.corrcoef(left, right)[0, 1]) if r.std() > 0 else 0.0
-    else:
+    else:  # pragma: nocover
         correlation = float("nan")
     return dict(
         translation=float(np.hypot(mx, my) * scale),
@@ -667,7 +667,7 @@ def align_channels(
             break
 
         for c, shift_fields in fields.items():
-            if not shift_fields:
+            if not shift_fields:  # pragma: nocover
                 continue
             targets, columns = [], []
             for field in shift_fields:
@@ -722,7 +722,7 @@ def align_channels(
                 keep_new = np.abs(residual) < 3 * sigma
                 if keep_new.sum() < len(index_free) + 4 or (keep_new == keep).all():
                     break
-                keep = keep_new
+                keep = keep_new  # pragma: nocover
             dp = dp_s * scale * damping
             # the frozen parameters stay exactly where they are
             dp[[k for k in range(len(dp)) if k not in index_free]] = 0

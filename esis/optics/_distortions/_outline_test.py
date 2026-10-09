@@ -149,3 +149,14 @@ def test_fit_distortion_outline():
     assert any("outline pass 1" in line for line in log)
     # nothing else moved
     assert result.z_sensor == start.z_sensor
+
+
+def test_fit_edge_guards():
+    profile = np.concatenate([np.zeros(40), np.ones(40)])
+    # a guess too close to the ends of the profile cannot be fit
+    assert np.all(np.isnan(_outline._fit_edge(profile, guess=3, half=10)))
+    assert np.all(np.isnan(_outline._fit_edge(profile, guess=77, half=10)))
+    # nor can a profile with a hole in it
+    holed = profile.copy()
+    holed[42] = np.nan
+    assert np.all(np.isnan(_outline._fit_edge(holed, guess=40, half=10)))

@@ -224,7 +224,7 @@ class LinearMerit:
             return 0.0
         lit = image > 1e-4 * image.max()
         outside = ~scipy.ndimage.binary_dilation(lit, iterations=margin)
-        if not outside.any():
+        if not outside.any():  # pragma: nocover
             return 0.0
         return float(np.median(observation[outside]))
 

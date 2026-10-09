@@ -139,38 +139,19 @@ def plot_distortion_flight(
     measured = defocus["z_primary_measured"].to_value(u.um)
     applied = pointing["z_primary"].to_value(u.um)
     td = _minutes(defocus["frame"], first)
-    if applied.ndim == 2:
-        # one focus per channel's sector; the mean over them is the primary's
-        ax.plot(td, measured.mean(axis=1), ".", color="0.4", label="per frame")
-        ax.plot(t, applied.mean(axis=1), color="k", label="applied")
-    else:
-        ax.plot(td, measured, ".", color="0.4", label="per frame")
-        ax.plot(t, applied, color="k", label="applied")
+    # one focus per channel's sector; the mean over them is the primary's
+    ax.plot(td, measured.mean(axis=1), ".", color="0.4", label="per frame")
+    ax.plot(t, applied.mean(axis=1), color="k", label="applied")
     ax.set_ylabel("primary defocus\n[µm]")
 
     ax = axes[3]
-    if applied.ndim == 2:
-        for c in range(applied.shape[1]):
-            about = measured[:, c] - measured.mean(axis=1)
-            ax.plot(td, about, ".", color=colors[c], ms=3)
-            ax.plot(
-                t, applied[:, c] - applied.mean(axis=1), color=colors[c], label=f"ch{c}"
-            )
-        ax.set_ylabel("sector focus\nabout the mean [µm]")
-    elif "pitch_channel" in pointing.colnames:
-        for c in range(pointing["pitch_channel"].shape[1]):
-            ax.plot(
-                t, pointing["pitch_channel"][:, c].to_value(u.arcsec), color=colors[c]
-            )
-            ax.plot(
-                t,
-                pointing["yaw_channel"][:, c].to_value(u.arcsec),
-                color=colors[c],
-                ls="--",
-            )
-        ax.plot([], [], color="k", label="pitch")
-        ax.plot([], [], color="k", ls="--", label="yaw")
-        ax.set_ylabel("channel offset\n[arcsec]")
+    for c in range(applied.shape[1]):
+        about = measured[:, c] - measured.mean(axis=1)
+        ax.plot(td, about, ".", color=colors[c], ms=3)
+        ax.plot(
+            t, applied[:, c] - applied.mean(axis=1), color=colors[c], label=f"ch{c}"
+        )
+    ax.set_ylabel("sector focus\nabout the mean [µm]")
 
     ax = axes[4]
     anchor = int(acceptance.meta.get("anchor", 1))

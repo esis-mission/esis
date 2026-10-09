@@ -217,3 +217,17 @@ def test_shift_modes():
     assert modes["magnification"] < 0.1 and modes["rotation"] < 0.1
     assert abs(modes["correlation"]) < 0.3
     assert np.isclose(modes["residual"], modes["scatter"], rtol=0.2)
+
+
+def test_shift_modes_too_few_tiles():
+    """Fewer than six tiles determine nothing, so every mode is NaN."""
+    field = _alignment.ShiftField(
+        584 * u.AA,
+        np.array([10.0, 50.0]),
+        np.array([10.0, 50.0]),
+        np.zeros(2),
+        np.zeros(2),
+    )
+    modes = esis.optics.shift_modes([field], 2.0, 401)
+    assert set(modes) >= {"translation", "magnification", "residual", "correlation"}
+    assert all(np.isnan(v) for v in modes.values())

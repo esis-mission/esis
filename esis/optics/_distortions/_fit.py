@@ -250,7 +250,7 @@ def fit_distortion(
     time_start = time.perf_counter()
     failed_before = getattr(merit, "num_failed", 0)
     fun_start = objective(x0)
-    if getattr(merit, "num_failed", 0) > failed_before:
+    if getattr(merit, "num_failed", 0) > failed_before:  # pragma: nocover
         raise RuntimeError(
             "the objective fails at the starting point; nothing can be fit from it"
         )

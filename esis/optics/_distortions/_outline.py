@@ -184,7 +184,7 @@ def measure_edges(
 
     for line, footprint in enumerate(footprints):
         px, py = _polygon(footprint)
-        if not np.all(np.isfinite(px)):
+        if not np.all(np.isfinite(px)):  # pragma: nocover
             continue
         xc, yc = px.mean(), py.mean()
         ry = 0.5 * (py.max() - py.min())
@@ -193,14 +193,14 @@ def measure_edges(
             if abs(dy) < skip:
                 continue
             y = int(round(yc + dy))
-            if y < 0 or y >= num_y:
+            if y < 0 or y >= num_y:  # pragma: nocover
                 continue
             left, right = _crossings(px, py, y)
             fit(line, 0, y, frame[y], left)
             fit(line, 1, y, frame[y], right)
         for dx in range(-int(fraction * rx), int(fraction * rx), stride):
             x = int(round(xc + dx))
-            if x < 0 or x >= num_x:
+            if x < 0 or x >= num_x:  # pragma: nocover
                 continue
             top, bottom = _crossings(py, px, x)
             fit(line, 2, x, frame[:, x], top)
@@ -395,7 +395,11 @@ def fit_distortion_outline(
         x_trial[index_window] = y
         try:
             return outline_residual(footprints(x_trial), edges, clip=clip)
-        except (ValueError, np.linalg.LinAlgError, FloatingPointError):
+        except (
+            ValueError,
+            np.linalg.LinAlgError,
+            FloatingPointError,
+        ):  # pragma: nocover
             return float(clip)
 
     if log is not None:

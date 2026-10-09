@@ -1,4 +1,5 @@
 import dataclasses
+import types
 import io
 import pathlib
 import astropy.table
@@ -340,3 +341,146 @@ def test_environment():
     table.write(buffer, format="ascii.ecsv")
     back = astropy.table.QTable.read(buffer.getvalue(), format="ascii.ecsv")
     assert back.meta["environment"]["packages"] == environment["packages"]
+
+
+def test_frame_times():
+    times = _fits._frame_times()
+    assert len(times) == 30
+    for record in times:
+        assert record["start"] < record["end"]
+        assert 0 < record["exposure"] < 60
+
+
+def test_read_table(tmp_path: pathlib.Path):
+    table = _pointing_table()
+    assert _fits._read_table(None) is None
+    assert _fits._read_table(table) is table
+    path = tmp_path / "pointing.ecsv"
+    table.write(path, format="ascii.ecsv")
+    back = _fits._read_table(path)
+    assert list(back["frame"]) == [3, 15]
+    assert _fits._read_table(str(path))["pitch"].unit == u.arcsec
+
+
+def test_map_channels():
+    assert _fits._map_channels(abs, [-1, 2, -3], workers=1) == [1, 2, 3]
+    assert _fits._map_channels(abs, [-1, 2, -3], workers=2) == [1, 2, 3]
+
+
+def test_stamp():
+    stamp = _fits._stamp()
+    assert set(stamp) == {"date", "environment"}
+    assert stamp["date"][:4] == str(_fits.datetime.date.today().year)
+    assert "optika" in stamp["environment"]["checkouts"]
+
+
+def test_mean_column():
+    table = astropy.table.QTable(
+        dict(a=np.array([1.0, np.nan, 3.0]) * u.pix, b=np.array([2.0, 4.0, np.nan]))
+    )
+    assert _fits._mean_column(table, "a") == 2.0
+    assert _fits._mean_column(table, "b") == 3.0
+
+
+def _drift_table(num_frame: int) -> astropy.table.QTable:
+    rows = [
+        (c, t, side, 0.1 * t * (1 + c), 10)
+        for c in range(2)
+        for t in range(num_frame)
+        for side in range(4)
+    ]
+    drift = astropy.table.QTable(
+        rows=rows, names=("channel", "frame", "side", "shift", "num")
+    )
+    drift["shift"] = drift["shift"] * u.pix
+    return drift
+
+
+def test_drift_function():
+    drift = _drift_table(6)
+    assert _fits._drift_function(None, 2, 3) is None
+    raw = _fits._drift_function(drift, 2, None)
+    smooth = _fits._drift_function(drift, 2, 1)
+    assert np.allclose(raw(1, 4), [0.8, 0.8])
+    assert np.allclose(smooth(1, 4), [0.8, 0.8], atol=1e-6)
+    # the raw reading of an unmeasured frame is zero, the smooth one is held
+    assert np.allclose(raw(1, 9), 0)
+    assert np.allclose(smooth(1, 9), smooth(1, 5))
+
+
+def test_drift_smooth_too_few_frames():
+    with pytest.raises(ValueError, match="too few"):
+        _fits._drift_smooth(_drift_table(3), num_channel=2, degree=3)
+
+
+def _reference_channels() -> list[esis.optics.DistortionParameters]:
+    from esis.flights.f1.optics._instruments import _instruments
+
+    reference = esis.optics.DistortionParameters.from_file(
+        _instruments._directory_data / "distortion_reference.ecsv"
+    )
+    return [_fits._channel(reference, c) for c in range(4)]
+
+
+def test_defocus_pattern():
+    """
+    Check the sector pattern: a defocus moves each channel's sky its own way.
+
+    Each channel looks through its own sector of the primary, so a defocus
+    translates its image along its own dispersion; against the anchor the
+    pattern is the difference of two such vectors, and the anchor's own is zero.
+    """
+    instrument = _fits._base(None)
+    reference = _reference_channels()
+    wavelengths = _fits._wavelengths_alignment()
+    own = _fits._defocus_pattern(instrument, reference, wavelengths, relative=False)
+    relative = _fits._defocus_pattern(instrument, reference, wavelengths)
+    assert own.shape == relative.shape == (4, 2)
+    assert np.allclose(relative, own - own[1])
+    assert np.allclose(relative[1], 0)
+    # about a pixel and a half per hundred microns, see KAPPA_FOCUS
+    lengths = np.hypot(own[:, 0], own[:, 1])
+    assert np.all((lengths > 5) & (lengths < 50))
+    # the channels disperse 45 degrees apart, so no two vectors are parallel
+    for c in range(4):
+        cosine = np.dot(own[c], own[(c + 1) % 4]) / (lengths[c] * lengths[(c + 1) % 4])
+        assert abs(cosine) < 0.9
+
+
+def test_dispersion_and_footprints():
+    """A redshift at He I displaces a channel's image by about 19 km/s per pixel."""
+    instrument = _fits._base(None)
+    p = _reference_channels()[0]
+    model = p.to_instrument(instrument[dict(channel=0)])
+    linear = model.system.linearize(
+        wavelength=model.wavelength, degree=2, field_stop=True
+    )
+    footprints = _fits._footprints(linear, model.wavelength)
+    assert len(footprints) == na.shape(model.wavelength)["wavelength"]
+    direction, velocity = _fits._dispersion(
+        linear, _fits._wavelengths_alignment()["He I"]
+    )
+    assert np.linalg.norm(direction) == pytest.approx(1)
+    assert velocity == pytest.approx(18.9, abs=1.0)
+
+
+def test_drift_sensitivity():
+    """The grating steers the window by whole pixels per arcminute."""
+    instrument = _fits._base(None)
+    reference = _reference_channels()
+    merits = [
+        types.SimpleNamespace(
+            linearize=lambda m: m.system.linearize(
+                wavelength=m.wavelength, degree=2, field_stop=True
+            )
+        )
+        for _ in reference
+    ]
+    sensitivity = _fits._drift_sensitivity(instrument, reference, merits)
+    assert sensitivity.shape == (4, 2)
+    assert np.all(np.abs(sensitivity) > 1)
+    # the four gratings are alike, so the channels agree
+    assert (
+        np.abs(sensitivity - sensitivity.mean(axis=0)).max()
+        < 0.2 * np.abs(sensitivity).mean()
+    )

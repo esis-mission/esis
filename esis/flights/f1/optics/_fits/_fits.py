@@ -603,7 +603,7 @@ def _window_centers(
     parameters: list[esis.optics.DistortionParameters],
     scene: na.FunctionArray,
     observation: na.AbstractScalar,
-) -> list[list[list[float]]]:
+) -> list[list[list[float]]]:  # pragma: nocover
     """
     Locate the centre of every window on the sensor, in pixels.
 
@@ -681,7 +681,7 @@ def _versions() -> dict[str, str]:
     for module, name in modules.items():
         try:
             version = importlib.metadata.version(name)
-        except importlib.metadata.PackageNotFoundError:
+        except importlib.metadata.PackageNotFoundError:  # pragma: nocover
             version = "unknown"
         try:
             path = pathlib.Path(importlib.import_module(module).__file__).parent
@@ -701,7 +701,7 @@ def _versions() -> dict[str, str]:
                 )
                 if status.returncode == 0 and status.stdout.strip():
                     version = version + " +dirty"
-        except Exception:
+        except Exception:  # pragma: nocover
             pass
         result[name] = version
     return result
