@@ -1,7 +1,6 @@
 """The merit of a distortion fit: a linearized image compared with a frame."""
 
 from __future__ import annotations
-from typing import Callable
 import numpy as np
 import astropy.units as u
 import scipy.ndimage
@@ -13,6 +12,7 @@ __all__ = [
     "LinearMerit",
     "correlation",
     "least_squares",
+    "correlation_raytraced",
 ]
 
 
@@ -115,22 +115,17 @@ class LinearMerit:
     Each evaluation applies the parameters to the channel, linearizes the
     resulting optical system (:meth:`optika.systems.SequentialSystem.linearize`),
     clips the scene by the field stop in object space, images it with a
-    conservative regrid onto the sensor, and returns the Pearson correlation
-    with the observed frame.
+    conservative regrid onto the sensor, and compares it with the observed
+    frame.  The linearized image has no sampling noise, so the merit is
+    deterministic and smooth.
 
-    Compared with imaging the scene by a sparse ray trace, the linearized
-    image has no sampling noise, so the merit is deterministic and smooth,
-    and it needs no point-spread function: the exact footprint integral of
-    the regrid is a physically sized smoothing on its own.  It is also about
-    three times cheaper, and the regrid can run on a GPU.
-
-    The merit is geometric: the materials of the instrument are idealized
-    and the effective area of every line is pinned to a common value, so
-    that the fit measures where light lands and not how much of it there is.
+    The merit is geometric: the effective area of every line is pinned to a
+    common value, so that the fit measures where light lands and not how
+    much of it there is.
 
     Instances are callables of a flat parameter vector, picklable so that
     :func:`scipy.optimize.differential_evolution` can evaluate them in worker
-    processes, and return the *negative* correlation for minimization.
+    processes, and return the *negative* merit for minimization.
 
     Parameters
     ----------
@@ -186,7 +181,7 @@ class LinearMerit:
         self.merit = merit
         self.axis_wavelength = axis_wavelength
         self.axis_field = axis_field
-        # the linear forward model wants spectral-positional coordinates
+        # the linear system images spectral-positional coordinates only
         self.scene = na.FunctionArray(
             inputs=na.SpectralPositionalVectorArray(
                 wavelength=scene.inputs.wavelength,
@@ -197,8 +192,7 @@ class LinearMerit:
         self.field_centers = self.scene.inputs.position.cell_centers(axis=axis_field)
         self.num_calls = 0
         self.num_failed = 0
-        # the level of the frame away from every window, which the image
-        # model cannot produce, is removed before any comparison
+        # the image model cannot produce a pedestal, so the frame's is removed
         self.background = self._background(parameters)
         self.observation = self.observation - self.background
 
@@ -226,7 +220,7 @@ class LinearMerit:
         image = np.asarray(self.image(parameters).ndarray_aligned(axes))
         observation = np.asarray(self.observation.ndarray_aligned(axes))
         if observation.shape != image.shape:
-            # a placeholder observation, as a probe that only images has
+            # a placeholder observation: the instance is only used to image
             return 0.0
         lit = image > 1e-4 * image.max()
         outside = ~scipy.ndimage.binary_dilation(lit, iterations=margin)
@@ -242,8 +236,8 @@ class LinearMerit:
         Estimate the degradation that best scales the image onto the observation.
 
         The least-squares gain of the image at the given parameters, whose
-        own degradation plays no part, which seeds a fit whose start knows
-        nothing about the level of the frame.
+        own :attr:`~esis.optics.DistortionParameters.degradation` plays no
+        part.
 
         Parameters
         ----------
@@ -268,8 +262,7 @@ class LinearMerit:
             degree=self.degree,
             field_stop=True,
         )
-        # the fit is geometric: every line shares one effective area, which
-        # also removes the sampling scatter of the fitted area model
+        # one effective area for every line, see the class docstring
         area = linear.area_effective
         linear.area_effective = optika.radiometry.InterpolatedEffectiveAreaModel(
             wavelength=area.wavelength,
@@ -343,7 +336,7 @@ class LinearMerit:
         extra = tuple(set(na.shape(result)) - set(self.axis_field))
         if extra:
             result = result.sum(axis=extra)
-        # kept for callers that also need the mapping, e.g. the alignment
+        # kept for callers that also need the mapping
         self.linear = linear
         return result
 
@@ -405,10 +398,8 @@ class LinearMerit:
                 return -self.score(parameters)
             return -self.correlation(parameters)
         except (ValueError, np.linalg.LinAlgError, FloatingPointError):
-            # a trial that cannot be imaged (off the sensor, a singular
-            # linearization) is the worst possible, whatever the merit's
-            # range; anything else, such as a device that cannot run the
-            # regrid, is a fault and propagates
+            # anything else, such as a device that cannot run the regrid,
+            # is a fault and propagates
             self.num_failed += 1
             return np.inf
 
@@ -427,10 +418,10 @@ def correlation_raytraced(
     """
     Compute the correlation of a ray-traced image with the observation.
 
-    This is the merit the fit used before it was linearized, kept as an
-    independent forward model to score a fit against.  The ray trace samples
-    every scene cell with a few rays, so the image carries sampling noise and
-    needs a point-spread function of a few pixels to compare with the data.
+    An independent forward model to score a fit against.  The ray trace
+    samples every scene cell with a few rays, so the image carries sampling
+    noise and needs a point-spread function of a few pixels to compare with
+    the data.
 
     Parameters
     ----------
@@ -481,6 +472,3 @@ def correlation_raytraced(
         kernel = na.ScalarArray(kernel / kernel.sum(), axes=axis_field)
         image = na.convolve(image, kernel, axis=axis_field)
     return float(na.value(correlation(image, observation, axis_field)).ndarray)
-
-
-ObjectiveType = Callable[[np.ndarray], float]

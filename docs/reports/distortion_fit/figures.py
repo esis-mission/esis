@@ -7,9 +7,9 @@ Draw the figures of the distortion-fit summary from a run's tables.
     python figures.py tiles <directory> <out.pdf|png>    # tile shifts, frames 0 and 15
 
 ``flight`` needs only the committed tables (``distortion_pointing.ecsv``,
-``defocus.ecsv``, ``acceptance.ecsv``, ``window_drift.ecsv``), so the
-documentation can build it; ``frame`` needs the ``blink_015.npz`` a
-``blink.py render`` leaves in the directory.
+``defocus.ecsv``, ``acceptance.ecsv``), so the documentation can build it;
+``frame`` needs the ``blink_015.npz`` a ``blink.py render`` leaves in the
+directory.
 """
 
 import pathlib
@@ -34,7 +34,7 @@ def _read(directory: pathlib.Path, name: str) -> None | astropy.table.QTable:
 
 
 def flight(directory: pathlib.Path, out: pathlib.Path) -> None:
-    """Draw the pointing, drift, defocus, channel offsets and coalignment in flight."""
+    """Draw the pointing, drift, defocus, sector focus and coalignment in flight."""
     fig, axes = plt.subplots(
         5, 1, figsize=(3.5, 7.6), sharex=True, constrained_layout=True
     )

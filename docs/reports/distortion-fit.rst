@@ -69,7 +69,7 @@ field of view carried as the polygon its stop rays trace, so that every
 scene cell outside the field stop is blocked before the lines are summed,
 and the scene is regridded conservatively onto the sensor.  The merit is
 the Pearson correlation with the frame, or the least-squares score of
-:func:`esis.optics.least_squares`, which compares absolute intensities
+:class:`~esis.optics.LinearMerit` (``merit="least_squares"``), which compares absolute intensities
 after the level of the frame outside every window is subtracted and lets
 one :attr:`~esis.optics.DistortionParameters.degradation` per channel set
 the level of the image.  Both give the same geometry within the

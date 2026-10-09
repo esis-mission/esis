@@ -43,11 +43,6 @@ def test_wavelengths_alignment():
         assert wavelength.unit.is_equivalent(u.AA)
 
 
-def test_pupil():
-    result = _fits._pupil()
-    assert na.shape(result) == dict(pupil_x=2, pupil_y=2)
-
-
 def test_enforce_shared():
     instrument = esis.flights.f1.optics.design(num_distribution=0)
     parameters = [
@@ -115,13 +110,6 @@ def test_logger(tmp_path: pathlib.Path):
     assert "hello" in (tmp_path / "test.log").read_text()
     # without a directory the logger only prints
     _fits._logger(None, "test")("hello")
-
-
-def test_names_absolute():
-    instrument = esis.flights.f1.optics.design(num_distribution=0)[dict(channel=1)]
-    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
-    names = _fits._names_absolute(parameters)
-    assert names == tuple(f.name for f in dataclasses.fields(parameters))
 
 
 def test_frames_by_axis():

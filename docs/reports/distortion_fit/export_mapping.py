@@ -2,15 +2,13 @@
 """
 Export a distortion mapping as calibration pairs for the MART acceptance test.
 
-The inversion pipeline lives on a branch with an older instrument model, so
-the mapping is handed over as the sensor position of a dense
-(channel, wavelength, x, y) grid on the sky, from which a degree-2 polynomial
-refit reproduces it exactly.
+The mapping is handed over model-free, as the sensor position of a dense
+(channel, wavelength, x, y) grid on the sky, which a degree-2 polynomial
+refit reproduces exactly.
 
     python export_mapping.py out.npz [distortion_reference.ecsv]
 
-Without a file, the reference committed to the package is exported.  With
-one, its parameters are applied to the model the fit runs on.
+Without a file, the reference committed to the package is exported.
 """
 
 import pathlib

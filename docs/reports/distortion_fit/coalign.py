@@ -8,22 +8,21 @@ Put the channels on the sky through the fit, to blink and difference them.
 The render reads every channel's Level-1 frame onto a common sky grid
 through its fitted distortion at each alignment line, inside the window
 that line illuminates, with the frame's pointing and window drift applied,
-exactly as the internal alignment sees the channels.  It normalizes each image
-to a mean of one over the pixels every channel covers, high-passes a copy
-the way the alignment does before measuring shifts, measures the median
-tile shift between every pair of channels, and records the direction on the
-sky in which each channel disperses.  The page blinks any two channels and
-shows their difference, at either line, in either version, with the
-dispersion directions drawn: a Doppler-shifted feature is displaced along
-that arrow in each channel, so in the difference of two channels it shows
-as a paired excess and deficit while stationary structure cancels.
+as the internal alignment sees the channels.  It normalizes each image to a
+mean of one over the pixels every channel covers, measures the median tile
+shift between every pair of channels, and records the direction on the sky
+in which each channel disperses.  The page blinks any two channels and shows
+their difference, plain or high-passed, with the dispersion directions
+drawn: a Doppler-shifted feature is displaced along that arrow, so in a
+difference it shows as a paired excess and deficit while stationary
+structure cancels.
 
-Environment: ESIS_NUM_SCENE for the sampling of the AIA scene whose extent
-sets the sky grid (default 401); the frames default to the reference frame.
-For the page, ESIS_PAGE_JPEG (a quality; empty for lossless PNG) and
-ESIS_PAGE_BLOCK (a further block-averaging factor) trade fidelity for the
-number of frames that fit the page; the page computes its high-pass version
-itself from the normalized images.
+Environment: ESIS_NUM_SCENE (sampling of the AIA scene whose extent sets the
+sky grid, default 401) and ESIS_BLOCK (block-averaging of the render,
+default 3) for the render, whose frames default to the reference frame;
+ESIS_PAGE_JPEG (a quality; empty for lossless PNG) and ESIS_PAGE_BLOCK (a
+further block-averaging factor) for the page, trading fidelity for the
+number of frames that fit it.
 """
 
 import base64
@@ -58,11 +57,10 @@ ANCHOR = 1
 
 HIGHPASS_SIGMA = 40.0
 """
-The Gaussian sigma of the page's high-pass, in sky samples (0.52 arcsec).
+The Gaussian sigma of the page's high-pass, in sky samples of 0.52 arcsec.
 
-About 21 arcsec, so the page keeps everything smaller than a supergranule and
-removes only the vignetting and effective-area gradients.  The page applies
-it itself to the normalized images; the shift measurement uses the
+About 21 arcsec: smaller than a supergranule, so only the vignetting and
+effective-area gradients are removed.  The shift measurement uses the
 alignment's own, sharper filter.
 """
 
@@ -145,8 +143,8 @@ def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:
             )
         distortions = [system.distortion for system in linears]
 
-        images, highpassed, valid, shifts, scales = [], [], [], {}, []
-        dispersions = {}
+        images, highpassed, valid, scales = [], [], [], []
+        shifts, dispersions = {}, {}
         for name, wavelength in wavelengths.items():
             sampled, coordinates = [], []
             for c in range(num_channel):
@@ -307,10 +305,9 @@ def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:
         summary = "; ".join(
             f"{name}: "
             + ", ".join(
-                f"ch{c} {dx:+.2f},{dy:+.2f}"
+                f"ch{c} {table[key][0]:+.2f},{table[key][1]:+.2f}"
                 for c in range(num_channel)
-                for dx, dy in [table.get(f"{c}-{ANCHOR}", (np.nan, np.nan))]
-                if f"{c}-{ANCHOR}" in table
+                if (key := f"{c}-{ANCHOR}") in table
             )
             for name, table in shifts.items()
         )
@@ -318,12 +315,7 @@ def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:
 
 
 def _png(a: np.ndarray, limits: tuple[float, float]) -> str:
-    """
-    Encode an image as a base64 grey PNG over the given range, or a JPEG.
-
-    A JPEG of the quality ``ESIS_PAGE_JPEG`` names if it is set, whose
-    error is a few hundredths of the mean at quality 95, else lossless.
-    """
+    """Encode an image over the given range as a base64 grey PNG, or a JPEG."""
     from PIL import Image
 
     lower, upper = limits
@@ -343,8 +335,7 @@ def _reblock(
     """Block-average a stored image further, over its valid pixels."""
     if block == 1:
         return a, valid
-    mean, fraction = _block(a, valid > 0.5, block)
-    return mean, fraction
+    return _block(a, valid > 0.5, block)
 
 
 def _mask(valid: np.ndarray) -> str:
@@ -360,7 +351,7 @@ def _mask(valid: np.ndarray) -> str:
 def page(directory: pathlib.Path, out: pathlib.Path) -> None:
     """Write a self-contained page that blinks and differences the channels."""
     frames = {}
-    times = None  # the Level-1 frames are loaded only for renders that lack the times
+    times = None  # loaded only for renders that predate the stored times
     for path in sorted(directory.glob("coalign_*.npz")):
         with np.load(path) as f:
             meta = json.loads(str(f["meta"]))

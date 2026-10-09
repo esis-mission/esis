@@ -867,8 +867,7 @@ class Instrument(
     The placements the instrument was built with, before any fitted term.
 
     :meth:`esis.optics.DistortionParameters.to_instrument` records here the
-    sensor and grating positions and the nominal focal length of the
-    primary that its terms are measured from, so that the terms can be read
-    back and applied again from the same origin, whether or not the
-    instrument has since been indexed by channel.
+    sensor and grating positions and the nominal focal length of the primary
+    its terms are measured from, so that they can be read back and applied
+    again from the same origin, even after indexing by channel.
     """

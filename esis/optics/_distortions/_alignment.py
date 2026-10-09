@@ -3,11 +3,11 @@ The internal alignment of the channels, solved in the physical parameters.
 
 A fit of each channel against a proxy image of the Sun places the channel to
 about a pixel; the channels compared with one another on the sky plane
-resolve a tenth of a pixel.  This module measures that disagreement the way
-the coalignment analysis does (each channel's frame sampled on a common sky
-grid through its own distortion, tile by tile against an anchor) and solves
-for the increments of the physical parameters whose change of the mapping
-reproduces the measured shift field.
+resolve a tenth of a pixel.  This module measures that disagreement (each
+channel's frame sampled on a common sky grid through its own distortion,
+tile by tile against an anchor) and solves for the increments of the
+physical parameters whose change of the mapping reproduces the measured
+shift field.
 """
 
 from __future__ import annotations
@@ -41,9 +41,8 @@ def highpass(a: np.ndarray, sigma: float = 8.0) -> np.ndarray:
     Remove the large-scale intensity structure of an image.
 
     Vignetting and effective-area differences between the channels appear
-    as smooth multiplicative gradients, which a correlation would happily
-    lock onto instead of the solar structure that actually carries the
-    alignment.  Subtracting a smoothed copy leaves the structure.
+    as smooth gradients, which a correlation would lock onto instead of the
+    solar structure that carries the alignment.
 
     Parameters
     ----------
@@ -572,10 +571,8 @@ def align_channels(
     free
         The names of the parameters the alignment may change.  If
         :obj:`None`, the grating terms and the sensor placement are free and
-        the pointing, the primary displacement and the field-stop roll are
-        held where the absolute fit put them: the alignment then never
-        revises what the absolute fit constrains well, and it still reaches
-        the floor of the measurement.
+        the pointing, the primary terms and the field-stop roll are held
+        where the absolute fit put them.
     anchor
         The channel the others are aligned to.
     num_sky
@@ -622,14 +619,15 @@ def align_channels(
     names = [f.name for f in dataclasses.fields(parameters[0])]
     index_free = [names.index(name) for name in free]
     lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters[0])
-    scale = na.pack(upper).ndarray - na.pack(lower).ndarray
+    lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
+    scale = ub - lb
     delta = 0.002 * scale
 
     sky = sky_grid(scene_position, num_sky)
     axis = ("sky_x", "sky_y")
     x0, x1 = scene_position.x.min().ndarray, scene_position.x.max().ndarray
     y0, y1 = scene_position.y.min().ndarray, scene_position.y.max().ndarray
-    step = (x1 - x0) / (num_sky - 1)
+    step_x = (x1 - x0) / (num_sky - 1)
     step_y = (y1 - y0) / (num_sky - 1)
 
     def linear(c, x):
@@ -641,21 +639,16 @@ def align_channels(
             field_stop=True,
         )
 
-    def distortion(c, x):
-        return linear(c, x).distortion
-
     x = [na.pack(p).ndarray.copy() for p in parameters]
     linears = [linear(c, x[c]) for c in range(len(x))]
     distortions = [system.distortion for system in linears]
     medians = None
 
     for it in range(num_pass + 1):
-        # measure: one shift field per channel and line
         fields, scales = measure_channel_shifts(
             linears, frames, sky, wavelengths, anchor, num_tile, mask_windows, axis
         )
-        # the length of the median shift of each channel: zero for the anchor,
-        # and nothing at all for a channel with no tile to measure
+        # NaN for a channel with no tile to measure
         reduced = median_shifts(fields, scales)
         medians = [
             (
@@ -673,7 +666,6 @@ def align_channels(
         if it == num_pass:
             break
 
-        # solve: the increment of each channel's free parameters
         for c, shift_fields in fields.items():
             if not shift_fields:
                 continue
@@ -689,7 +681,7 @@ def align_channels(
                 # belongs at r + s; the mapping must move so that r lands
                 # where r - s lands now
                 pos_shifted = na.Cartesian2dVectorArray(
-                    x=na.ScalarArray(ax - field.dx * step, axes="tile"),
+                    x=na.ScalarArray(ax - field.dx * step_x, axes="tile"),
                     y=na.ScalarArray(ay - field.dy * step_y, axes="tile"),
                 )
 
@@ -712,7 +704,7 @@ def align_channels(
                 for k in index_free:
                     v = x[c].copy()
                     v[k] += delta[k]
-                    cols[:, k] = (sensor(distortion(c, v), pos) - s0) / delta[k]
+                    cols[:, k] = (sensor(linear(c, v).distortion, pos) - s0) / delta[k]
                 columns.append(cols)
             A = np.vstack(columns)
             b = np.concatenate(targets)
@@ -734,7 +726,7 @@ def align_channels(
             dp = dp_s * scale * damping
             # the frozen parameters stay exactly where they are
             dp[[k for k in range(len(dp)) if k not in index_free]] = 0
-            x[c] = np.clip(x[c] + dp, na.pack(lower).ndarray, na.pack(upper).ndarray)
+            x[c] = np.clip(x[c] + dp, lb, ub)
             linears[c] = linear(c, x[c])
             distortions[c] = linears[c].distortion
 

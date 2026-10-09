@@ -82,10 +82,10 @@ def plot_distortion_flight(
     Five panels against time since the first frame: the pointing of the
     payload; the drift of each channel's windows; the measured and the
     applied defocus of the primary, the mean over its sectors; the focus of
-    each channel's sector about that mean (or, for a run that used the
-    co-registration instead, the offset of each channel's own pointing);
-    and the shift of every channel's sky against the anchor's, before the
-    per-channel term dashed and after it solid.
+    each channel's sector about that mean (or, for a run that applied the
+    empirical co-registration instead, the offset of each channel's own
+    pointing); and the shift of every channel's sky against the anchor's,
+    before the per-channel term dashed and after it solid.
 
     Parameters
     ----------
@@ -107,8 +107,7 @@ def plot_distortion_flight(
     pointing = distortion_fit_table("pointing", directory)
     acceptance = distortion_fit_table("acceptance", directory)
     defocus = distortion_fit_table("defocus", directory)
-    # a run that registered the channels empirically, before the sectors of
-    # the primary were told apart, carries that stage's table beside these
+    # a run that applied the empirical co-registration carries its table too
     directory = _directory_data if directory is None else pathlib.Path(directory)
     path = directory / "coregistration.ecsv"
     coregistration = (
@@ -172,9 +171,8 @@ def plot_distortion_flight(
 
     ax = axes[4]
     anchor = int(acceptance.meta.get("anchor", 1))
-    # the channels before the per-channel term: the co-registration's first
-    # measurement where that stage ran, else the defocus stage's, which is
-    # made before any focus is applied
+    # the channels before the per-channel term: the defocus stage measures
+    # them before any focus is applied, the co-registration before its offsets
     source = coregistration if coregistration is not None else defocus
     if "shift_x" in source.colnames:
         before = np.hypot(

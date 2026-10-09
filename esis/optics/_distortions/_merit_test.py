@@ -1,6 +1,7 @@
 import dataclasses
 import pytest
 import numpy as np
+import scipy.ndimage
 import astropy.units as u
 import named_arrays as na
 import optika
@@ -30,8 +31,6 @@ def _scene(num: int = 41, seed: int = 0) -> na.FunctionArray:
     # a smooth random field, so that a shift of a few pixels is visible
     rng = np.random.default_rng(seed)
     values = rng.uniform(0, 1, size=(3, 1, num - 1, num - 1))
-    import scipy.ndimage
-
     values = scipy.ndimage.gaussian_filter(values, sigma=(0, 0, 1.5, 1.5))
     radiance = u.photon / u.s / u.cm**2 / u.arcsec**2 / u.AA
     return na.FunctionArray(
@@ -87,7 +86,7 @@ class TestLinearMerit:
         m, truth = merit
         x = na.pack(truth).ndarray
         y = x.copy()
-        names = [f.name for f in __import__("dataclasses").fields(truth)]
+        names = [f.name for f in dataclasses.fields(truth)]
         y[names.index("yaw")] += 20  # arcsec, a few pixels
         assert m(y) > m(x)
 
@@ -98,7 +97,7 @@ class TestLinearMerit:
     def test_off_sensor_is_worst(self, merit):
         m, truth = merit
         x = na.pack(truth).ndarray.copy()
-        names = [f.name for f in __import__("dataclasses").fields(truth)]
+        names = [f.name for f in dataclasses.fields(truth)]
         x[names.index("pitch")] += 3000  # arcsec: off the sensor
         assert np.isinf(m(x))
         assert m.num_failed >= 1

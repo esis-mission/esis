@@ -3,6 +3,7 @@ import pytest
 import pathlib
 import numpy as np
 import astropy.units as u
+import astropy.table
 import named_arrays as na
 import esis
 from . import _parameters
@@ -195,10 +196,6 @@ def test_from_file_without_sensor_terms(tmp_path: pathlib.Path):
     parameters = esis.optics.DistortionParameters.from_instrument(instrument)
     path = tmp_path / "parameters.ecsv"
     parameters.to_file(path)
-    lines = path.read_text().splitlines()
-    # drop the sensor columns from the header and the rows
-    import astropy.table
-
     table = astropy.table.QTable.read(path, format="ascii.ecsv")
     for name in (
         "z_sensor",
@@ -216,7 +213,6 @@ def test_from_file_without_sensor_terms(tmp_path: pathlib.Path):
     assert result.roll_sensor == 0 * u.deg
     assert result.degradation == 1
     assert np.all(result.yaw_grating == parameters.yaw_grating)
-    assert len(lines) > 0
 
 
 def test_to_file_errors(tmp_path: pathlib.Path):
@@ -238,11 +234,9 @@ def test_roll_rotates_the_image():
 
     The roll is a rigid rotation of the optics about the optical axis, which
     passes through the field stop, so the image of the centre of the field
-    stays put while the corners move.  The optika releases 2.7.0 and 2.8.0
-    expressed the traced rays in the frame of the un-rolled sensor instead,
-    which turned a roll into a translation of the whole image by about 125 px
-    per degree; a reference fit made against that behaviour is silently
-    wrong on any other version.
+    stays put while the corners move.  optika 2.7.0 and 2.8.0 turned a roll
+    into a translation of the whole image instead, which would silently
+    invalidate a reference fit made against them.
     """
     instrument = _channel()
     parameters = esis.optics.DistortionParameters.from_instrument(instrument)

@@ -25,7 +25,7 @@ def test_plot_distortion_flight():
     axes = esis.flights.f1.optics.plot_distortion_flight()
     assert axes.shape == (5,)
     # the last panel holds the channels before (dashed) and after (solid)
-    # the co-registration, three of each
+    # the per-channel term, three of each
     styles = [line.get_linestyle() for line in axes[4].get_lines()]
     assert styles.count("--") == 3
     assert styles.count("-") == 3

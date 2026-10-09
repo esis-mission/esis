@@ -113,7 +113,7 @@ def _jpeg(a: np.ndarray, inside: np.ndarray, limit: float = 3.0) -> str:
 def page(directory: pathlib.Path, out: pathlib.Path) -> None:
     """Write a self-contained page that blinks the model against the data."""
     frames = {}
-    times = None  # the Level-1 frames are loaded only for renders that lack the times
+    times = None  # loaded only for renders that predate the stored times
     for path in sorted(directory.glob("blink_*.npz")):
         t = int(path.stem.split("_")[1])
         with np.load(path) as f:

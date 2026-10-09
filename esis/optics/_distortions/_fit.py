@@ -54,14 +54,12 @@ def polish(
     """
     Polish a solution with restarted Nelder-Mead simplices.
 
-    The objective is smooth and deterministic once the fit is inside its
-    basin, so a simplex spends every evaluation descending; the size of the
-    starting simplex decides whether it does.  A vertex a tenth of the
-    bounds away is a millimetre of defocus, and stalls; a fiftieth reaches
-    the optimum.  Each vertex steps into the interior, because the design
-    start sits on the upper bound of two parameters and a clipped step there
-    would silently leave that axis unexplored.  A second round restarts from
-    the best point with a smaller simplex.
+    The size of the starting simplex decides whether the simplex descends
+    or stalls, so it is a small fraction of the bounds.  Each vertex steps
+    into the interior, since a start on a bound would otherwise have that
+    axis clipped away unexplored; a round that improves on nothing is
+    retried with the mirrored simplex.  Each later round restarts from the
+    best point with a smaller simplex.
 
     Parameters
     ----------
@@ -119,10 +117,8 @@ def polish(
         fun_before = best["fun"]
         result = run(x, step)
         if not best["fun"] < fun_before:
-            # every vertex of the simplex was worse than the start, which
-            # happens when the start sits against a guard of the objective
-            # that the steps walk into; the mirrored simplex looks the other
-            # way
+            # every vertex was worse than the start, e.g. the steps walked
+            # into a guard of the objective: look the other way
             step = np.where(x - step >= lower, -step, step)
             result = run(x, step)
         _log(
@@ -150,12 +146,11 @@ def fit_distortion(
     """
     Fit distortion parameters by a seeded capture and a local polish.
 
-    A local method alone does not reliably find the basin of the merit from
-    the as-built model, or from starts displaced by a tenth of the bounds,
-    so the first stage is a seeded differential evolution with a loose
-    tolerance: it only has to land in the basin.  The second stage is
-    :func:`polish`.  Because the objective is deterministic and the capture
-    is seeded, the whole fit is reproducible.
+    A local method alone does not reliably find the basin of the merit, so
+    the first stage is a seeded differential evolution with a loose
+    tolerance, which only has to land in the basin; the second is
+    :func:`polish`.  With a deterministic objective the whole fit is
+    reproducible.
 
     Parameters
     ----------

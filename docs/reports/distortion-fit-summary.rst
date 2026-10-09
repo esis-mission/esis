@@ -253,12 +253,13 @@ difference, at the reference frame.  It shows what is being fit and how
 well, and the windows of the neighbouring lines on each sensor.
 (``figures.py frame``)
 
-**Figure 2, the flight.**  Four panels against time: the fitted pointing
+**Figure 2, the flight.**  Five panels against time: the fitted pointing
 in pitch and yaw; the drift of each channel's windows; the measured and
-applied focus of each sector of the primary; and the coalignment metric of every
-channel against channel 1 with the acceptance threshold.  It shows the
-three time-dependent motions the model carries and that the channels stay
-registered to the threshold through the flight.  (``figures.py flight``)
+applied defocus of the primary as a whole; the focus of each sector about
+that mean; and the coalignment metric of every channel against channel 1
+with the acceptance threshold.  It shows the time-dependent motions the
+model carries and that the channels stay registered to the threshold
+through the flight.  (``figures.py flight``)
 
 A third figure is worth considering if space allows: the degeneracy
 diagram, the singular-value spectrum of one frame's Jacobian beside a
@@ -302,7 +303,8 @@ peak to a few gigabytes and the chain within reach of a 32 GB machine in
 a working day.
 
 Repeatability was measured by running the whole chain again from a
-capture with a different seed.  Everything the data determine repeats:
+capture with a different seed, on the chain before the focus of each
+sector was added.  Everything the data determine repeats:
 the correlations with the reference frame agree to 0.012 after the
 capture and to 0.002 after the shared polish, the held-out correlations
 to 0.002, the outline residuals to 0.1 px, and the coalignment metric

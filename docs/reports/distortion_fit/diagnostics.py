@@ -11,22 +11,18 @@ Measure what the distortion fit cannot explain, from the Level-1 frames alone.
 ``window_drift.ecsv``, ``distortion_pointing.ecsv``).
 
 ``image`` asks whether each channel's image moves with its window or inside
-it.  Against frame 15 it measures, on the detector, the motion of the solar
-image, by correlating the interior of the He I and O V windows with the same
-pixels at frame 15, their edges eroded away; and the motion of the window,
-from the edge table.  Both are taken to the sky through the channel's own
-Jacobian, where the pointing moves every channel's image, and not its
-window, by one vector; the field stop moves every window, and not its
-image, by one vector; a grating or a camera moves the image and the window
-of its channel together; and whatever is left moves one channel's image
-alone.
+it: against frame 15 it measures the motion of the solar image, by
+correlating the interior of the He I and O V windows with their edges
+eroded away, and the motion of the window, from the edge table, and takes
+both to the sky through the channel's Jacobian.  The pointing moves every
+image and no window; the field stop every window and no image; a grating or
+camera its channel's image and window together.
 
-``edges`` asks whether the edges are the fiducials the fit takes them for.
-For every frame, channel, line and side it fits the error-function step of
-:func:`esis.optics.measure_edges` along the rows or columns that cross the
-edge, keeping its width, and stacks the profiles about their crossing,
-normalized from the dark side to the lit side, which shows the edge's shape
-free of the step's symmetry.
+``edges`` asks whether the edges are the fiducials the fit takes them for:
+for every frame, channel, line and side it fits the error-function step of
+:func:`esis.optics.measure_edges` along the rows or columns crossing the
+edge, keeping its width, and stacks the profiles about the crossing,
+normalized from the dark side to the lit side.
 """
 
 import pathlib
@@ -64,6 +60,9 @@ ANCHOR = 1
 
 LAST = 26
 """The last frame bright enough for its edges to be measured."""
+
+OFFSETS = np.arange(-12, 12.01, 0.25)
+"""The distances from the crossing at which the stacked edge profile is sampled."""
 
 
 def _windows(directory: pathlib.Path):
@@ -271,10 +270,6 @@ def report_image(
 
 def _step(x, a, b, x0, sigma):
     return a + b * scipy.special.erf((x - x0) / (np.sqrt(2) * sigma))
-
-
-OFFSETS = np.arange(-12, 12.01, 0.25)
-"""The distances from the crossing at which the stacked edge profile is sampled."""
 
 
 def _fit_edge(profile: np.ndarray, guess: float, half: int = 30):

@@ -1,13 +1,13 @@
 """
 The outline of the windows: where the field stop's image crosses the frame.
 
-The merit compares the interior of every window with the scene, and the
-edge pixels are a fraction of a percent of it, so it cannot tell a moved
-grating from a moved sky.  The edges can: they are the image of the field
-stop through the optics alone, and do not move when the pointing does.
-This module measures where the edges of each window cross the rows and
-columns of a frame, predicts the same crossings from a linearized channel,
-and fits the terms that place the windows to the difference.
+The edge pixels are a fraction of a percent of a window, so the merit
+cannot tell a moved grating from a moved sky.  The edges can: they are the
+image of the field stop through the optics alone, and do not move when the
+pointing does.  This module measures where the edges of each window cross
+the rows and columns of a frame, predicts the same crossings from a
+linearized channel, and fits the terms that place the windows to the
+difference.
 """
 
 from __future__ import annotations
@@ -171,7 +171,17 @@ def measure_edges(
     ``position`` and ``error`` in pixels.
     """
     frame = scipy.ndimage.median_filter(np.asarray(frame, dtype=float), size=(3, 1))
+    num_y, num_x = frame.shape
     rows = []
+
+    def fit(line: int, side: int, index: int, profile: np.ndarray, guess: float):
+        limit = profile.size - margin
+        if not np.isfinite(guess) or guess < margin or guess > limit:
+            return
+        position, error = _fit_edge(profile, guess, half)
+        if np.isfinite(position) and np.isfinite(error):
+            rows.append((line, side, index, position, error))
+
     for line, footprint in enumerate(footprints):
         px, py = _polygon(footprint)
         if not np.all(np.isfinite(px)):
@@ -179,42 +189,22 @@ def measure_edges(
         xc, yc = px.mean(), py.mean()
         ry = 0.5 * (py.max() - py.min())
         rx = 0.5 * (px.max() - px.min())
-        band_y = [
-            dy
-            for dy in range(-int(fraction * ry), int(fraction * ry))
-            if abs(dy) >= skip
-        ]
-        for dy in band_y:
+        for dy in range(-int(fraction * ry), int(fraction * ry)):
+            if abs(dy) < skip:
+                continue
             y = int(round(yc + dy))
-            if y < 0 or y >= frame.shape[0]:
+            if y < 0 or y >= num_y:
                 continue
             left, right = _crossings(px, py, y)
-            for side, guess in ((0, left), (1, right)):
-                if (
-                    not np.isfinite(guess)
-                    or guess < margin
-                    or guess > frame.shape[1] - margin
-                ):
-                    continue
-                position, error = _fit_edge(frame[y], guess, half)
-                if np.isfinite(position) and np.isfinite(error):
-                    rows.append((line, side, y, position, error))
-        band_x = [dx for dx in range(-int(fraction * rx), int(fraction * rx), stride)]
-        for dx in band_x:
+            fit(line, 0, y, frame[y], left)
+            fit(line, 1, y, frame[y], right)
+        for dx in range(-int(fraction * rx), int(fraction * rx), stride):
             x = int(round(xc + dx))
-            if x < 0 or x >= frame.shape[1]:
+            if x < 0 or x >= num_x:
                 continue
             top, bottom = _crossings(py, px, x)
-            for side, guess in ((2, top), (3, bottom)):
-                if (
-                    not np.isfinite(guess)
-                    or guess < margin
-                    or guess > frame.shape[0] - margin
-                ):
-                    continue
-                position, error = _fit_edge(frame[:, x], guess, half)
-                if np.isfinite(position) and np.isfinite(error):
-                    rows.append((line, side, x, position, error))
+            fit(line, 2, x, frame[:, x], top)
+            fit(line, 3, x, frame[:, x], bottom)
     result = astropy.table.QTable(
         rows=rows or None,
         names=("line", "side", "index", "position", "error"),

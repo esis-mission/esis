@@ -6,25 +6,27 @@
 #SBATCH --mem=150G
 #SBATCH --time=12:00:00
 #SBATCH --output=%x_%A_%a.out
-# Reproduce the committed distortion fit on the cluster.
+# Reproduce the committed distortion fit on the cluster, in this order:
 #
 #   sbatch --job-name=dist-channel --array=0-3 reproduce.sbatch channel <dir>
 #   sbatch --job-name=dist-edges reproduce.sbatch edges <dir>
 #   sbatch --job-name=dist-combine reproduce.sbatch combine <dir>
-#   sbatch --job-name=dist-polish reproduce.sbatch polish <dir>    # from start_reference.ecsv
-#   sbatch --job-name=dist-align reproduce.sbatch align <dir>      # alignment only, in place
-#   sbatch --job-name=dist-defocus reproduce.sbatch defocus <dir>  # defocus history, before the pointing
-#   sbatch --job-name=dist-coalign reproduce.sbatch coalign <dir>  # channels on the sky, ESIS_FRAMES
+#   sbatch --job-name=dist-defocus reproduce.sbatch defocus <dir>
 #   sbatch --job-name=dist-pointing --array=0-29 reproduce.sbatch pointing <dir>
 #   sbatch --job-name=dist-gather reproduce.sbatch gather <dir>
-#   sbatch --job-name=dist-coregister reproduce.sbatch coregister <dir>
 #   sbatch --job-name=dist-accept reproduce.sbatch accept <dir>
 #   sbatch --job-name=dist-blink reproduce.sbatch blink <dir>
+#   sbatch --job-name=dist-coalign reproduce.sbatch coalign <dir>  # frames from ESIS_FRAMES
 #
-# The environment must provide `esis` with the linearized fit, `named_arrays`
-# and `optika` with device support, `regridding` >= 3.4 with `torch`, and a
-# numba that can see the CUDA driver (see the notes in the report).  Loading
-# the Level-1 frames peaks above 100 GB of memory.
+# and, on a finished reference:
+#
+#   sbatch --job-name=dist-polish reproduce.sbatch polish <dir>    # from start_reference.ecsv
+#   sbatch --job-name=dist-align reproduce.sbatch align <dir>      # alignment only, in place
+#   sbatch --job-name=dist-coregister reproduce.sbatch coregister <dir>
+#
+# The environment is the released libraries with `torch` and a numba that can
+# see the CUDA driver (see the report).  Loading the Level-1 frames peaks
+# above 100 GB of memory.
 COMMAND=$1
 DIRECTORY=$2
 export PYTHONHASHSEED=0

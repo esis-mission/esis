@@ -96,10 +96,8 @@ class DistortionParameters(
 
     A roll turns the sky inside windows that stay put, since the field stop
     turns with the optics, so it sets the angle between every window and
-    the sky.  That angle is one number for the whole instrument, the same
-    as a roll of the field stop with the opposite sign, and the reference
-    fit holds it at zero: one frame cannot tell the two apart, and neither
-    is measurable to better than a degree from the images.
+    the sky.  It is the same as a roll of the field stop with the opposite
+    sign, which one frame cannot tell it apart from.
     """
 
     z_primary: u.Quantity | na.AbstractScalar = 0 * u.mm
@@ -111,10 +109,8 @@ class DistortionParameters(
     field stop.  Each channel views the defocused image through its own
     sector of the primary, so the image shifts on the sky by the sector's
     offset times the defocus, differently in every channel, while the
-    field stop and hence the window edges stay put: about 1.6 pixels along
-    the dispersion of every channel per 0.1 mm for ESIS-I.  It is the one
-    term that moves the sky without moving the windows, and it is bounded
-    by the blur the defocus would put in the cross-dispersion image.
+    window edges stay put: it is the one term that moves the sky without
+    moving the windows.
     """
 
     z_sensor: u.Quantity | na.AbstractScalar = 0 * u.mm
@@ -123,11 +119,6 @@ class DistortionParameters(
     following along the beam by :obj:`KAPPA_FOCUS` times less so that the
     image stays in focus: a change of the magnification of one channel
     without a change of its focus.
-
-    Together with the sensor rotations and in-plane translations below this
-    lets a channel's mapping differ from another's by a scale, an
-    anisotropy and a rotation, which is what the inter-channel alignment
-    measures and which none of the parameters above can produce.
     """
 
     roll_sensor: u.Quantity | na.AbstractScalar = 0 * u.deg
@@ -149,11 +140,8 @@ class DistortionParameters(
     """
     The factor by which the channel's response falls short of the model.
 
-    A scale on the image rather than an optical parameter: it stands in for
-    whatever throughput the material models do not yet carry, so that a
-    merit which compares absolute intensities has one number per channel to
-    absorb the difference.  :meth:`to_instrument` leaves the instrument
-    untouched by it.
+    A scale on the image rather than an optical parameter, for a merit
+    which compares absolute intensities; :meth:`to_instrument` ignores it.
     """
 
     @classmethod
@@ -207,12 +195,9 @@ class DistortionParameters(
 
         The given instrument is left unmodified, and any cached optical
         system on the result is discarded so that it is rebuilt with the
-        new parameters.
-
-        The nominal focal length of the primary mirror is the one the
-        instrument was built with, remembered on the result like the sensor's
-        placement, so this method may be applied repeatedly to the results of
-        previous applications.
+        new parameters.  The placements the terms are measured from are
+        remembered on the result, so this method may be applied repeatedly
+        to the results of previous applications.
 
         Parameters
         ----------
@@ -227,9 +212,7 @@ class DistortionParameters(
 
         result = copy.deepcopy(result)
 
-        # copy the parameter values too, so that the result does not alias
-        # this object's arrays (mutating one must not silently change the
-        # other)
+        # so that the result does not alias this object's arrays
         p = copy.deepcopy(self)
 
         primary_mirror = result.primary_mirror
@@ -246,9 +229,8 @@ class DistortionParameters(
         result.yaw = p.yaw
         result.roll = p.roll
 
-        # the sensor terms are offsets from the placement the instrument was
-        # built with, so that repeated applications do not accumulate; the
-        # compound focus-preserving move shifts the grating along with it
+        # offsets from the built placement, so repeated applications do not
+        # accumulate; the focus-preserving move takes the grating along
         sensor = result.camera.sensor
         sensor.translation.z = _design(instrument, "z_sensor") + p.z_sensor
         result.grating.translation.z = (
@@ -303,7 +285,7 @@ class DistortionParameters(
         shape = na.shape(self)
         if len(shape) > 1:
             raise ValueError(
-                f"only parameters with at most one axis can be saved, " f"got {shape=}"
+                f"only parameters with at most one axis can be saved, got {shape=}"
             )
         axis = next(iter(shape), None)
         num = shape.get(axis, 1)
@@ -390,8 +372,7 @@ def _design(instrument: esis.optics.abc.AbstractInstrument, name: str):
     if name == "z_grating":
         return instrument.grating.translation.z
     if name == "focal_length":
-        # before any term is applied the primary is focused on the field
-        # stop, and the invariant is the nominal focal length
+        # before any term is applied the primary is focused on the field stop
         primary_mirror = instrument.primary_mirror
         return primary_mirror.sag.focal_length + primary_mirror.translation.z
     raise ValueError(name)  # pragma: nocover

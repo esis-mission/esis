@@ -1,14 +1,14 @@
 import numpy as np
+import scipy.ndimage
 import astropy.units as u
 import named_arrays as na
 import esis
 from . import _alignment
+from ._merit_test import _scene
 
 
 def test_shift_fft():
     rng = np.random.default_rng(0)
-    import scipy.ndimage
-
     a = scipy.ndimage.gaussian_filter(rng.uniform(size=(96, 96)), 2)
     # the convention: b shows at r what a shows at r + s
     b = np.roll(a, (3, -2), axis=(0, 1))
@@ -38,8 +38,6 @@ def test_sample_on_sky():
 
 def test_measure_shifts():
     rng = np.random.default_rng(1)
-    import scipy.ndimage
-
     a = scipy.ndimage.gaussian_filter(rng.uniform(size=(240, 240)), 2)
     b = np.roll(a, (2, 1), axis=(0, 1))
     result = _alignment.measure_shifts([a, b], num_tile=3, anchor=0)
@@ -80,12 +78,10 @@ def test_window_mask():
 
 def test_median_shifts():
     """Reduce tile shifts to the length of the median, not the median length."""
-    from esis.optics._distortions._alignment import ShiftField
-
     rng = np.random.default_rng(1)
     dx = 0.2 + rng.normal(0, 0.3, 36)
     dy = -0.1 + rng.normal(0, 0.3, 36)
-    field = ShiftField(584 * u.AA, np.zeros(36), np.zeros(36), dx, dy)
+    field = _alignment.ShiftField(584 * u.AA, np.zeros(36), np.zeros(36), dx, dy)
     result = esis.optics.median_shifts({0: [field], 2: []}, scales=[0.5, 0.5])
     assert np.allclose(result[0], 0.5 * np.array([np.median(dx), np.median(dy)]))
     assert np.all(np.isnan(result[2]))
@@ -103,7 +99,6 @@ def test_align_channels():
         _wavelength_lines,
         _wavelengths_alignment,
     )
-    from ._merit_test import _scene
 
     instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
     instrument.wavelength = _wavelength_lines()
@@ -162,7 +157,6 @@ def test_channel_shifts_agree_on_the_pixel_convention():
         _wavelength_lines,
         _wavelengths_alignment,
     )
-    from ._merit_test import _scene
 
     instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
     instrument.wavelength = _wavelength_lines()
@@ -195,8 +189,6 @@ def test_channel_shifts_agree_on_the_pixel_convention():
 
 def test_shift_modes():
     """Recover a magnification and a rotation from tile shifts, and call noise noise."""
-    from esis.optics._distortions._alignment import ShiftField
-
     num_sky = 401
     half = 0.5 * (num_sky - 1)
     centres = np.linspace(25, 375, 8)
@@ -209,7 +201,7 @@ def test_shift_modes():
     # a rotation of 0.2 samples at the edge
     dx = 1.0 + 0.3 * u_ - 0.2 * v_
     dy = 0.5 + 0.3 * v_ + 0.2 * u_
-    field = ShiftField(584 * u.AA, i, j, dx, dy)
+    field = _alignment.ShiftField(584 * u.AA, i, j, dx, dy)
     modes = esis.optics.shift_modes([field], scale, num_sky)
     assert np.isclose(modes["translation"], np.hypot(1.0, 0.5) * scale, atol=0.05)
     assert np.isclose(modes["magnification"], 0.3 * scale, atol=0.02)
@@ -218,7 +210,7 @@ def test_shift_modes():
     assert modes["residual"] < 0.02
     # pure noise: no modes to speak of, and uncorrelated neighbours
     rng = np.random.default_rng(0)
-    noise = ShiftField(
+    noise = _alignment.ShiftField(
         584 * u.AA, i, j, rng.normal(0, 0.1, i.size), rng.normal(0, 0.1, i.size)
     )
     modes = esis.optics.shift_modes([noise], scale, num_sky)

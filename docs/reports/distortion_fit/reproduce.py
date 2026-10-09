@@ -2,35 +2,36 @@
 """
 Reproduce the committed distortion fit of ESIS-I from the model and the data.
 
-The fit is the stages of
-:func:`esis.flights.f1.optics.fit_distortion_reference`.  The first, the
-absolute fit of each channel, is hours on one GPU per channel, so the
-stages are split across jobs.  Run, in order::
+The stages of :func:`esis.flights.f1.optics.fit_distortion_reference` are
+split across jobs, since the absolute fit alone is hours per channel.  The
+chain, in order::
 
     python reproduce.py channel <c> <directory>   # absolute fit of channel c
     python reproduce.py edges <directory>         # window edges of every frame
     python reproduce.py combine <directory>       # outline + shared + alignment
-    python reproduce.py polish <directory>        # shared + alignment, saved start
-    python reproduce.py align <directory>         # alignment only, in place
-    python reproduce.py defocus <directory>       # defocus history from the channels
-    python reproduce.py pointing <t> <directory>  # per-frame pointing of frame t
+    python reproduce.py defocus <directory>       # focus of each sector, per frame
+    python reproduce.py pointing <t> <directory>  # pointing of frame t
     python reproduce.py gather <directory>        # pointing rows -> ECSV
-    python reproduce.py coregister <directory>    # channels against one another
     python reproduce.py accept <directory>        # score the fit on held-out frames
 
-Environment: ESIS_DEVICE (default ``cuda``; empty for the host),
-ESIS_WORKERS (default 6), ESIS_MERIT (``correlation`` or
-``least_squares``), and to depart from the committed configuration,
-ESIS_FREE_ABSOLUTE and ESIS_FREE_SHARED (colon-separated field names),
-ESIS_PRIMARY=0 to hold the primary at nominal, ESIS_SEED for the capture's
-seed (default 0), ESIS_NUM_SCENE for the
-sampling of the AIA scene (default 401) and ESIS_DRIFT_DEGREE for the
-polynomial that smooths the window drift (default 3; empty for none).
+Three more commands work on a finished reference::
 
-``polish`` starts from ``start_reference.ecsv`` in the directory, a saved
-reference whose windows are already placed, and reruns only the shared
-polish and the internal alignment, for instance at a finer scene; the
-outline record of the start is carried into the result.
+    python reproduce.py polish <directory>      # shared + alignment, saved start
+    python reproduce.py align <directory>       # alignment only, in place
+    python reproduce.py coregister <directory>  # empirical channel offsets, a check
+
+``polish`` starts from ``start_reference.ecsv`` in the directory and carries
+its outline record into the result.
+
+Environment: ESIS_DEVICE (default ``cuda``; ``cpu`` or empty for the host),
+ESIS_WORKERS (default 6), ESIS_NUM_SCENE (sampling of the AIA scene,
+default 401), ESIS_SEED (seed of the capture, default 0), ESIS_PRIMARY=0 to
+hold the primary at nominal, ESIS_DRIFT_DEGREE (polynomial that smooths the
+window drift, default 3; empty for none), ESIS_DEFOCUS_DEGREE (polynomial
+through each sector's focus, default 2), ESIS_COREGISTRATION_DEGREE (the
+same for ``coregister``, default 2), and to depart from the committed
+configuration, ESIS_MERIT (``correlation`` or ``least_squares``),
+ESIS_FREE_ABSOLUTE and ESIS_FREE_SHARED (colon-separated field names).
 """
 
 import logging
@@ -47,35 +48,17 @@ from esis.flights.f1.optics._fits import _fits
 # every device allocation
 logging.getLogger("numba").setLevel(logging.WARNING)
 
-# ESIS_DEVICE is the device the regridding weights are built on: "cuda" by
-# default, or "cpu" (also "", "none") for the host, which the released
-# libraries support
 DEVICE = os.environ.get("ESIS_DEVICE", "cuda")
 DEVICE = None if DEVICE.strip().lower() in ("", "cpu", "none") else DEVICE
 WORKERS = int(os.environ.get("ESIS_WORKERS", "6"))
-
-# ESIS_MERIT selects the comparison the fit maximizes: "correlation" (the
-# default) or "least_squares", which also fits the degradation of each channel
 MERIT = os.environ.get("ESIS_MERIT", "correlation")
-
-# ESIS_PRIMARY=0 holds the primary at nominal instead of scanning the window widths
 PRIMARY = os.environ.get("ESIS_PRIMARY", "1") not in ("0", "false", "no")
-
-# ESIS_NUM_SCENE samples the AIA scene; 401 is 2.1 arcsec, about 2.8 ESIS pixels
+# 401 samples is 2.1 arcsec, about 2.8 ESIS pixels
 NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
-
-# ESIS_SEED seeds the capture of the absolute stage; a second seed is the
-# repeatability test
 SEED = int(os.environ.get("ESIS_SEED", "0"))
-
-# ESIS_DRIFT_DEGREE smooths the measured window drift through the flight
 DRIFT_DEGREE = os.environ.get("ESIS_DRIFT_DEGREE", "3")
 DRIFT_DEGREE = int(DRIFT_DEGREE) if DRIFT_DEGREE else None
-
-# ESIS_COREGISTRATION_DEGREE is the polynomial through the channels' offsets
 COREGISTRATION_DEGREE = int(os.environ.get("ESIS_COREGISTRATION_DEGREE", "2"))
-
-# ESIS_DEFOCUS_DEGREE is the polynomial through the focus of each sector
 DEFOCUS_DEGREE = int(os.environ.get("ESIS_DEFOCUS_DEGREE", "2"))
 
 
@@ -224,7 +207,7 @@ def align(directory: pathlib.Path) -> None:
 
 
 def defocus(directory: pathlib.Path) -> None:
-    """Measure the defocus of the primary through the flight from the channels."""
+    """Measure the focus of each sector of the primary through the flight."""
     path_drift = directory / "window_drift.ecsv"
     _fits.fit_defocus_history(
         reference=directory / "distortion_reference.ecsv",
@@ -277,7 +260,7 @@ def gather(directory: pathlib.Path) -> None:
 
 
 def coregister(directory: pathlib.Path) -> None:
-    """Register the channels with one another, into the pointing table."""
+    """Register the channels empirically, a check; the chain uses ``defocus``."""
     path = directory / "distortion_pointing.ecsv"
     pointing = astropy.table.QTable.read(path, format="ascii.ecsv")
     table = _fits.fit_coregistration(

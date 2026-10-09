@@ -1,18 +1,14 @@
 """
 Fit the distortion of the instrument to observed images.
 
-An absolute stage places each channel against a proxy image of the Sun
-with :class:`LinearMerit` and :func:`fit_distortion`; it is reproducible
-from the as-built model, but one frame constrains only some combinations
-of the mapping's terms, to about a pixel.  An outline stage,
-:func:`fit_distortion_outline`, places each channel's windows on the edges
-measured in the frames by :func:`measure_edges`, which the merit itself
-cannot resolve, and the quantities shared by every channel are made
-shared.  An internal stage, :func:`align_channels`, aligns the channels to
-one another on the sky to a tenth of a pixel in the grating and camera
-terms, reading each frame inside its windows with :func:`window_mask`;
-:func:`measure_channel_shifts` is its measurement on its own, which a
-flight's frames can be put through one by one.
+:class:`DistortionParameters` are the degrees of freedom.
+:class:`LinearMerit` compares a channel's linearized image of a proxy scene
+with a frame, and :func:`fit_distortion` searches it, to about a pixel.
+:func:`fit_distortion_outline` places each channel's windows on the edges
+measured in the frames by :func:`measure_edges`, which the merit cannot
+resolve.  :func:`align_channels` aligns the channels to one another on the
+sky in the grating and camera terms, to a tenth of a pixel;
+:func:`measure_channel_shifts` is its measurement on its own.
 """
 
 from ._parameters import DistortionParameters, KAPPA_FOCUS
