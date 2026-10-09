@@ -2836,6 +2836,7 @@ def acceptance(
                     "which is near zero when what is left is noise."
                 ),
                 anchor=anchor,
+                environment=_environment(),
             )
         )
         modes.write(
@@ -2854,6 +2855,7 @@ def acceptance(
                 num_sky=num_sky,
                 num_tile=num_tile,
                 fraction_valid=fraction_valid,
+                environment=_environment(),
             )
         )
         tiles.write(
