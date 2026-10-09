@@ -3,16 +3,34 @@ import pathlib
 import numpy as np
 import scipy
 import astropy.units as u
+import astropy.time
 import named_arrays as na
 import optika
 import esis
 
 __all__ = [
+    "time_coating",
+    "time_measurement",
     "multilayer_design",
     "multilayer_witness_measured",
     "multilayer_witness_fit",
     "multilayer_fit",
 ]
+
+time_coating = na.ScalarArray(
+    ndarray=astropy.time.Time(["2017-12-14", "2017-12-15", "2017-12-15"]),
+    axes="channel",
+)
+"""
+When each witness sample of :func:`multilayer_witness_measured` was coated,
+along its ``channel`` axis.
+
+Each witness was coated with its grating. The date is the one in the name of
+the sample, such as ``CX171214JK``, which heads its measurement.
+"""
+
+time_measurement = astropy.time.Time("2018-01-21")
+"""When the witness samples of :func:`multilayer_witness_measured` were measured."""
 
 
 def multilayer_design() -> optika.materials.MultilayerMirror:

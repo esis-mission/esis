@@ -8,8 +8,9 @@ from esis.flights.f1.spectrum import O_V, Mg_X, He_I
 @pytest.mark.parametrize("num_velocity", [3])
 def test_scene_aia(
     num_velocity: int,
-):
+) -> None:
 
+    axis_time = "time"
     axis_x = "detector_x"
     axis_y = "detector_y"
     axis_xy = (axis_x, axis_y)
@@ -18,18 +19,17 @@ def test_scene_aia(
 
     limit = 1
 
-    try:
-        result = esis.flights.f1.data.synth.scene_aia(
-            axis_detector_x=axis_x,
-            axis_detector_y=axis_y,
-            axis_wavelength=axis_wavelength,
-            axis_velocity=axis_velocity,
-            num_velocity=num_velocity,
-            limit=limit,
-        )
-    except OSError as e:
-        pytest.skip(f"JSOC is unreachable, skipping live-network test: {e}")
+    result = esis.flights.f1.data.synth.scene_aia(
+        axis_time=axis_time,
+        axis_detector_x=axis_x,
+        axis_detector_y=axis_y,
+        axis_wavelength=axis_wavelength,
+        axis_velocity=axis_velocity,
+        num_velocity=num_velocity,
+        limit=limit,
+    )
 
+    assert result.shape[axis_time] == limit
     assert result.shape[axis_velocity] == num_velocity
     assert result.outputs.unit.is_equivalent(u.erg / u.cm**2 / u.sr / u.AA / u.s)
 
