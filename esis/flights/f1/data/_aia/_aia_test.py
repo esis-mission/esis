@@ -70,11 +70,26 @@ class TestPathAIA:
         assert np.all(time >= time_start)
         assert np.all(time <= time_stop)
 
+    def test_time_range_archive(
+        self,
+        wavelength: u.Quantity | na.AbstractScalarArray,
+    ) -> None:
+        """The whole time range of the archive holds every image."""
+        result = esis.flights.f1.data.path_aia(
+            wavelength=wavelength,
+            axis_time=_axis_time,
+            time_start=astropy.time.Time("2019-09-30T18:06:00"),
+            time_stop=astropy.time.Time("2019-09-30T18:12:00"),
+        )
+        everything = esis.flights.f1.data.path_aia(wavelength, _axis_time)
+        assert result.shape == everything.shape
+        assert np.all(result == everything)
+
     def test_time_range_empty(
         self,
         wavelength: u.Quantity | na.AbstractScalarArray,
     ) -> None:
-        time = astropy.time.Time("2019-09-30T18:00:00")
+        time = astropy.time.Time("2019-09-30T18:07:00")
         with pytest.raises(ValueError, match="no images"):
             esis.flights.f1.data.path_aia(
                 wavelength=wavelength,
@@ -91,6 +106,42 @@ class TestPathAIA:
         everything = esis.flights.f1.data.path_aia(wavelength, _axis_time)
         index = na.ScalarArray(np.array([5, 15, 25]), axes=_axis_time)
         assert np.all(result == everything[{_axis_time: index}])
+
+
+@pytest.mark.parametrize(
+    argnames="time_start,time_stop",
+    argvalues=[
+        ("2019-09-30T18:00:00", "2019-09-30T18:20:00"),
+        ("2019-09-30T18:05:59", "2019-09-30T18:07:00"),
+        ("2019-09-30T18:07:00", "2019-09-30T18:12:01"),
+    ],
+)
+def test_time_range_outside(
+    time_start: str,
+    time_stop: str,
+) -> None:
+    """A time range beyond the archive's raises instead of being cut short."""
+    with pytest.raises(ValueError, match="holds the images from"):
+        esis.flights.f1.data.path_aia(
+            wavelength=304 * u.AA,
+            axis_time=_axis_time,
+            time_start=astropy.time.Time(time_start),
+            time_stop=astropy.time.Time(time_stop),
+        )
+
+
+@pytest.mark.parametrize("limit", [0, -2])
+def test_limit_invalid(limit: int) -> None:
+    with pytest.raises(ValueError, match="limit"):
+        esis.flights.f1.data.path_aia(304 * u.AA, _axis_time, limit=limit)
+
+
+def test_path_aia_unit() -> None:
+    """A channel can be given in any unit of length."""
+    result = esis.flights.f1.data.path_aia(30.4 * u.nm, _axis_time)
+    expected = esis.flights.f1.data.path_aia(304 * u.AA, _axis_time)
+    assert result.shape == expected.shape
+    assert np.all(result == expected)
 
 
 def test_path_aia_channel() -> None:

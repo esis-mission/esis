@@ -104,7 +104,9 @@ def scene_aia(
         limit=limit,
     )
 
-    files = sdo.aia.prep(files)
+    # The Level 1.5 files are written beside the archive's images,
+    # so a cache kept anywhere else could outlive them.
+    files = sdo.aia.prep(files, cache=None)
 
     filtergram = sdo.aia.Filtergram.from_fits(
         path=files,
