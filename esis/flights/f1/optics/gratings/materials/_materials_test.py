@@ -1,3 +1,6 @@
+import numpy as np
+import astropy.units as u
+import named_arrays as na
 import optika
 import esis
 
@@ -10,6 +13,28 @@ def test_multilayer_design():
 def test_multilayer_witness_measured():
     r = esis.flights.f1.optics.gratings.materials.multilayer_witness_measured()
     assert isinstance(r, optika.materials.MeasuredMirror)
+
+
+def test_multilayer_witness_measured_efficiency() -> None:
+    """Each witness is evaluated on its own wavelength samples."""
+    r = esis.flights.f1.optics.gratings.materials.multilayer_witness_measured()
+    measurement = r.efficiency_measured
+    wavelength = esis.flights.f1.spectrum.O_V.wavelength
+    angle = measurement.inputs.direction
+    rays = optika.rays.RayVectorArray(
+        wavelength=wavelength,
+        direction=na.Cartesian3dVectorArray(np.sin(angle), 0, np.cos(angle)),
+    )
+    result = r.efficiency(rays, na.Cartesian3dVectorArray(0, 0, -1))
+    expected = na.interp(
+        wavelength,
+        measurement.inputs.wavelength,
+        measurement.outputs,
+        axis="wavelength",
+    )
+    assert result.shape == r.shape == dict(channel=3)
+    assert np.all(result == expected)
+    assert np.all(result > 0.3 * u.dimensionless_unscaled)
 
 
 def test_multilayer_witness_fit():

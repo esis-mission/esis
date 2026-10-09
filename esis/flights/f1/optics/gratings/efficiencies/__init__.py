@@ -1,6 +1,8 @@
 """Measurements of the grating efficiency by Eric Gullikson."""
 
 from ._efficiencies import (
+    serial_number,
+    time_measurement,
     efficiency_vs_wavelength,
     efficiency_vs_x,
     efficiency_vs_y,
@@ -9,6 +11,8 @@ from ._efficiencies import (
 )
 
 __all__ = [
+    "serial_number",
+    "time_measurement",
     "efficiency_vs_wavelength",
     "efficiency_vs_x",
     "efficiency_vs_y",

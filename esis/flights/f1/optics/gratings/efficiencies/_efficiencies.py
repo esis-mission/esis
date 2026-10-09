@@ -5,6 +5,8 @@ import astropy.time
 import named_arrays as na
 
 __all__ = [
+    "serial_number",
+    "time_measurement",
     "efficiency_vs_wavelength",
     "efficiency_vs_x",
     "efficiency_vs_y",
@@ -15,7 +17,16 @@ __all__ = [
 _directory_data = pathlib.Path(__file__).parent / "_data"
 
 serial_number = "UBO-16-017"
+"""
+The manufacturing number of the grating these measurements were made of.
+
+It is one of the flight gratings, so
+:attr:`esis.optics.Grating.manufacturing_number` of
+:func:`~esis.flights.f1.optics.as_built` says which channel it flew in.
+"""
+
 time_measurement = astropy.time.Time("2018-01-21")
+"""When these measurements were made."""
 
 
 def efficiency_vs_wavelength() -> (

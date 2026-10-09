@@ -368,14 +368,13 @@ class AbstractInstrument(
         .. jupyter-execute::
 
             import astropy.units as u
-            import named_arrays as na
             import esis
 
             instrument = esis.flights.f1.optics.as_built_unfocused(num_distribution=0)
 
             focused = instrument.focus_grating(wavelength=629.73 * u.AA)
 
-            na.nominal(focused.grating.translation.z - instrument.grating.translation.z)
+            focused.grating.translation.z - instrument.grating.translation.z
         """
         if wavelength is None:
             wavelength = self.wavelength_physical
@@ -573,7 +572,6 @@ class AbstractInstrument(
         .. jupyter-execute::
 
             import astropy.units as u
-            import named_arrays as na
             import esis
 
             instrument = esis.flights.f1.optics.as_built_unfocused(num_distribution=0)
@@ -581,7 +579,7 @@ class AbstractInstrument(
             aligned = instrument.align_grating()
 
             error = aligned.position_line() - aligned.camera.sensor.position_image
-            na.nominal(error.length.to(u.um))
+            error.length.to(u.um)
         """
         if wavelength is None:
             wavelength = self.wavelength_physical
@@ -655,15 +653,25 @@ class AbstractInstrument(
         kwargs
             Additional kwargs for plotting the primary mirror.
 
+        Notes
+        -----
+        A schematic cannot represent uncertainty, so any uncertain parameters
+        of this instrument are drawn at their nominal values.
         """
+        # The nominal value is taken before anything is computed, rather than
+        # from the results, so that the rays are only traced for the nominal
+        # instrument and every mask applied to them is certain.
+        instrument = na.nominal(self)
+        transformation = na.nominal(transformation)
+
         if ax is None:
             ax = plt.gca()
 
         if transformation is None:
             transformation = na.transformations.IdentityTransformation()
 
-        if self.transformation is not None:
-            transformation = transformation @ self.transformation
+        if instrument.transformation is not None:
+            transformation = transformation @ instrument.transformation
 
         if kwargs_footprint is None:
             kwargs_footprint = dict()
@@ -673,9 +681,9 @@ class AbstractInstrument(
             edgecolor="tab:orange",
         )
 
-        shape = self.system.shape
+        shape = instrument.system.shape
 
-        primary = self.primary_mirror.surface
+        primary = instrument.primary_mirror.surface
 
         components = ("x", "y")
 
@@ -711,12 +719,12 @@ class AbstractInstrument(
 
         if footprint:
 
-            index_primary = self.system.surfaces_all.index(primary)
-            index_primary = {self.system.axis_surface: index_primary}
+            index_primary = instrument.system.surfaces_all.index(primary)
+            index_primary = {instrument.system.axis_surface: index_primary}
 
-            rays = self.system.raytrace().outputs
+            rays = instrument.system.raytrace().outputs
 
-            where = rays.unvignetted[{self.system.axis_surface: ~0}]
+            where = rays.unvignetted[{instrument.system.axis_surface: ~0}]
 
             rays = rays[index_primary]
 
@@ -729,8 +737,8 @@ class AbstractInstrument(
                 position_i = rays.position[i]
                 where_i = where[i]
 
-                position_x = na.nominal(position_i.x[where_i]).ndarray
-                position_y = na.nominal(position_i.y[where_i]).ndarray
+                position_x = position_i.x[where_i].ndarray
+                position_y = position_i.y[where_i].ndarray
                 # a vignetted ray may carry no position at all
                 finite = np.isfinite(position_x) & np.isfinite(position_y)
                 position_x = position_x[finite]
@@ -760,7 +768,7 @@ class AbstractInstrument(
                 ax.text(
                     x=sx,
                     y=sy,
-                    s=f"Ch. {self.camera.channel[i].ndarray}",
+                    s=f"Ch. {instrument.camera.channel[i].ndarray}",
                     ha="center",
                     va="center",
                     color=kwargs_footprint["edgecolor"],
@@ -779,8 +787,8 @@ class AbstractInstrument(
                     label=label,
                 )
 
-                width_clear = self.primary_mirror.width_clear
-                width_border = self.primary_mirror.width_border
+                width_clear = instrument.primary_mirror.width_clear
+                width_border = instrument.primary_mirror.width_border
 
                 halfwidth_mech = width_clear / 2 + width_border
 

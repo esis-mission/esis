@@ -1,0 +1,53 @@
+cff-version: 1.2.0
+message: "If you use esis in your research, please cite it using these metadata, along with the ESIS mission paper listed in the references."
+type: software
+title: esis
+abstract: >-
+  esis is a Python library for modeling and interpreting observations from the
+  EUV Snapshot Imaging Spectrograph (ESIS), a NASA sounding rocket mission
+  which measures the speed of plasma in the solar atmosphere. It provides a
+  model of the ESIS optical system built on optika, and a pipeline which
+  reduces the images captured during flight to physically meaningful
+  quantities. It is published on PyPI as euv-snapshot-imaging-spectrograph.
+authors:
+  - family-names: Smart
+    given-names: Roy T.
+    orcid: "https://orcid.org/0000-0002-9997-5515"
+  - family-names: Parker
+    given-names: Jacob D.
+    orcid: "https://orcid.org/0000-0001-8732-8284"
+  - family-names: Kankelborg
+    given-names: Charles C.
+    orcid: "https://orcid.org/0000-0002-1992-7469"
+repository-code: "https://github.com/esis-mission/esis"
+url: "https://esis-mission.github.io"
+license: BSD-3-Clause
+identifiers:
+  - type: doi
+    description: Concept DOI, which always resolves to the latest version
+    value: "10.5281/zenodo.23113153"
+keywords:
+  - ESIS
+  - sounding rocket
+  - imaging spectroscopy
+  - solar physics
+references:
+  - type: article
+    title: "First Flight of the EUV Snapshot Imaging Spectrograph (ESIS)"
+    authors:
+      - family-names: Parker
+        given-names: Jacob D.
+      - family-names: Smart
+        given-names: Roy T.
+      - family-names: Kankelborg
+        given-names: Charles
+      - family-names: Winebarger
+        given-names: Amy
+      - family-names: Goldsworth
+        given-names: Nelson
+    journal: The Astrophysical Journal
+    volume: 938
+    issue: 2
+    start: 116
+    year: 2022
+    doi: 10.3847/1538-4357/ac8eaa

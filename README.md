@@ -6,6 +6,7 @@
 [![Ruff](https://github.com/esis-mission/esis/actions/workflows/ruff.yml/badge.svg)](https://github.com/esis-mission/esis/actions/workflows/ruff.yml)
 [![docs](https://github.com/esis-mission/esis/actions/workflows/docs.yml/badge.svg)](https://github.com/esis-mission/esis/actions/workflows/docs.yml)
 [![PyPI version](https://badge.fury.io/py/euv-snapshot-imaging-spectrograph.svg)](https://badge.fury.io/py/euv-snapshot-imaging-spectrograph)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23113153.svg)](https://doi.org/10.5281/zenodo.23113153)
 
 The _EUV Snapshot Imaging Spectrograph_ (ESIS) is a NASA [sounding rocket](https://en.wikipedia.org/wiki/Sounding_rocket)
 mission designed to measure the speed of plasma in the [solar atmosphere](https://en.wikipedia.org/wiki/Sun#Atmosphere).
@@ -125,7 +126,33 @@ hosted at [esis-mission.github.io](https://esis-mission.github.io).
 
 ## Citation
 
-If you use this package in your research, please cite the ESIS mission paper:
+If you use this package in your research, please cite both the package and
+the ESIS mission paper.
+
+The citation metadata for the package is kept in [`CITATION.cff`](https://github.com/esis-mission/esis/blob/main/CITATION.cff),
+which the "Cite this repository" button on GitHub can export as BibTeX or APA.
+
+Every release of the package is archived on Zenodo with its own DOI.
+The concept DOI, [10.5281/zenodo.23113153](https://doi.org/10.5281/zenodo.23113153),
+always resolves to the latest version,
+and the Zenodo page lists the DOI of every version.
+Please include the version of the package that you used,
+which is given by `importlib.metadata.version("euv-snapshot-imaging-spectrograph")`.
+The BibTeX entry below uses the concept DOI.
+To cite a specific version instead,
+replace `doi` with the DOI of that version.
+
+```bibtex
+@software{esis,
+  author = {Smart, Roy T. and Parker, Jacob D. and Kankelborg, Charles C.},
+  title = {esis},
+  version = {X.Y.Z},
+  doi = {10.5281/zenodo.23113153},
+  url = {https://github.com/esis-mission/esis},
+}
+```
+
+The mission paper describes the instrument and the results of the first flight:
 
 > Parker, J. D., Smart, R. T., Kankelborg, C., Winebarger, A., and
 > Goldsworth, N. 2022, "First Flight of the EUV Snapshot Imaging Spectrograph

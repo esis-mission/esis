@@ -244,6 +244,8 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
             ),
             outputs=reflectivity,
         ),
+        # each witness was sampled at its own wavelengths
+        axis_wavelength="wavelength",
         substrate=optika.materials.Layer(
             chemical="Si",
         ),

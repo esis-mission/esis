@@ -10,6 +10,8 @@ authors = [
 description = "A Python library for modeling and interpreting data from the EUV Snapshot Imaging Spectrograph (ESIS)."
 readme = "README.md"
 requires-python = ">=3.12"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
@@ -21,7 +23,7 @@ dependencies = [
     "joblib",
     "pooch",
     "named-arrays~=2.14",
-    "optika~=3.0",
+    "optika~=3.1",
     "msfc-ccd~=1.0",
     "solar-dynamics-observatory~=1.0",
     "interface-region-imaging-spectrograph~=1.0,>=1.0.1",

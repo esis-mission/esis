@@ -112,16 +112,16 @@ def design_proposed(
     c1 = -2.852e-5 * (u.um / u.mm)
     c2 = -2.112e-7 * (u.um / u.mm**2)
 
-    if num_distribution == 0:
-        result.grating.rulings.spacing.coefficients[0] = c0
-        result.grating.rulings.spacing.coefficients[1] = c1
-        result.grating.rulings.spacing.coefficients[2] = c2
-        z_filter = result.grating.translation.z + 1291.012 * u.mm
-    else:
-        result.grating.rulings.spacing.coefficients[0].nominal = c0
-        result.grating.rulings.spacing.coefficients[1].nominal = c1
-        result.grating.rulings.spacing.coefficients[2].nominal = c2
-        z_filter = result.grating.translation.z.nominal + 1291.012 * u.mm
+    # The uncertainty of the new rulings is not known yet,
+    # so they are exactly as designed.
+    coefficients = result.grating.rulings.spacing.coefficients
+    coefficients[0] = c0
+    coefficients[1] = c1
+    coefficients[2] = c2
+
+    # The filter is placed relative to where the grating is designed to be,
+    # not relative to each of its possible positions.
+    z_filter = na.nominal(result.grating.translation.z) + 1291.012 * u.mm
 
     result.grating.yaw = -3.65 * u.deg
 
@@ -401,16 +401,14 @@ def design_guess(
 
     grating.yaw = yaw_grating
 
-    if num_distribution == 0:
-        result.grating.rulings.spacing.coefficients[0] = c0
-        result.grating.rulings.spacing.coefficients[1] = c1
-        result.grating.rulings.spacing.coefficients[2] = c2
-        result.grating.sag.radius = radius_grating
-    else:
-        result.grating.rulings.spacing.coefficients[0].nominal = c0
-        result.grating.rulings.spacing.coefficients[1].nominal = c1
-        result.grating.rulings.spacing.coefficients[2].nominal = c2
-        result.grating.sag.radius.nominal = radius_grating
+    # The uncertainty of the new grating is not known yet, so it is exactly
+    # what the nominal geometry calls for, rather than what each sample of
+    # the geometry would call for.
+    coefficients = result.grating.rulings.spacing.coefficients
+    coefficients[0] = na.nominal(c0)
+    coefficients[1] = na.nominal(c1)
+    coefficients[2] = c2
+    result.grating.sag.radius = na.nominal(radius_grating)
 
     filt.yaw = b
 
@@ -505,16 +503,13 @@ def design_single(
 
     result.grating.yaw = yaw_grating
 
-    if num_distribution == 0:
-        result.grating.rulings.spacing.coefficients[0] = c0
-        result.grating.rulings.spacing.coefficients[1] = c1
-        result.grating.rulings.spacing.coefficients[2] = c2
-        result.grating.sag.radius = radius_grating
-    else:
-        result.grating.rulings.spacing.coefficients[0].nominal = c0
-        result.grating.rulings.spacing.coefficients[1].nominal = c1
-        result.grating.rulings.spacing.coefficients[2].nominal = c2
-        result.grating.sag.radius.nominal = radius_grating
+    # The uncertainty of the new grating is not known yet,
+    # so it is exactly as designed.
+    coefficients = result.grating.rulings.spacing.coefficients
+    coefficients[0] = c0
+    coefficients[1] = c1
+    coefficients[2] = c2
+    result.grating.sag.radius = radius_grating
 
     # refresh the groove depth so the blaze angle tracks the new ruling spacing
     _blaze_rulings(result.grating)
