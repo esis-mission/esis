@@ -22,7 +22,9 @@ sky grid, default 401) and ESIS_BLOCK (block-averaging of the render,
 default 3) for the render, whose frames default to the reference frame;
 ESIS_PAGE_JPEG (a quality; empty for lossless PNG) and ESIS_PAGE_BLOCK (a
 further block-averaging factor) for the page, trading fidelity for the
-number of frames that fit it.
+number of frames that fit it.  ESIS_COREGISTERED=1 renders through the
+co-registered copy of the pointing table (``reproduce.py coregister``),
+with ``_coregistered`` in the file names.
 """
 
 import base64
@@ -54,6 +56,13 @@ NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
 
 ANCHOR = 1
 """The channel the alignment anchors on, the default to difference against."""
+
+SUFFIX = (
+    "_coregistered"
+    if os.environ.get("ESIS_COREGISTERED", "") not in ("", "0", "false", "no")
+    else ""
+)
+"""Marks a render through the co-registered pointing table, in its file names."""
 
 HIGHPASS_SIGMA = 40.0
 """
@@ -102,7 +111,7 @@ def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:
     reference = esis.optics.DistortionParameters.from_file(
         directory / "distortion_reference.ecsv"
     )
-    path_pointing = directory / "distortion_pointing.ecsv"
+    path_pointing = directory / f"distortion_pointing{SUFFIX}.ecsv"
     pointing = (
         astropy.table.QTable.read(path_pointing, format="ascii.ecsv")
         if path_pointing.exists()
@@ -272,7 +281,7 @@ def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:
             rows_t = pointing[np.asarray(pointing["frame"]) == t]
             row = rows_t[0] if len(rows_t) else None
         np.savez_compressed(
-            directory / f"coalign_{t:03d}.npz",
+            directory / f"coalign{SUFFIX}_{t:03d}.npz",
             images=image_blocks,
             highpass=highpass_blocks,
             valid=fraction,
@@ -352,7 +361,7 @@ def page(directory: pathlib.Path, out: pathlib.Path) -> None:
     """Write a self-contained page that blinks and differences the channels."""
     frames = {}
     times = None  # loaded only for renders that predate the stored times
-    for path in sorted(directory.glob("coalign_*.npz")):
+    for path in sorted(directory.glob(f"coalign{SUFFIX}_[0-9]*.npz")):
         with np.load(path) as f:
             meta = json.loads(str(f["meta"]))
             images = f["images"].astype(float)

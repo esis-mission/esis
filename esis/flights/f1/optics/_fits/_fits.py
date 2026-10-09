@@ -2158,7 +2158,8 @@ def fit_coregistration(
                 "The registration of the ESIS-I channels with one another "
                 "through the flight.  shift is the median tile shift of every "
                 "channel's sky against the anchor's with the pointing, the "
-                "window drift and the defocus applied, in detector pixels, and "
+                "window drift and the focus of each sector applied, in detector "
+                "pixels, and "
                 "residual the same in the last pass, measured with the "
                 "previous pass's offsets applied.  motion is the motion on the "
                 "sky, in detector pixels, that each channel's image needs "
@@ -2166,9 +2167,9 @@ def fit_coregistration(
                 "index that vanishes at the reference frame is fit through "
                 "it, taken about the mean of the channels, and expressed as "
                 "pitch_channel and yaw_channel, the offset of each channel's "
-                "own pointing.  used marks the frames the fit kept.  The "
-                "origin of the shifts is not understood: the windows do not "
-                "follow them."
+                "own pointing.  used marks the frames the fit kept.  This is "
+                "what the focus of each sector leaves, an empirical term the "
+                "flight factory applies only when asked (channel_offsets)."
             ),
             provenance=(
                 f"esis.flights.f1.optics.fit_coregistration(num_scene={num_scene}, "

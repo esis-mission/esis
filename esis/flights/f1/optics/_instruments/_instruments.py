@@ -623,6 +623,7 @@ def distortion_fit(
     axis_channel: str = "channel",
     num_distribution: int = 11,
     axis_time: None | str = None,
+    channel_offsets: bool = False,
 ) -> esis.optics.Instrument:
     """
     Apply the best-fit distortion parameters to the ESIS-I :func:`as_built`.
@@ -643,6 +644,15 @@ def distortion_fit(
     channel's windows (:func:`fit_distortion_pointing`).  The optics are
     otherwise held at the reference fit.
 
+    If `channel_offsets` is also set, each channel's own pointing offset from
+    ``_data/coregistration.ecsv`` is added: the registration of the channels
+    with one another that remains after the focus of each sector, measured
+    empirically by :func:`fit_coregistration`.  It is an option rather than
+    a stage of the fit, since it is twelve numbers with no mechanism behind
+    them; it tightens the registration of the channels by a few hundredths
+    of a pixel.  The offsets vanish at the reference frame, so without
+    `axis_time` they have no effect.
+
     Parameters
     ----------
     grid
@@ -656,6 +666,9 @@ def distortion_fit(
         The name of the logical axis corresponding to changing time.
         If :obj:`None`, the model is that of the ``time=15`` reference fit;
         otherwise its time-dependent terms gain one element per Level-1 frame.
+    channel_offsets
+        Whether to add each channel's own empirical pointing offset through
+        the flight, from ``_data/coregistration.ecsv``.  Needs `axis_time`.
 
     Examples
     --------
@@ -774,11 +787,21 @@ def distortion_fit(
                 model.primary_mirror.translation.z
                 + na.ScalarArray(z_primary, axes=axes)
             )
-        # each channel's own pointing offset, if the table was co-registered
-        for name in ("pitch", "yaw"):
-            if f"{name}_channel" in pointing.colnames:
+        # each channel's own pointing offset, the empirical registration left
+        # after the sector focus, kept as an option
+        if channel_offsets:
+            coregistration = astropy.table.QTable.read(
+                _directory_data / "coregistration.ecsv",
+                format="ascii.ecsv",
+            )
+            registered = np.asarray(coregistration["frame"])
+            index = [
+                int(np.flatnonzero(registered == t)[0])
+                for t in np.asarray(pointing["frame"])
+            ]
+            for name in ("pitch", "yaw"):
                 offset = na.ScalarArray(
-                    u.Quantity(pointing[f"{name}_channel"]),
+                    u.Quantity(coregistration[f"{name}_channel"][index]),
                     axes=(axis_time, axis_channel),
                 )
                 setattr(model, name, getattr(model, name) + offset)

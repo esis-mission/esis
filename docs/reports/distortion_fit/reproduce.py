@@ -21,7 +21,12 @@ Three more commands work on a finished reference::
     python reproduce.py coregister <directory>  # empirical channel offsets, a check
 
 ``polish`` starts from ``start_reference.ecsv`` in the directory and carries
-its outline record into the result.
+its outline record into the result.  ``coregister`` measures what the focus
+of each sector leaves and writes ``coregistration.ecsv`` beside a copy of
+the pointing table with the offsets applied,
+``distortion_pointing_coregistered.ecsv``; with ESIS_COREGISTERED=1,
+``accept`` (and ``coalign.py``) read that copy and write their results with
+a ``_coregistered`` suffix, so the two models can be compared.
 
 Environment: ESIS_DEVICE (default ``cuda``; ``cpu`` or empty for the host),
 ESIS_WORKERS (default 6), ESIS_NUM_SCENE (sampling of the AIA scene,
@@ -29,7 +34,8 @@ default 401), ESIS_SEED (seed of the capture, default 0), ESIS_PRIMARY=0 to
 hold the primary at nominal, ESIS_DRIFT_DEGREE (polynomial that smooths the
 window drift, default 3; empty for none), ESIS_DEFOCUS_DEGREE (polynomial
 through each sector's focus, default 2), ESIS_COREGISTRATION_DEGREE (the
-same for ``coregister``, default 2), and to depart from the committed
+same for ``coregister``, default 2), ESIS_COREGISTERED=1 to score the
+co-registered copy of the pointing table, and to depart from the committed
 configuration, ESIS_MERIT (``correlation`` or ``least_squares``),
 ESIS_FREE_ABSOLUTE and ESIS_FREE_SHARED (colon-separated field names).
 """
@@ -60,6 +66,13 @@ DRIFT_DEGREE = os.environ.get("ESIS_DRIFT_DEGREE", "3")
 DRIFT_DEGREE = int(DRIFT_DEGREE) if DRIFT_DEGREE else None
 COREGISTRATION_DEGREE = int(os.environ.get("ESIS_COREGISTRATION_DEGREE", "2"))
 DEFOCUS_DEGREE = int(os.environ.get("ESIS_DEFOCUS_DEGREE", "2"))
+COREGISTERED = os.environ.get("ESIS_COREGISTERED", "") not in ("", "0", "false", "no")
+SUFFIX = "_coregistered" if COREGISTERED else ""
+
+
+def _pointing(directory: pathlib.Path) -> pathlib.Path:
+    """Name the pointing table to score: the chain's, or the co-registered copy."""
+    return directory / f"distortion_pointing{SUFFIX}.ecsv"
 
 
 def _names(variable: str, default: tuple[str, ...]) -> tuple[str, ...]:
@@ -260,9 +273,10 @@ def gather(directory: pathlib.Path) -> None:
 
 
 def coregister(directory: pathlib.Path) -> None:
-    """Register the channels empirically, a check; the chain uses ``defocus``."""
-    path = directory / "distortion_pointing.ecsv"
-    pointing = astropy.table.QTable.read(path, format="ascii.ecsv")
+    """Measure the channel offsets the sector focus leaves; the chain is untouched."""
+    pointing = astropy.table.QTable.read(
+        directory / "distortion_pointing.ecsv", format="ascii.ecsv"
+    )
     table = _fits.fit_coregistration(
         reference=directory / "distortion_reference.ecsv",
         pointing=pointing,
@@ -271,10 +285,11 @@ def coregister(directory: pathlib.Path) -> None:
         path=directory / "coregistration.ecsv",
         directory=directory,
     )
+    path = directory / "distortion_pointing_coregistered.ecsv"
     _fits.apply_coregistration(pointing, table).write(
         path, format="ascii.ecsv", overwrite=True
     )
-    print(f"channel offsets -> {path}")
+    print(f"channel offsets -> {directory / 'coregistration.ecsv'}, applied in {path}")
 
 
 def accept(directory: pathlib.Path) -> None:
@@ -284,9 +299,7 @@ def accept(directory: pathlib.Path) -> None:
         reference=esis.optics.DistortionParameters.from_file(
             directory / "distortion_reference.ecsv"
         ),
-        pointing=astropy.table.QTable.read(
-            directory / "distortion_pointing.ecsv", format="ascii.ecsv"
-        ),
+        pointing=astropy.table.QTable.read(_pointing(directory), format="ascii.ecsv"),
         edges=(
             astropy.table.QTable.read(path_edges, format="ascii.ecsv")
             if path_edges.exists()
@@ -295,7 +308,7 @@ def accept(directory: pathlib.Path) -> None:
         num_scene=NUM_SCENE,
         device=DEVICE,
         merit=MERIT,
-        path=directory / "acceptance.ecsv",
+        path=directory / f"acceptance{SUFFIX}.ecsv",
         directory=directory,
     )
 

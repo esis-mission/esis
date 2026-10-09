@@ -82,10 +82,10 @@ def plot_distortion_flight(
     Five panels against time since the first frame: the pointing of the
     payload; the drift of each channel's windows; the measured and the
     applied defocus of the primary, the mean over its sectors; the focus of
-    each channel's sector about that mean (or, for a run that applied the
-    empirical co-registration instead, the offset of each channel's own
-    pointing); and the shift of every channel's sky against the anchor's,
-    before the per-channel term dashed and after it solid.
+    each channel's sector about that mean; and the shift of every channel's
+    sky against the anchor's, before the focus dashed, after it solid and,
+    where the optional channel offsets were measured
+    (``coregistration.ecsv``), after them dotted.
 
     Parameters
     ----------
@@ -107,7 +107,7 @@ def plot_distortion_flight(
     pointing = distortion_fit_table("pointing", directory)
     acceptance = distortion_fit_table("acceptance", directory)
     defocus = distortion_fit_table("defocus", directory)
-    # a run that applied the empirical co-registration carries its table too
+    # the optional empirical offsets, where they were measured
     directory = _directory_data if directory is None else pathlib.Path(directory)
     path = directory / "coregistration.ecsv"
     coregistration = (
@@ -171,18 +171,27 @@ def plot_distortion_flight(
 
     ax = axes[4]
     anchor = int(acceptance.meta.get("anchor", 1))
-    # the channels before the per-channel term: the defocus stage measures
-    # them before any focus is applied, the co-registration before its offsets
-    source = coregistration if coregistration is not None else defocus
-    if "shift_x" in source.colnames:
+    # the channels before any focus is applied, as the focus stage measured them
+    if "shift_x" in defocus.colnames:
         before = np.hypot(
-            source["shift_x"].to_value(u.pix),
-            source["shift_y"].to_value(u.pix),
+            defocus["shift_x"].to_value(u.pix),
+            defocus["shift_y"].to_value(u.pix),
         )
-        tt = _minutes(source["frame"], first)
+        tt = _minutes(defocus["frame"], first)
         for c in range(before.shape[1]):
             if c != anchor:
                 ax.plot(tt, before[:, c], color=colors[c], ls="--", lw=0.8)
+    if coregistration is not None:
+        # what the optional channel offsets leave, measured in their last pass
+        after = np.hypot(
+            coregistration["residual_x"].to_value(u.pix),
+            coregistration["residual_y"].to_value(u.pix),
+        )
+        tc = _minutes(coregistration["frame"], first)
+        for c in range(after.shape[1]):
+            if c != anchor:
+                ax.plot(tc, after[:, c], color=colors[c], ls=":", lw=0.8)
+        ax.plot([], [], color="k", ls=":", lw=0.8, label="with channel offsets")
     for c in sorted(set(int(v) for v in acceptance["channel"])):
         if c == anchor:
             continue
