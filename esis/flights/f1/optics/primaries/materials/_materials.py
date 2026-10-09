@@ -2,16 +2,21 @@ import pathlib
 import numpy as np
 import scipy.optimize
 import astropy.units as u
+import astropy.time
 import named_arrays as na
 import optika
 import esis
 
 __all__ = [
+    "time_measurement",
     "multilayer_design",
     "multilayer_witness_measured",
     "multilayer_witness_fit",
     "multilayer_fit",
 ]
+
+time_measurement = astropy.time.Time("2018-05-10")
+"""When the witness sample of :func:`multilayer_witness_measured` was measured."""
 
 
 def multilayer_design() -> optika.materials.MultilayerMirror:
