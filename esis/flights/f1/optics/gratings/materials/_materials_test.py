@@ -1,3 +1,4 @@
+import pathlib
 import numpy as np
 import astropy.units as u
 import named_arrays as na
@@ -35,6 +36,21 @@ def test_multilayer_witness_measured_efficiency() -> None:
     assert result.shape == r.shape == dict(channel=3)
     assert np.all(result == expected)
     assert np.all(result > 0.3 * u.dimensionless_unscaled)
+
+
+def test_time_coating() -> None:
+    """Each witness was coated on the date in the name of its sample."""
+    materials = esis.flights.f1.optics.gratings.materials
+    serial_number = materials.multilayer_witness_measured().serial_number
+    directory = pathlib.Path(materials.__file__).parent / "_data"
+    assert materials.time_coating.shape == serial_number.shape
+    for index in na.ndindex(serial_number.shape):
+        number = serial_number[index].ndarray[-2:]
+        path = directory / f"Witness_g{number}.txt"
+        header = path.read_text().splitlines()[0]
+        time = materials.time_coating[index].ndarray
+        assert header.startswith(f"# CX{time.strftime('%y%m%d')}")
+    assert np.all(materials.time_coating < materials.time_measurement)
 
 
 def test_multilayer_witness_fit():

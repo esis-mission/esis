@@ -8,12 +8,22 @@ import optika
 import esis
 
 __all__ = [
+    "time_coating",
     "time_measurement",
     "multilayer_design",
     "multilayer_witness_measured",
     "multilayer_witness_fit",
     "multilayer_fit",
 ]
+
+time_coating = astropy.time.Time("2018-05-09")
+"""
+When the witness sample of :func:`multilayer_witness_measured` was coated.
+
+The witness was coated with the mirror when the mirror was recoated. The date
+is the one in the name of the sample, ``CX180509A``, which heads its
+measurement.
+"""
 
 time_measurement = astropy.time.Time("2018-05-10")
 """When the witness sample of :func:`multilayer_witness_measured` was measured."""
