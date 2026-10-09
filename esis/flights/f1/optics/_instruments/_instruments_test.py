@@ -1,7 +1,9 @@
 import dataclasses
+import pathlib
 import pytest
 import numpy as np
 import astropy.units as u
+import astropy.table
 import named_arrays as na
 import esis
 
@@ -193,16 +195,33 @@ def test_distortion_fit_axis_time():
     assert np.all(delta[dict(time=0, channel=0)] > 0 * u.arcsec)
     assert np.all(delta[dict(time=~0, channel=0)] < 0 * u.arcsec)
     assert np.all(np.abs(delta[dict(time=15)]) < 0.01 * u.arcsec)
-    # each channel carries an offset of its own on top of the payload's
-    # pointing, which registers the channels with one another: zero at the
-    # reference frame and in the mean over the channels
-    own = delta - delta.mean("channel")
-    assert np.all(np.abs(own[dict(time=0)]).max() > 0.05 * u.arcsec)
-    assert np.all(np.abs(own[dict(time=15)]) < 1e-6 * u.arcsec)
-    pitch = result.pitch - reference.pitch
-    assert np.all(
-        np.abs((pitch - pitch.mean("channel"))[dict(time=0)]).max() > 0.05 * u.arcsec
-    )
+    # the pointing is the payload's, common to the channels
+    assert np.all(np.abs(delta - delta.mean("channel")) < 1e-6 * u.arcsec)
+    # each channel views the Sun through its own sector of the primary, and
+    # the focus of each sector has its own history: zero at the reference
+    # frame, tens of microns apart at the first frame, and channel 1's
+    # sector moves by more than 30 um over the flight
+    z = (
+        result.primary_mirror.translation.z - reference.primary_mirror.translation.z
+    ).to(u.um)
+    assert na.shape(z) == dict(time=30, channel=4)
+    assert np.all(np.abs(z[dict(time=15)]) < 1e-6 * u.um)
+    first = z[dict(time=0)]
+    assert first.max() - first.min() > 15 * u.um
+    assert np.abs(z[dict(time=~0, channel=1)] - z[dict(time=0, channel=1)]) > 30 * u.um
+
+
+def test_distortion_fit_tables_record_environment():
+    # every committed table names the environment that produced it
+    directory = pathlib.Path(esis.flights.f1.optics._instruments._instruments.__file__)
+    paths = sorted((directory.parent / "_data").glob("*.ecsv"))
+    assert paths
+    for path in paths:
+        table = astropy.table.QTable.read(path, format="ascii.ecsv")
+        environment = table.meta.get("environment")
+        assert environment is not None, path.name
+        assert "optika" in environment["checkouts"], path.name
+        assert "optika" in environment["packages"], path.name
 
 
 def test_distortion_fit_sensor_terms():

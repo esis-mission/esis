@@ -89,19 +89,23 @@ The pipeline
    make, since those move the edges too; an axial defocus of the primary
    does exactly that, because each channel views the defocused image
    through its own sector of the primary and sees it shifted along its own
-   dispersion.  The defocus is measured from the channels against one
-   another in every frame, 40 µm end to end, and applied.
+   dispersion.  One defocus for the whole primary, measured from the
+   channels against one another in every frame, takes out about a fifth of
+   the separation; what remains is a translation of each channel's whole
+   image inside its window, the same at both lines and smooth in time,
+   which nothing after the field stop can produce.  A focus that differs
+   from sector to sector reproduces it to the precision of the
+   measurement, so the stage solves one focus per sector: four histories
+   that differ by up to 49 µm, channel 0's holding within 8 µm of its
+   value at the reference frame while channel 1's moves from −26 to
+   +22 µm, channel 2's from +2 to +24 and channel 3's from −17 to +13,
+   each smoothed by a quadratic in time.  A paraboloid has one focus for every
+   zone, so if this is real the mirror's figure changed unevenly with
+   temperature during the flight, by about 100 nm of sag between sectors;
+   the edges the measurement rests on are soft enough that the data do not
+   exclude part of it being the edges' apparent motion, see below.
 
-6. **Co-registration.**  What the channels still show against one another
-   after that is a translation of each channel's whole image inside its
-   window, up to half a pixel at the ends of the flight, the same at both
-   lines and smooth in time.  No term of the model produces it and we do
-   not know its cause.  It is measured the same way, in every frame, and
-   removed as an offset of each channel's own pointing, a quadratic in
-   time that is zero at the reference frame: twelve numbers for the
-   flight, labelled as empirical.
-
-7. **Acceptance.**  The fit is scored on frames it was not fit to, and the
+6. **Acceptance.**  The fit is scored on frames it was not fit to, and the
    coalignment metric is measured in every frame: the whole-channel shift
    of each channel against channel 1, and the scatter of the tiles about
    it, in pixels.
@@ -110,53 +114,61 @@ Results
 -------
 
 The committed tables come from the chain run from scratch on the cluster
-on 2026-10-02 with the final code, from the seed-0 captures, in 6.3 hours
-of wall time, with the co-registration and the acceptance run over it
-on 2026-10-05.  The correlation with the reference frame after the capture
-is 0.799, 0.837, 0.794, 0.816 on channels 0 to 3, after the shared polish
-0.804, 0.847, 0.793, 0.820, and on six frames across the flight that the
-fit never saw, with each frame's pointing applied, a mean of 0.799,
-0.842, 0.792, 0.816.  The
-internal alignment leaves the channels 0.02, 0.00, 0.02, 0.04 px from
-channel 1 at the reference frame.  The defocus of the primary drifts by
--16 to +25 µm over the flight, a line with 1.9 µm of scatter.  A second
-run of the same chain from a different seed, and the candidate run that
-preceded this one, reproduce every one of these numbers to 0.01 in
-correlation and 0.02 px in coalignment.
+on 2026-10-08 and 2026-10-09 with the final code and the released
+libraries (optika 3.1, named-arrays 2.14, regridding 3.5), on GPUs, from
+the seed-0 captures, in six hours of wall time.  The correlation with the
+reference frame after the capture is 0.803, 0.841, 0.803, 0.827 on
+channels 0 to 3, after the shared polish 0.809, 0.851, 0.804, 0.828, and
+on six frames across the flight that the fit never saw, with each frame's
+pointing applied, a mean of 0.806, 0.848, 0.801, 0.824.  The internal
+alignment leaves the channels 0.01, 0.00, 0.03, 0.03 px from channel 1 at
+the reference frame.  The focus of each sector of the primary drifts over
+the flight, by −8 to −4 µm on channel 0, −26 to +22 on channel 1, +2 to
++24 on channel 2 and −17 to +13 on channel 3, each a quadratic with 2 to
+4 µm of scatter; their mean, the defocus of the primary as a whole, by
+−12 to +14 µm.  The same chain run on the host without a GPU reproduces
+every one of these numbers, the capture merits to seven figures and the
+coalignment to 0.01 px, and a run from a different seed on the earlier
+code reproduced them to 0.01 in correlation and 0.02 px in coalignment.
 
 The coalignment metric, every channel but the anchor, over the
-twenty-seven frames bright enough to measure, before and after the
-empirical co-registration:
+twenty-seven frames bright enough to measure, with one focus for the whole
+primary and with one per sector:
 
 =====  ================  ================  ====================  ============
 line   rms shift         max shift         rms along dispersion  tile scatter
 =====  ================  ================  ====================  ============
-He I   0.20 to 0.09 px   0.62 to 0.21 px   3.3 to 1.5 km/s       0.33 px
-O V    0.17 to 0.07 px   0.48 to 0.13 px   2.5 to 0.7 km/s       0.24 px
+He I   0.20 to 0.11 px   0.62 to 0.22 px   3.3 to 1.7 km/s       0.35 px
+O V    0.17 to 0.08 px   0.48 to 0.24 px   2.5 to 0.8 km/s       0.24 px
 =====  ================  ================  ====================  ============
 
 Only the part of a misregistration along a channel's dispersion is a
 velocity error, and a pixel along the dispersion is 18.9 km/s at He I
-and 17.4 km/s at O V.  With the pointing, the window drift and the
-defocus alone the channels agree to a fifth of a pixel, 3 km/s, and
-part by up to 0.6 px in the first minute of the flight.  The
-co-registration brings them to 0.09 and 0.07 px, 1.5 and 0.7 km/s, with
-the worst single channel and frame at 4 km/s; a length taken from two
-components each measured to 0.05 px cannot come out below 0.07 px, so
-that is what the measurement resolves.  The three dark frames that
+and 17.4 km/s at O V.  With the pointing, the window drift and one
+defocus of the whole primary the channels agree to a fifth of a pixel,
+3 km/s, and part by up to 0.6 px in the first minute of the flight.  The
+focus of each sector brings them to 0.11 and 0.08 px, 1.7 and 0.8 km/s,
+with the worst single channel and frame at 4 km/s; a length taken from
+two components each measured to 0.05 px cannot come out below 0.07 px, so
+this is close to what the measurement resolves.  The empirical
+registration it replaced, twelve free numbers against the sectors' four
+physical ones, did a little better, 0.09 and 0.07 px; the sector focus is
+kept because it is a mechanism.  The three dark frames that
 close the flight are extrapolated, and He I is measured there only to
 0.8 px in the worst channel; the metric is what would exclude them from
 an inversion.  For scale, the quiet-Sun velocities ESIS measures are of
 order 10 km/s, and the tile-to-tile scatter along the dispersion, which
 contains the real Doppler structure of the scene as well as noise, is 3.4
 and 2.3 km/s per 105″ tile through the middle of the flight.  The
-co-registration is an empirical term: twelve numbers that remove a motion
-we measured and could not explain, described under the lessons below.  In the
-candidate run that preceded the committed one, dropping the defocus term
-from an otherwise identical chain raised the rms over the flight from
-0.226 to 0.285 px at He I and from 0.180 to 0.233 px at O V, so the term
-buys about a fifth of the residual at no cost to the fit against AIA,
-whose correlations do not depend on it.
+focus of each sector is a physical term, four numbers per frame fitted
+to six measured components and smoothed in time; the motion it accounts
+for, and the caveat that the edges it rests on are soft, are described
+under the lessons below.  In the candidate run that preceded the
+committed one, dropping the common defocus from an otherwise identical
+chain raised the rms over the flight from 0.226 to 0.285 px at He I and
+from 0.180 to 0.233 px at O V; the sectors take out most of the rest, at
+no cost to the fit against AIA, whose correlations do not depend on
+them.
 
 What limits the coalignment, and what it taught us
 --------------------------------------------------
@@ -198,17 +210,18 @@ soften by a pixel through the flight, their profiles are skewed, and the
 two lines, which share one field stop and one grating, disagree on the
 motion of the same side by up to 0.3 px over half the flight.  The
 placement of a window from its edges is therefore uncertain by 0.2 to
-0.3 px over half the flight, which is the size of the motion the
-co-registration stage removes without explaining: we cannot tell whether
-the image moved inside a fixed window or the edges' apparent positions
-moved over a fixed image.  A field stop imaged whole, with margin on
+0.3 px over half the flight, which is the size of the motion the focus
+of each sector accounts for: the data alone cannot tell whether the
+mirror's sectors moved each image inside a fixed window or the edges'
+apparent positions moved over a fixed image.  A field stop imaged whole, with margin on
 every side of every window, with edges verified sharp on the ground and a
 deliberate fiducial, a notch or a step, in each side, would have decided
 it, and would fix the rotation and the scale of every window as well as
 its position.
 
-*Microns matter.*  The primary's focus drifted 40 µm over the flight and
-the field stop moved 7 µm, and each moved the images by a few tenths of a
+*Microns matter.*  The primary's focus drifted 26 µm over the flight,
+its sectors by up to 49 µm against one another, and the field stop moved
+7 µm, and each moved the images by a few tenths of a
 pixel: 1.6 px per 0.1 mm of focus, and a pixel per 4 µm of stop.  Either
 an athermal metering structure between the primary and the stop, or a
 way to measure both in flight, is worth more to the coalignment than any
@@ -242,7 +255,7 @@ well, and the windows of the neighbouring lines on each sensor.
 
 **Figure 2, the flight.**  Four panels against time: the fitted pointing
 in pitch and yaw; the drift of each channel's windows; the measured and
-applied defocus of the primary; and the coalignment metric of every
+applied focus of each sector of the primary; and the coalignment metric of every
 channel against channel 1 with the acceptance threshold.  It shows the
 three time-dependent motions the model carries and that the channels stay
 registered to the threshold through the flight.  (``figures.py flight``)
@@ -269,13 +282,13 @@ on the cluster, one GPU and 16 cores per job:
 ==================  ==========  ======================================
 stage               wall time   parallel over
 ==================  ==========  ======================================
-capture             2.2 h       the four channels
-window edges        10 min      —
-outline and shared  2 h         the four channels (six workers)
-defocus history     25 min      —
-pointing            22–34 min   the thirty frames
-acceptance          15 min      —
-pages               8–25 min    —
+capture             1.1–1.9 h   the four channels
+window edges        8 min       —
+outline and shared  2.6 h       the four channels (eight workers)
+focus history       46 min      —
+pointing            8–17 min    the thirty frames
+acceptance          36 min      —
+pages               10–30 min   —
 ==================  ==========  ======================================
 
 With the channels and the frames spread over the cluster the chain is
@@ -300,5 +313,5 @@ the mapping they describe differs by up to a pixel at the edge of the
 field.  The absolute placement of the sky on the sensor is therefore
 repeatable to about half a pixel, which is what the AIA proxy scene can
 give, while the registration of the channels against one another is
-repeatable to a few hundredths.  The whole chain took eight hours of
+repeatable to a few hundredths.  The whole chain took six hours of
 wall time on the cluster.
