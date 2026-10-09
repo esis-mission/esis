@@ -150,10 +150,12 @@ defocus of the whole primary the channels agree to a fifth of a pixel,
 focus of each sector brings them to 0.11 and 0.08 px, 1.7 and 0.8 km/s,
 with the worst single channel and frame at 4 km/s; a length taken from
 two components each measured to 0.05 px cannot come out below 0.07 px, so
-this is close to what the measurement resolves.  The empirical
-registration it replaced, twelve free numbers against the sectors' four
-physical ones, did a little better, 0.09 and 0.07 px; the sector focus is
-kept because it is a mechanism.  The three dark frames that
+this is close to what the measurement resolves.  What the sector focus
+leaves is also fit as an empirical offset of each channel's pointing,
+twelve numbers of at most 0.17″ (0.22 px), which bring the registration to
+0.09 and 0.06 px, 1.5 and 0.6 km/s; the model carries them as an option,
+off by default, since no mechanism stands behind them, and an inversion
+can be run with and without them.  The three dark frames that
 close the flight are extrapolated, and He I is measured there only to
 0.8 px in the worst channel; the metric is what would exclude them from
 an inversion.  For scale, the quiet-Sun velocities ESIS measures are of
@@ -257,7 +259,8 @@ well, and the windows of the neighbouring lines on each sensor.
 in pitch and yaw; the drift of each channel's windows; the measured and
 applied defocus of the primary as a whole; the focus of each sector about
 that mean; and the coalignment metric of every channel against channel 1
-with the acceptance threshold.  It shows the time-dependent motions the
+with the acceptance threshold, and dash-dotted what the optional channel
+offsets leave.  It shows the time-dependent motions the
 model carries and that the channels stay registered to the threshold
 through the flight.  (``figures.py flight``)
 

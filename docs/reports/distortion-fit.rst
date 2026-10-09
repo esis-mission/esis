@@ -215,10 +215,21 @@ table's header records the whole environment it was made in:
 the interpreter, the platform, the version of every installed package and
 the commit of each checkout the fit imported from, so that a table names
 exactly the code that produced it.  A further command, ``coregister``,
-registers the channels empirically with an offset of each channel's own
-pointing; it was the measurement that led to the focus of each sector, and
-it stays in the package as a check, not as a stage of the chain.  Loading the Level-1 frames
-peaks above 100 GB of memory, which the job script asks for.  End to end
+measures what the focus of each sector leaves and fits it as an offset of
+each channel's own pointing, twelve numbers through the flight; it was the
+measurement that led to the sector focus.  Its table,
+``coregistration.ecsv``, is committed beside the others, and
+:func:`esis.flights.f1.optics.distortion_fit` applies it only when asked
+(``channel_offsets=True``): the offsets are at most 0.17 arcsec, 0.22 px,
+and take the registration of the channels over the bright frames from 0.11
+to 0.09 px rms at He I and from 0.08 to 0.06 px at O V (1.7 to 1.5 and
+0.8 to 0.6 km/s along the dispersion), with the held-out correlations
+unchanged.  They are kept as an option because no mechanism stands behind
+them; ``ESIS_COREGISTERED=1`` makes ``accept`` and ``coalign.py`` score
+and render through the co-registered copy of the pointing table that
+``coregister`` writes, so an inversion or a page can be made either way.
+Loading the Level-1 frames peaks above 100 GB of memory, which the job
+script asks for.  End to end
 the chain is six hours on the cluster: one to two hours for the capture
 of each channel, ten minutes for the edges, two and a half hours for the
 combine, three quarters of an hour for the focus, ten to fifteen minutes

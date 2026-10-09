@@ -286,3 +286,29 @@ def test_distortion_fit_windows():
             cx, cy = _fits._center(footprint)
             assert abs(cx - x) < 1
             assert abs(cy - y) < 1
+
+
+def test_distortion_fit_channel_offsets():
+    reference = esis.flights.f1.optics.distortion_fit(
+        num_distribution=0, axis_time="time"
+    )
+    result = esis.flights.f1.optics.distortion_fit(
+        num_distribution=0,
+        axis_time="time",
+        channel_offsets=True,
+    )
+    for name in ("pitch", "yaw"):
+        delta = getattr(result, name) - getattr(reference, name)
+        assert na.shape(delta) == dict(channel=4, time=30)
+        # zero at the reference frame and about the mean of the channels,
+        # so the payload's pointing is left where the scene put it
+        assert np.all(np.abs(delta[dict(time=15)]) < 1e-6 * u.arcsec)
+        # (the centering is done on the sky, so in angle it holds to a
+        # ten-thousandth of a pixel)
+        assert np.all(np.abs(delta.mean("channel")) < 1e-4 * u.arcsec)
+        # a few hundredths of a pixel, well under a pixel of 0.76 arcsec
+        assert np.all(np.abs(delta) < 0.5 * u.arcsec)
+    assert np.any(np.abs(result.yaw - reference.yaw) > 0.01 * u.arcsec)
+    # the optics are untouched
+    z = result.primary_mirror.translation.z - reference.primary_mirror.translation.z
+    assert np.all(np.abs(z) < 1e-9 * u.um)

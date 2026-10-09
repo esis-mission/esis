@@ -24,6 +24,7 @@ _tables = dict(
     window_edges="window_edges.ecsv",
     window_drift="window_drift.ecsv",
     defocus="defocus.ecsv",
+    coregistration="coregistration.ecsv",
 )
 """The tables the distortion fit committed, by the name this module reads them under."""
 
@@ -42,13 +43,15 @@ def distortion_fit_table(
     ----------
     name
         Which table: ``reference`` (the fitted parameters of every channel),
-        ``pointing`` (the per-frame pointing, defocus, window drift and
-        channel offsets), ``acceptance`` (the held-out scores and the
+        ``pointing`` (the per-frame pointing, sector focus and window
+        drift), ``acceptance`` (the held-out scores and the
         coalignment metric of every frame), ``acceptance_modes`` and
         ``acceptance_tiles`` (the decomposition of the tile shifts and the
         tiles themselves), ``window_edges`` and ``window_drift`` (the
-        measured edges and their motion) or ``defocus`` (the focus of each
-        sector of the primary through the flight).
+        measured edges and their motion), ``defocus`` (the focus of each
+        sector of the primary through the flight) or ``coregistration`` (the
+        optional empirical offset of each channel's pointing, what the
+        sector focus leaves).
     directory
         The directory to read from.  If :obj:`None`, the committed tables.
 
@@ -85,7 +88,7 @@ def plot_distortion_flight(
     each channel's sector about that mean; and the shift of every channel's
     sky against the anchor's, before the focus dashed, after it solid and,
     where the optional channel offsets were measured
-    (``coregistration.ecsv``), after them dotted.
+    (``coregistration.ecsv``), after them dash-dotted.
 
     Parameters
     ----------
@@ -190,8 +193,8 @@ def plot_distortion_flight(
         tc = _minutes(coregistration["frame"], first)
         for c in range(after.shape[1]):
             if c != anchor:
-                ax.plot(tc, after[:, c], color=colors[c], ls=":", lw=0.8)
-        ax.plot([], [], color="k", ls=":", lw=0.8, label="with channel offsets")
+                ax.plot(tc, after[:, c], color=colors[c], ls="-.", lw=0.8)
+        ax.plot([], [], color="k", ls="-.", lw=0.8, label="with channel offsets")
     for c in sorted(set(int(v) for v in acceptance["channel"])):
         if c == anchor:
             continue
