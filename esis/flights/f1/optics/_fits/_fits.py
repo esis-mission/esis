@@ -2498,6 +2498,7 @@ def fit_distortion_pointing(
                 )
                 + ", per frame, with the measured defocus applied"
             ),
+            environment=_environment(),
         )
     )
     if relative and frame_reference in frames:
