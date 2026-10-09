@@ -1,4 +1,5 @@
 import os
+import functools
 import pathlib
 import numpy as np
 import numpy.typing as npt
@@ -41,6 +42,45 @@ def _path_cache() -> pathlib.Path:
     )
 
 
+@functools.cache
+def _retrieve(
+    url: str,
+    known_hash: str,
+    fname: str,
+    path: pathlib.Path,
+    extract_dir: str,
+) -> pathlib.Path:
+    """
+    Download a tar archive into `path` and return the directory it was unpacked into.
+
+    If the archive is already in `path`, it is not downloaded again,
+    but checking it means hashing the whole file,
+    so the result is kept for the rest of the process.
+
+    Parameters
+    ----------
+    url
+        Where to download the archive from.
+    known_hash
+        The hash of the archive, such as ``"sha256:..."``.
+    fname
+        The name of the downloaded archive in `path`.
+    path
+        The directory to download the archive into.
+    extract_dir
+        The name of the directory in `path` to unpack the archive into.
+    """
+    files = pooch.retrieve(
+        url=url,
+        known_hash=known_hash,
+        fname=fname,
+        path=path,
+        processor=pooch.Untar(extract_dir=extract_dir),
+    )
+
+    return pathlib.Path(files[0]).parent
+
+
 def path_directory() -> pathlib.Path:
     """
     Return the directory containing the FITS files captured during the flight.
@@ -49,15 +89,13 @@ def path_directory() -> pathlib.Path:
     downloaded from `Zenodo <https://doi.org/10.5281/zenodo.21997280>`_ the
     first time they are needed and unpacked into :func:`_path_cache`.
     """
-    files = pooch.retrieve(
+    return _retrieve(
         url=_url,
         known_hash=_hash,
         fname="esis-2019-level0-fits.tar.gz",
         path=_path_cache(),
-        processor=pooch.Untar(extract_dir="fits"),
+        extract_dir="fits",
     )
-
-    return pathlib.Path(files[0]).parent
 
 
 def path_fits(
