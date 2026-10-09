@@ -1,6 +1,7 @@
 """Models of the optical coatings and substrates."""
 
 from ._materials import (
+    time_coating,
     time_measurement,
     multilayer_design,
     multilayer_witness_measured,
@@ -9,6 +10,7 @@ from ._materials import (
 )
 
 __all__ = [
+    "time_coating",
     "time_measurement",
     "multilayer_design",
     "multilayer_witness_measured",
