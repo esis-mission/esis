@@ -1,8 +1,9 @@
 import astropy.units as u
 import astropy.time
 import named_arrays as na
+import sdo
 import esis
-from ... import level_1
+from ... import level_1, path_aia
 from ....spectrum import O_V, Mg_X, He_I
 
 __all__ = [
@@ -26,8 +27,11 @@ def scene_aia(
     Load a synthetic solar scene composed of AIA images captured during the flight.
 
     This function plugs the spectral line properties in
-    :mod:`esis.flights.f1.spectrum` into :func:`esis.data.synth.scene_aia`
+    :mod:`esis.flights.f1.spectrum` into :func:`esis.data.synth.scene_filtergram`
     to produce the synthic scene.
+
+    The AIA images are those of :func:`esis.flights.f1.data.path_aia`,
+    which span 18:06 to 18:12 UTC, so this does not depend on the JSOC.
 
     Only the brightest three lines in the ESIS passband are recreated:
     :math:`\text{O\,V}\;630\,\AA`, :math:`\text{Mg\,X}\;609\,\AA`, and
@@ -56,7 +60,8 @@ def scene_aia(
     num_std
         The size of the domain for each spectral line in standard deviation units.
     limit
-        The maximum number of files to download per wavelength.
+        If not :obj:`None`, at most this many images of each AIA channel are
+        used, spread evenly over the time range.
     """
     l1 = level_1()
 
@@ -91,20 +96,33 @@ def scene_aia(
     radiance_esis = na.stack(radiance_esis, axis_wavelength)
     width_esis = na.stack(width_esis, axis_wavelength)
 
-    result = esis.data.synth.scene_aia(
+    files = path_aia(
+        wavelength=wavelength_aia,
+        axis_time=axis_time,
         time_start=time_start,
         time_stop=time_stop,
-        wavelength_aia=wavelength_aia,
+        limit=limit,
+    )
+
+    files = sdo.aia.prep(files)
+
+    filtergram = sdo.aia.Filtergram.from_fits(
+        path=files,
+        wavelength=wavelength_aia,
+        axis_time=axis_time,
+        axis_wavelength=axis_wavelength,
+        axis_detector_x=axis_detector_x,
+        axis_detector_y=axis_detector_y,
+    )
+
+    result = esis.data.synth.scene_filtergram(
+        filtergram=filtergram,
         wavelength_new=wavelength_esis,
         radiance=radiance_esis,
         width_doppler=width_esis,
-        axis_time=axis_time,
-        axis_detector_x=axis_detector_x,
-        axis_detector_y=axis_detector_y,
         axis_velocity=axis_velocity,
         num_velocity=num_velocity,
         num_std=num_std,
-        limit=limit,
     )
 
     shape = result.outputs.shape

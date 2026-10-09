@@ -8,6 +8,7 @@ import sdo
 
 __all__ = [
     "scene_aia",
+    "scene_filtergram",
 ]
 
 
@@ -69,9 +70,79 @@ def scene_aia(
 
     See Also
     --------
+    :func:`scene_filtergram`:
+        The same scene from AIA images already in hand.
     :func:`esis.flights.f1.data.synth.scene_aia`:
-        A wrapper around this function for ESIS-I.
+        A wrapper around :func:`scene_filtergram` for ESIS-I.
     """
+    filtergram = sdo.aia.open(
+        time_start=time_start,
+        time_stop=time_stop,
+        wavelength=wavelength_aia,
+        axis_time=axis_time,
+        axis_detector_x=axis_detector_x,
+        axis_detector_y=axis_detector_y,
+        limit=limit,
+    )
+
+    return scene_filtergram(
+        filtergram=filtergram,
+        wavelength_new=wavelength_new,
+        radiance=radiance,
+        width_doppler=width_doppler,
+        axis_velocity=axis_velocity,
+        num_velocity=num_velocity,
+        num_std=num_std,
+    )
+
+
+def scene_filtergram(
+    filtergram: sdo.aia.Filtergram,
+    wavelength_new: u.Quantity | na.AbstractScalarArray,
+    radiance: u.Quantity | na.AbstractScalarArray,
+    width_doppler: u.Quantity | na.AbstractScalarArray,
+    axis_velocity: str = "velocity",
+    num_velocity: int = 1,
+    num_std: float = 3,
+) -> na.FunctionArray[na.TemporalSpectralPositionalVectorArray, na.ScalarArray]:
+    r"""
+    Create a synthetic solar scene from a sequence of AIA images.
+
+    The AIA images in `filtergram` are used to represent estimates of images
+    at `wavelength_new`.
+    A supplied mean radiance is assigned to each image at `wavelength_new`
+    and distributed along `axis_velocity` into `num_velocity` bins
+    using a Gaussian with standard deviation `width_doppler`.
+
+    Parameters
+    ----------
+    filtergram
+        The AIA images, such as those loaded by :func:`sdo.aia.open`
+        or :meth:`sdo.aia.Filtergram.from_fits`.
+    wavelength_new
+        The rest wavelength of each spectral line in the synthetic scene
+        replacing the wavelength of each AIA channel in `filtergram`.
+    radiance
+        The average radiance of each spectral line in the synthetic scene in
+        units of :math:`\text{erg}\,\text{cm}^{-2}\,\text{sr}^{-1}\,\text{s}^{-1}.`
+    width_doppler
+        The average standard deviation of each spectral line in the synthetic scene.
+    axis_velocity
+        The logical axis corresponding to changes in line-of-sight velocity.
+    num_velocity
+        The number of velocity bins in the synthetic scene.
+    num_std
+        The size of the domain for each spectral line in standard deviation units.
+
+    See Also
+    --------
+    :func:`scene_aia`:
+        The same scene from the AIA images in a time range, downloaded from
+        the JSOC.
+    """
+    axis_detector_x = filtergram.axis_detector_x
+    axis_detector_y = filtergram.axis_detector_y
+
     velocity_max = width_doppler * num_std
 
     velocity = na.linspace(
@@ -87,15 +158,6 @@ def scene_aia(
 
     wavelength = (1 + velocity / const.c) * wavelength_new
 
-    obs = sdo.aia.open(
-        time_start=time_start,
-        time_stop=time_stop,
-        wavelength=wavelength_aia,
-        axis_time=axis_time,
-        axis_detector_x=axis_detector_x,
-        axis_detector_y=axis_detector_y,
-        limit=limit,
-    )
     axis_detector_xy = axis_detector_x, axis_detector_y
 
     crop = {
@@ -103,7 +165,9 @@ def scene_aia(
         axis_detector_y: slice(1024, 1024 + 2048),
     }
 
-    outputs = radiance * obs.outputs / obs.outputs[crop].mean(axis_detector_xy)
+    outputs = (
+        radiance * filtergram.outputs / filtergram.outputs[crop].mean(axis_detector_xy)
+    )
     delta_lambda = np.diff(wavelength, axis=axis_velocity)
     outputs = outputs * gaussian / delta_lambda
 
@@ -111,9 +175,9 @@ def scene_aia(
 
     return na.FunctionArray(
         inputs=na.TemporalSpectralPositionalVectorArray(
-            time=obs.inputs.time,
+            time=filtergram.inputs.time,
             wavelength=wavelength,
-            position=obs.inputs.position,
+            position=filtergram.inputs.position,
         ),
         outputs=outputs,
     )
