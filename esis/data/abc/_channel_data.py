@@ -38,7 +38,8 @@ class AbstractChannelData(
         where_1 = sn == "6"
         where_2 = sn == "7"
         where_3 = sn == "9"
-        where_4 = sn == "1"
+        # msfc-ccd read this as "1" until 1.1.0 kept every character of it
+        where_4 = sn == "10"
 
         result = np.empty_like(sn, dtype=object)
 
