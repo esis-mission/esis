@@ -1,5 +1,7 @@
+import pathlib
 import numpy as np
 import astropy.units as u
+import astropy.table
 import named_arrays as na
 import optika
 import esis
@@ -8,6 +10,8 @@ from .. import primaries
 from .. import gratings
 from .. import filters
 from .._uncertainty import uniform
+
+_directory_data = pathlib.Path(__file__).parent / "_data"
 
 __all__ = [
     "design_full",
@@ -56,16 +60,6 @@ def design_full(
         endpoint=False,
     )
     angle_channel = angle_channel + angle_channel_offset
-
-    # dashstyle = (0, (1, 3))
-    # dashstyle_channels = na.ScalarArray(
-    #     ndarray=np.array(
-    #         object=[dashstyle, "solid", "solid", "solid", "solid", dashstyle],
-    #         dtype=object,
-    #     ),
-    #     axes="channel",
-    # )
-    # alpha_channels = na.ScalarArray(np.array([0, 1, 1, 1, 1, 0]), axes="channel")
 
     radius_primary_clear = 77.9 * u.mm
     primary = esis.optics.PrimaryMirror(
@@ -628,15 +622,36 @@ def distortion_fit(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
     num_distribution: int = 11,
+    axis_time: None | str = None,
+    channel_offsets: bool = False,
 ) -> esis.optics.Instrument:
     """
-    Apply the best-fit distortion parameters to the ESIS-I :func:`design`.
+    Apply the best-fit distortion parameters to the ESIS-I :func:`as_built`.
 
-    The parameters are hard-coded from the best distortion fit of the ESIS-I
-    flight data, optimized against the ``time=15`` frame of the 2019-09-30
-    flight (:func:`esis.flights.f1.data.level_1`, with a start time of
-    2019-09-30T18:08:41.642 UTC). The values are per-channel and were produced
-    by the ``ESISI_distortion_optimization_20260213_151715`` run.
+    The per-channel parameters are loaded from
+    ``_data/distortion_reference.ecsv``, the best distortion fit of the
+    ESIS-I flight data, optimized against the ``time=15`` frame of the
+    2019-09-30 flight (:func:`esis.flights.f1.data.level_1`, with a start
+    time of 2019-09-30T18:08:41.642 UTC). The provenance of the fit is
+    recorded in the file header, and the fit is reproduced from the as-built
+    model and the data by :func:`fit_distortion_reference`.
+
+    If `axis_time` is given, the per-frame columns of
+    ``_data/distortion_pointing.ecsv`` are applied along that axis, one
+    element per frame of :func:`esis.flights.f1.data.level_1`: the pointing
+    of the payload, common to the four channels; the focus of each channel's
+    sector of the primary; and the grating offsets that follow each
+    channel's windows (:func:`fit_distortion_pointing`).  The optics are
+    otherwise held at the reference fit.
+
+    If `channel_offsets` is also set, each channel's own pointing offset from
+    ``_data/coregistration.ecsv`` is added: the registration of the channels
+    with one another that remains after the focus of each sector, measured
+    empirically by :func:`fit_coregistration`.  It is an option rather than
+    a stage of the fit, since it is twelve numbers with no mechanism behind
+    them; it tightens the registration of the channels by a few hundredths
+    of a pixel.  The offsets vanish at the reference frame, so without
+    `axis_time` they have no effect.
 
     Parameters
     ----------
@@ -647,6 +662,13 @@ def distortion_fit(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    axis_time
+        The name of the logical axis corresponding to changing time.
+        If :obj:`None`, the model is that of the ``time=15`` reference fit;
+        otherwise its time-dependent terms gain one element per Level-1 frame.
+    channel_offsets
+        Whether to add each channel's own empirical pointing offset through
+        the flight, from ``_data/coregistration.ecsv``.  Needs `axis_time`.
 
     Examples
     --------
@@ -667,7 +689,8 @@ def distortion_fit(
 
         rays = model.system.rayfunction_default.outputs
         position = rays.position.to(u.um).mean(axis=("pupil_x", "pupil_y"))
-        position = position / model.camera.sensor.width_pixel * u.pixel
+        position = na.nominal(position / model.camera.sensor.width_pixel) * u.pixel
+        unvignetted = na.nominal(rays.unvignetted)
 
         fig, ax = na.plt.subplots(
             figsize=(8, 17),
@@ -710,12 +733,12 @@ def distortion_fit(
                 color=colors[i],
                 ax=ax,
                 s=8,
-                where=rays.unvignetted[j],
+                where=unvignetted[j],
                 label=spectral_lines[i],
             )
         ax.ndarray[0].legend(loc="upper right");
     """
-    model = design(
+    model = as_built(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
@@ -732,74 +755,151 @@ def distortion_fit(
         axes="wavelength",
     )
 
-    model.grating.yaw = (
-        na.ScalarArray(
-            np.array([-2.693e02, -2.681e02, -2.687e02, -2.680e02]),
-            axes=axis_channel,
-        )
-        * u.arcmin
+    parameters = esis.optics.DistortionParameters.from_file(
+        path=_directory_data / "distortion_reference.ecsv",
+        axis=axis_channel,
     )
-    model.grating.pitch = (
-        na.ScalarArray(
-            np.array([3.704e00, 1.522e00, 1.316e00, 5.705e00]),
-            axes=axis_channel,
-        )
-        * u.arcmin
-    )
-    model.grating.roll = (
-        na.ScalarArray(
-            np.array([1.027e00, 2.393e-01, 3.678e-01, 1.020e00]),
-            axes=axis_channel,
-        )
-        * u.deg
-    )
-    model.field_stop.roll = (
-        na.ScalarArray(
-            np.array([-2.066e-01, -2.891e-01, -5.264e-01, 1.182e00]),
-            axes=axis_channel,
-        )
-        * u.deg
-    )
-    model.grating.rulings.spacing.coefficients[0] = (
-        na.ScalarArray(
-            np.array([3.854e-01, 3.859e-01, 3.855e-01, 3.863e-01]),
-            axes=axis_channel,
-        )
-        * u.um
-    )
+    model = parameters.to_instrument(model)
 
-    # The fitted primary-mirror displacement relative to its -1000 mm nominal
-    # focal length; this hard reference is what the fit is measured from.
-    primary_displacement = (
-        na.ScalarArray(
-            np.array([-5.649e00, -2.207e-02, -2.795e00, -1.616e00]),
-            axes=axis_channel,
+    if axis_time is not None:
+        pointing = astropy.table.QTable.read(
+            _directory_data / "distortion_pointing.ecsv",
+            format="ascii.ecsv",
         )
-        * u.mm
-    )
-    model.primary_mirror.sag.focal_length = -1000 * u.mm + primary_displacement
-    model.primary_mirror.translation.z = -primary_displacement
-
-    model.pitch = (
-        na.ScalarArray(
-            np.array([-2.024e01, -2.096e01, -1.973e01, -2.119e01]),
-            axes=axis_channel,
+        model.pitch = model.pitch + na.ScalarArray(
+            u.Quantity(pointing["pitch"]),
+            axes=axis_time,
         )
-        * u.arcsec
-    )
-    model.yaw = (
-        na.ScalarArray(
-            np.array([-1.832e01, -1.675e01, -1.604e01, -1.498e01]),
-            axes=axis_channel,
+        model.yaw = model.yaw + na.ScalarArray(
+            u.Quantity(pointing["yaw"]),
+            axes=axis_time,
         )
-        * u.arcsec
-    )
-    model.roll = (
-        na.ScalarArray(
-            np.array([-8.681e-01, -3.391e-01, -3.378e-01, -1.109e00]),
-            axes=axis_channel,
+        model.roll = model.roll + na.ScalarArray(
+            u.Quantity(pointing["roll"]),
+            axes=axis_time,
         )
-        * u.deg
-    )
+        # the focus of the primary, which moves each channel's sky without
+        # moving its windows: one focus per sector, or one for the whole primary
+        if "z_primary" in pointing.colnames:
+            z_primary = u.Quantity(pointing["z_primary"])
+            axes = (axis_time, axis_channel) if z_primary.ndim == 2 else (axis_time,)
+            model.primary_mirror.translation.z = (
+                model.primary_mirror.translation.z
+                + na.ScalarArray(z_primary, axes=axes)
+            )
+        # each channel's own pointing offset, the empirical registration left
+        # after the sector focus, kept as an option
+        if channel_offsets:
+            coregistration = astropy.table.QTable.read(
+                _directory_data / "coregistration.ecsv",
+                format="ascii.ecsv",
+            )
+            registered = np.asarray(coregistration["frame"])
+            index = [
+                int(np.flatnonzero(registered == t)[0])
+                for t in np.asarray(pointing["frame"])
+            ]
+            for name in ("pitch", "yaw"):
+                offset = na.ScalarArray(
+                    u.Quantity(coregistration[f"{name}_channel"][index]),
+                    axes=(axis_time, axis_channel),
+                )
+                setattr(model, name, getattr(model, name) + offset)
+        # the per-frame grating offsets that follow each channel's windows
+        for name in ("yaw_grating", "pitch_grating"):
+            if name in pointing.colnames:
+                offset = na.ScalarArray(
+                    u.Quantity(pointing[name]),
+                    axes=(axis_time, axis_channel),
+                )
+                attribute = name.split("_")[0]
+                setattr(
+                    model.grating,
+                    attribute,
+                    getattr(model.grating, attribute) + offset,
+                )
 
     return model
+
+
+def distortion_fit_bounds(
+    parameters: esis.optics.DistortionParameters,
+) -> tuple[esis.optics.DistortionParameters, esis.optics.DistortionParameters]:
+    r"""
+    Compute the parameter bounds used when fitting the ESIS-I distortion.
+
+    Most parameters are bounded at :math:`\pm 20\%` of the given initial
+    guess, but never narrower than an absolute floor: the design values of
+    the instrument pitch and yaw and of the grating pitch are exactly zero,
+    and a purely relative bound around a zero guess would collapse and
+    silently freeze the parameter (equal bounds are treated as fixed by
+    :func:`scipy.optimize.differential_evolution`).  The roll angles and the
+    primary-mirror displacement are given absolute bounds, and the sensor
+    placement a build tolerance about wherever it starts.
+
+    Every bound is broadcast against the shape of the corresponding parameter
+    and expressed in the same units, so that flattening the bounds and the
+    parameters with :func:`named_arrays.pack` yields vectors of the same
+    length.
+
+    Parameters
+    ----------
+    parameters
+        The initial guess of the fit.
+
+    Examples
+    --------
+    Compute the bounds for fitting the ESIS flight-1 design.
+
+    .. jupyter-execute::
+
+        import named_arrays as na
+        import esis
+
+        instrument = esis.flights.f1.optics.design(num_distribution=0)
+        parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+        lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+
+        na.pack(lower), na.pack(upper)
+    """
+    p = parameters
+
+    def relative(value, floor):
+        width = np.maximum(0.2 * np.abs(value), floor.to(na.unit(value)))
+        return value - width, value + width
+
+    def absolute(value, lower, upper):
+        zero = 0 * value
+        return zero + lower.to(na.unit(value)), zero + upper.to(na.unit(value))
+
+    def about(value, half):
+        # a build tolerance about wherever the sensor is: its yaw, for one,
+        # is designed at -12 degrees, so an absolute box would exclude it
+        return value - half.to(na.unit(value)), value + half.to(na.unit(value))
+
+    bounds = dict(
+        yaw_grating=relative(p.yaw_grating, floor=3 * u.arcmin),
+        pitch_grating=relative(p.pitch_grating, floor=10 * u.arcmin),
+        roll_grating=absolute(p.roll_grating, -2 * u.deg, 2 * u.deg),
+        roll_field_stop=absolute(p.roll_field_stop, -4 * u.deg, 4 * u.deg),
+        spacing_rulings=relative(p.spacing_rulings, floor=2e-3 * u.um),
+        displacement_primary=absolute(p.displacement_primary, -10 * u.mm, 0 * u.mm),
+        # a defocus of the primary at the field stop; beyond a few tenths of a
+        # millimetre the blur would exceed the cross-dispersion resolution
+        z_primary=absolute(p.z_primary, -0.3 * u.mm, 0.3 * u.mm),
+        pitch=relative(p.pitch, floor=60 * u.arcsec),
+        yaw=relative(p.yaw, floor=60 * u.arcsec),
+        roll=absolute(p.roll, -2 * u.deg, 2 * u.deg),
+        z_sensor=about(p.z_sensor, 10 * u.mm),
+        roll_sensor=about(p.roll_sensor, 2 * u.deg),
+        pitch_sensor=about(p.pitch_sensor, 3 * u.deg),
+        yaw_sensor=about(p.yaw_sensor, 3 * u.deg),
+        x_sensor=about(p.x_sensor, 5 * u.mm),
+        y_sensor=about(p.y_sensor, 5 * u.mm),
+        # the level of the ideal-material model is hundreds of times that of
+        # the frame, so the box follows whatever estimate the parameters carry
+        degradation=(p.degradation / 3, p.degradation * 3),
+    )
+    lower = esis.optics.DistortionParameters(**{k: v[0] for k, v in bounds.items()})
+    upper = esis.optics.DistortionParameters(**{k: v[1] for k, v in bounds.items()})
+    return lower, upper

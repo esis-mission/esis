@@ -1,7 +1,9 @@
 import dataclasses
+import pathlib
 import pytest
 import numpy as np
 import astropy.units as u
+import astropy.table
 import named_arrays as na
 import esis
 
@@ -208,3 +210,132 @@ def test_distortion_fit(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+
+
+def test_distortion_fit_axis_time():
+    result = esis.flights.f1.optics.distortion_fit(num_distribution=0, axis_time="time")
+    assert na.shape(result.pitch) == dict(channel=4, time=30)
+    reference = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+    delta = result.yaw - reference.yaw
+    # the yaw drifted monotonically through the flight, changing sign at the
+    # reference frame
+    assert np.all(delta[dict(time=0, channel=0)] > 0 * u.arcsec)
+    assert np.all(delta[dict(time=~0, channel=0)] < 0 * u.arcsec)
+    assert np.all(np.abs(delta[dict(time=15)]) < 0.01 * u.arcsec)
+    # the pointing is the payload's, common to the channels
+    assert np.all(np.abs(delta - delta.mean("channel")) < 1e-6 * u.arcsec)
+    # each channel views the Sun through its own sector of the primary, and
+    # the focus of each sector has its own history: zero at the reference
+    # frame, tens of microns apart at the first frame, and channel 1's
+    # sector moves by more than 30 um over the flight
+    z = (
+        result.primary_mirror.translation.z - reference.primary_mirror.translation.z
+    ).to(u.um)
+    assert na.shape(z) == dict(time=30, channel=4)
+    assert np.all(np.abs(z[dict(time=15)]) < 1e-6 * u.um)
+    first = z[dict(time=0)]
+    assert first.max() - first.min() > 15 * u.um
+    assert np.abs(z[dict(time=~0, channel=1)] - z[dict(time=0, channel=1)]) > 30 * u.um
+
+
+def test_distortion_fit_tables_record_environment():
+    # every committed table names the environment that produced it
+    directory = pathlib.Path(esis.flights.f1.optics._instruments._instruments.__file__)
+    paths = sorted((directory.parent / "_data").glob("*.ecsv"))
+    assert paths
+    for path in paths:
+        table = astropy.table.QTable.read(path, format="ascii.ecsv")
+        environment = table.meta.get("environment")
+        assert environment is not None, path.name
+        assert "optika" in environment["checkouts"], path.name
+        assert "optika" in environment["packages"], path.name
+
+
+def test_distortion_fit_sensor_terms():
+    # the loaded reference carries the sensor placement (zero for a file
+    # written before it existed) and the primary displacement is measured
+    # from the nominal focal length
+    result = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(result)
+    assert na.shape(parameters) == dict(channel=4)
+    z = na.value(parameters.z_sensor)
+    assert np.all(np.isfinite(np.asarray(getattr(z, "ndarray", z))))
+
+
+def test_distortion_fit_bounds():
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+    lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
+    x = na.pack(parameters).ndarray
+    assert lb.shape == ub.shape == x.shape
+    # every parameter starts within its box, and no box is degenerate
+    assert np.all(lb <= x)
+    assert np.all(x <= ub)
+    assert np.all(ub > lb)
+    # the sensor terms are bounded about wherever the sensor is
+    assert np.all(upper.yaw_sensor - parameters.yaw_sensor == 3 * u.deg)
+    assert np.all(parameters.yaw_sensor - lower.yaw_sensor == 3 * u.deg)
+    assert np.all(upper.z_sensor == parameters.z_sensor + 10 * u.mm)
+
+
+def test_distortion_fit_windows():
+    """
+    Check that the committed reference puts the windows where it says.
+
+    The reference table records the centre of every window as the fit
+    left it; a change in the optics library that moves the image, such as
+    the roll bug of optika 2.7, shows up here as a shift of every window.
+    """
+    import astropy.table
+    from esis.flights.f1.optics._instruments import _instruments
+
+    table = astropy.table.QTable.read(
+        _instruments._directory_data / "distortion_reference.ecsv",
+        format="ascii.ecsv",
+    )
+    if "windows" not in table.meta:
+        pytest.skip("the committed table predates the window record")
+    from esis.flights.f1.optics._fits import _fits
+
+    # the fit traces the idealized as-built model, whose uncertain ruling
+    # coefficients are stripped; the committed parameters go back onto it
+    model = esis.optics.DistortionParameters.from_file(
+        _instruments._directory_data / "distortion_reference.ecsv"
+    ).to_instrument(_fits._base(None))
+    for c, centers in enumerate(table.meta["windows"]):
+        channel = model[dict(channel=c)]
+        linear = channel.system.linearize(
+            wavelength=channel.wavelength, degree=2, field_stop=True
+        )
+        for i, (x, y) in enumerate(centers):
+            footprint = linear.footprint(channel.wavelength[dict(wavelength=i)])
+            cx, cy = _fits._center(footprint)
+            assert abs(cx - x) < 1
+            assert abs(cy - y) < 1
+
+
+def test_distortion_fit_channel_offsets():
+    reference = esis.flights.f1.optics.distortion_fit(
+        num_distribution=0, axis_time="time"
+    )
+    result = esis.flights.f1.optics.distortion_fit(
+        num_distribution=0,
+        axis_time="time",
+        channel_offsets=True,
+    )
+    for name in ("pitch", "yaw"):
+        delta = getattr(result, name) - getattr(reference, name)
+        assert na.shape(delta) == dict(channel=4, time=30)
+        # zero at the reference frame and about the mean of the channels,
+        # so the payload's pointing is left where the scene put it
+        assert np.all(np.abs(delta[dict(time=15)]) < 1e-6 * u.arcsec)
+        # (the centering is done on the sky, so in angle it holds to a
+        # ten-thousandth of a pixel)
+        assert np.all(np.abs(delta.mean("channel")) < 1e-4 * u.arcsec)
+        # a few hundredths of a pixel, well under a pixel of 0.76 arcsec
+        assert np.all(np.abs(delta) < 0.5 * u.arcsec)
+    assert np.any(np.abs(result.yaw - reference.yaw) > 0.01 * u.arcsec)
+    # the optics are untouched
+    z = result.primary_mirror.translation.z - reference.primary_mirror.translation.z
+    assert np.all(np.abs(z) < 1e-9 * u.um)

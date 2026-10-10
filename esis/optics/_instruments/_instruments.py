@@ -770,6 +770,10 @@ class AbstractInstrument(
 
                 position_x = position_i.x[where_i].ndarray
                 position_y = position_i.y[where_i].ndarray
+                # a vignetted ray may carry no position at all
+                finite = np.isfinite(position_x) & np.isfinite(position_y)
+                position_x = position_x[finite]
+                position_y = position_y[finite]
 
                 position = np.stack(
                     arrays=[
@@ -888,3 +892,13 @@ class Instrument(
 
     kwargs_plot: None | dict = None
     """Extra keyword arguments used to plot the optical system."""
+
+    placement_design: None | dict[str, u.Quantity | na.AbstractScalar] = None
+    """
+    The placements the instrument was built with, before any fitted term.
+
+    :meth:`esis.optics.DistortionParameters.to_instrument` records here the
+    sensor and grating positions and the nominal focal length of the primary
+    its terms are measured from, so that they can be read back and applied
+    again from the same origin, even after indexing by channel.
+    """
