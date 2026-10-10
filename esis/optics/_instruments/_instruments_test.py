@@ -81,6 +81,22 @@ class AbstractTestAbstractInstrument(
         assert isinstance(na.as_named_array(result), na.AbstractArray)
         assert na.unit_normalized(result).is_equivalent(u.deg)
 
+    def test_distance_grating_input(
+        self,
+        a: esis.optics.abc.AbstractInstrument,
+    ) -> None:
+        result = a.distance_grating_input
+        assert isinstance(na.as_named_array(result), na.AbstractScalar)
+        assert np.all(result > 0 * u.mm)
+
+    def test_distance_grating_output(
+        self,
+        a: esis.optics.abc.AbstractInstrument,
+    ) -> None:
+        result = a.distance_grating_output
+        assert isinstance(na.as_named_array(result), na.AbstractScalar)
+        assert np.all(result > 0 * u.mm)
+
     def test_wavelength_min(self, a: esis.optics.abc.AbstractInstrument):
         result = a.wavelength_min
         assert isinstance(na.as_named_array(result), na.AbstractScalar)

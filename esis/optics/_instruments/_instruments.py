@@ -156,6 +156,37 @@ class AbstractInstrument(
         )
 
     @property
+    def distance_grating_input(self) -> na.AbstractScalar:
+        """
+        The distance from the center of the field stop to the vertex of the grating.
+
+        This is the entrance arm of the grating: the distance from the object
+        it images, the field stop, to the grating.
+        The ratio of :attr:`distance_grating_output` to this is the
+        magnification with which the grating images the field stop onto the
+        detector, apart from the anamorphic magnification of the grating and
+        the tilt of the detector.
+        """
+        field_stop = self.field_stop.surface
+        grating = self.grating.surface
+        transformation = grating.transformation.inverse @ field_stop.transformation
+        return transformation(na.Cartesian3dVectorArray() * u.mm).length
+
+    @property
+    def distance_grating_output(self) -> na.AbstractScalar:
+        """
+        The distance from the vertex of the grating to the center of the detector.
+
+        This is the exit arm of the grating: the distance from the grating to
+        the detector, where it forms its image of the field stop.
+        See :attr:`distance_grating_input`.
+        """
+        detector = self.camera.surface
+        grating = self.grating.surface
+        transformation = grating.transformation.inverse @ detector.transformation
+        return transformation(na.Cartesian3dVectorArray() * u.mm).length
+
+    @property
     def _wavelength_test_grid(self) -> na.AbstractScalar:
         position = na.Cartesian3dVectorArray() * u.mm
         grating = self.grating.surface
