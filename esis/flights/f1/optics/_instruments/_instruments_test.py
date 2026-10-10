@@ -53,6 +53,33 @@ def test_design_single(num_distribution: int):
     assert _is_uncertain(result) == (num_distribution != 0)
 
 
+def test_design_distance_grating() -> None:
+    """
+    Check the arms of the grating against the prescription.
+
+    The design centers the field stop on the axis and places the grating and
+    the sensor of a channel at the same azimuth, each at its own distance from
+    the axis, so each arm is the hypotenuse of the distance along the axis and
+    the distance across it.
+    """
+    design = esis.flights.f1.optics.design_single(num_distribution=0)
+    field_stop = design.field_stop
+    grating = design.grating
+    sensor = design.camera.sensor
+
+    expected_input = np.hypot(
+        grating.translation.z - field_stop.translation.z,
+        grating.distance_radial,
+    )
+    expected_output = np.hypot(
+        sensor.translation.z - grating.translation.z,
+        sensor.distance_radial - grating.distance_radial,
+    )
+
+    assert np.isclose(design.distance_grating_input, expected_input)
+    assert np.isclose(design.distance_grating_output, expected_output)
+
+
 @pytest.mark.parametrize("num_distribution", [0, 11])
 def test_as_built_unfocused(num_distribution: int):
     result = esis.flights.f1.optics.as_built_unfocused(
