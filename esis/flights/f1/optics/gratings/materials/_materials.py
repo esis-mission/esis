@@ -7,6 +7,7 @@ import astropy.time
 import named_arrays as na
 import optika
 import esis
+from esis import _caching
 
 __all__ = [
     "time_coating",
@@ -31,6 +32,21 @@ the sample, such as ``CX171214JK``, which heads its measurement.
 
 time_measurement = astropy.time.Time("2018-01-21")
 """When the witness samples of :func:`multilayer_witness_measured` were measured."""
+
+_packages = (
+    "euv-snapshot-imaging-spectrograph",
+    "optika",
+    "named-arrays",
+    "scipy",
+)
+"""
+The packages whose versions the cache of :func:`multilayer_witness_fit` is
+keyed on.
+
+They hold the design and the measurements (this package), compute the
+reflectivity of a multilayer stack (:mod:`optika` and :mod:`named_arrays`),
+and minimize its difference from the measurements (:mod:`scipy`).
+"""
 
 
 def multilayer_design() -> optika.materials.MultilayerMirror:
@@ -273,7 +289,6 @@ def multilayer_witness_measured() -> optika.materials.MeasuredMirror:
     return result
 
 
-@esis.memory.cache
 def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
     r"""
     Fit a multilayer stack to the :func:`multilayer_witness_measured` measurement.
@@ -359,6 +374,26 @@ def multilayer_witness_fit() -> optika.materials.MultilayerMirror:
             )
             ax.set_axis_off()
 
+    """
+    return _multilayer_witness_fit(versions=_caching.versions(*_packages))
+
+
+@esis.memory.cache
+def _multilayer_witness_fit(
+    versions: dict[str, None | str],
+) -> optika.materials.MultilayerMirror:
+    """
+    Compute :func:`multilayer_witness_fit`, and remember it.
+
+    ``versions`` is not read here. It is an argument so that it is part of
+    the key the cache is looked up by, so that a new release of any of
+    :data:`_packages` fits the measurements again rather than returning the
+    fit made with the old release.
+
+    Parameters
+    ----------
+    versions
+        The versions of :data:`_packages`.
     """
     design = multilayer_design()
 
