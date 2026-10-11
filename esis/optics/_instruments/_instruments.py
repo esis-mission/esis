@@ -163,9 +163,7 @@ class AbstractInstrument(
         This is the entrance arm of the grating: the distance from the object
         it images, the field stop, to the grating.
         The ratio of :attr:`distance_grating_output` to this is the
-        magnification with which the grating images the field stop onto the
-        detector, apart from the anamorphic magnification of the grating and
-        the tilt of the detector.
+        :attr:`magnification`.
         """
         field_stop = self.field_stop.surface
         grating = self.grating.surface
@@ -185,6 +183,26 @@ class AbstractInstrument(
         grating = self.grating.surface
         transformation = grating.transformation.inverse @ detector.transformation
         return transformation(na.Cartesian3dVectorArray() * u.mm).length
+
+    @property
+    def magnification(self) -> na.AbstractScalar:
+        """
+        The magnification with which the grating images the field stop.
+
+        The ratio of :attr:`distance_grating_output` to
+        :attr:`distance_grating_input`, the exit arm of the grating over its
+        entrance arm. This is the size of the image of the field stop over
+        the size of the stop across the dispersion. Along the dispersion, the
+        anamorphic magnification of the grating and the tilt of the detector
+        stretch the image further.
+
+        This is the lateral magnification of the grating. Its angular
+        magnification is the reciprocal of this, and the effective focal
+        length of the instrument, which sets the scale of the image of the
+        sky on the detector, is the focal length of the primary mirror times
+        this.
+        """
+        return self.distance_grating_output / self.distance_grating_input
 
     @property
     def _wavelength_test_grid(self) -> na.AbstractScalar:
