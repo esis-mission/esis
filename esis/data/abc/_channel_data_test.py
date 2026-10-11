@@ -11,6 +11,9 @@ class AbstractTestAbstractChannelData(
     def test_channel(self, a: esis.data.Level_0):
         result = a.channel
         assert isinstance(result, na.ScalarArray)
+        # every camera is one of the channels, so none is left without a name
+        names = {"Channel 1", "Channel 2", "Channel 3", "Channel 4"}
+        assert set(result.ndarray.flat) <= names
 
     def test_to_jshtml(self, a: esis.data.abc.AbstractChannelData):
         index = {
