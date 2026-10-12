@@ -54,7 +54,12 @@ def multilayer_AlSc() -> optika.materials.MultilayerMirror:
         num_interpolation=esis.optics.num_interpolation,
         layers=[
             optika.materials.Layer(
-                chemical="Al2O3",
+                # The table for crystalline alumina starts at 2066 Angstroms,
+                # so use the amorphous table, which covers the EUV.
+                chemical=optika.chemicals.Chemical(
+                    formula="Al2O3",
+                    is_amorphous=True,
+                ),
                 thickness=1 * u.nm,
                 interface=optika.materials.profiles.ErfInterfaceProfile(
                     width=7 * u.AA,
