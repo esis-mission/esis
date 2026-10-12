@@ -97,6 +97,15 @@ class AbstractTestAbstractInstrument(
         assert isinstance(na.as_named_array(result), na.AbstractScalar)
         assert np.all(result > 0 * u.mm)
 
+    def test_magnification(
+        self,
+        a: esis.optics.abc.AbstractInstrument,
+    ) -> None:
+        result = a.magnification
+        assert isinstance(na.as_named_array(result), na.AbstractScalar)
+        assert na.unit_normalized(result).is_equivalent(u.dimensionless_unscaled)
+        assert np.all(result > 0)
+
     def test_wavelength_min(self, a: esis.optics.abc.AbstractInstrument):
         result = a.wavelength_min
         assert isinstance(na.as_named_array(result), na.AbstractScalar)

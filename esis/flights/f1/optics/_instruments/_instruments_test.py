@@ -80,6 +80,41 @@ def test_design_distance_grating() -> None:
     assert np.isclose(design.distance_grating_output, expected_output)
 
 
+def test_design_magnification() -> None:
+    """
+    Check the magnification against the image of the field stop.
+
+    The field stop sits at the focus of the primary mirror, so every ray
+    through a point on its edge lands at the same point of the detector, and
+    the outline of the stop traced through the center of the pupil is the
+    outline of its image. Across the dispersion, along the :math:`y` axis of
+    the detector, the image is as tall as the stop is wide from edge to edge,
+    times the magnification.
+    """
+    design = esis.flights.f1.optics.design_single(num_distribution=0)
+    wavelength = esis.flights.f1.spectrum.O_V.wavelength
+    system = design.system
+
+    # The vertices of the outline are along an axis named the same as those
+    # of every polygonal aperture they are traced through, which would
+    # broadcast against each other, so it is renamed.
+    outline = system.field_stop_polygon(wavelength).vertices.xy
+    outline = outline.combine_axes(axes=("vertex",), axis_new="outline")
+
+    rays = system.rayfunction(
+        wavelength=wavelength,
+        field=outline,
+        pupil=na.Cartesian2dVectorArray(0, 0),
+        normalized_field=False,
+        efficiency=False,
+    )
+    y = rays.outputs.position.y
+    height = y.max() - y.min()
+
+    expected = design.magnification * design.field_stop.width_clear
+    assert np.isclose(height, expected, rtol=0.005)
+
+
 @pytest.mark.parametrize("num_distribution", [0, 11])
 def test_as_built_unfocused(num_distribution: int):
     result = esis.flights.f1.optics.as_built_unfocused(
