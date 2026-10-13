@@ -96,9 +96,9 @@ The pipeline
    which nothing after the field stop can produce.  A focus that differs
    from sector to sector reproduces it to the precision of the
    measurement, so the stage solves one focus per sector: four histories
-   that differ by up to 49 µm, channel 0's holding within 8 µm of its
-   value at the reference frame while channel 1's moves from −26 to
-   +22 µm, channel 2's from +2 to +24 and channel 3's from −17 to +13,
+   that differ by up to 52 µm, channel 0's holding within 7 µm of its
+   value at the reference frame while channel 1's moves from −28 to
+   +24 µm, channel 2's from 0 to +34 and channel 3's from −19 to +16,
    each smoothed by a quadratic in time.  A paraboloid has one focus for every
    zone, so if this is real the mirror's figure changed unevenly with
    temperature during the flight, by about 100 nm of sag between sectors;
@@ -114,22 +114,30 @@ Results
 -------
 
 The committed tables come from the chain run from scratch on the cluster
-on 2026-10-08 and 2026-10-09 with the final code and the released
-libraries (optika 3.1, named-arrays 2.14, regridding 3.5), on GPUs, from
-the seed-0 captures, in six hours of wall time.  The correlation with the
-reference frame after the capture is 0.803, 0.841, 0.803, 0.827 on
-channels 0 to 3, after the shared polish 0.809, 0.851, 0.804, 0.828, and
+on 2026-10-12 with the final code and the released libraries (optika 3.1,
+named-arrays 2.14, regridding 3.5, solar-dynamics-observatory 1.2), on
+GPUs, from the seed-0 captures, in seven hours of wall time, against the
+AIA images archived beside the flight data.  The correlation with the
+reference frame after the capture is 0.802, 0.849, 0.799, 0.824 on
+channels 0 to 3, after the shared polish 0.806, 0.851, 0.806, 0.826, and
 on six frames across the flight that the fit never saw, with each frame's
-pointing applied, a mean of 0.806, 0.848, 0.801, 0.824.  The internal
-alignment leaves the channels 0.01, 0.00, 0.03, 0.03 px from channel 1 at
+pointing applied, a mean of 0.803, 0.848, 0.802, 0.824.  The internal
+alignment leaves the channels 0.01, 0.00, 0.02, 0.03 px from channel 1 at
 the reference frame.  The focus of each sector of the primary drifts over
-the flight, by −8 to −4 µm on channel 0, −26 to +22 on channel 1, +2 to
-+24 on channel 2 and −17 to +13 on channel 3, each a quadratic with 2 to
+the flight, by −7 to −4 µm on channel 0, −28 to +24 on channel 1, 0 to
++34 on channel 2 and −19 to +16 on channel 3, each a quadratic with 2 to
 4 µm of scatter; their mean, the defocus of the primary as a whole, by
-−12 to +14 µm.  The same chain run on the host without a GPU reproduces
-every one of these numbers, the capture merits to seven figures and the
-coalignment to 0.01 px, and a run from a different seed on the earlier
-code reproduced them to 0.01 in correlation and 0.02 px in coalignment.
+−13 to +17 µm.  The run that preceded this one differed only in the AIA
+scene, which an earlier version of the data library placed one AIA pixel
+(0.6″) away: the fitted pointing moved by 0.8″, as it had to, and
+everything the scene does not touch, the window edges, their drift, the
+sector foci and the registration of the channels, came out the same to
+the noise, the correlations within 0.003, the pointing drifts within
+0.04″, the foci within 9 µm and the registration within 0.02 px.  The
+same chain run on the host without a GPU reproduced that earlier run to
+seven figures in the capture merits and 0.01 px in coalignment, and a run
+from a different seed on the earlier code reproduced it to 0.01 in
+correlation and 0.02 px in coalignment.
 
 The coalignment metric, every channel but the anchor, over the
 twenty-seven frames bright enough to measure, with one focus for the whole
@@ -138,8 +146,8 @@ primary and with one per sector:
 =====  ================  ================  ====================  ============
 line   rms shift         max shift         rms along dispersion  tile scatter
 =====  ================  ================  ====================  ============
-He I   0.20 to 0.11 px   0.62 to 0.22 px   3.3 to 1.7 km/s       0.35 px
-O V    0.17 to 0.08 px   0.48 to 0.24 px   2.5 to 0.8 km/s       0.24 px
+He I   0.20 to 0.11 px   0.62 to 0.25 px   3.3 to 1.5 km/s       0.34 px
+O V    0.17 to 0.10 px   0.48 to 0.31 px   2.5 to 0.8 km/s       0.26 px
 =====  ================  ================  ====================  ============
 
 Only the part of a misregistration along a channel's dispersion is a
@@ -147,21 +155,21 @@ velocity error, and a pixel along the dispersion is 18.9 km/s at He I
 and 17.4 km/s at O V.  With the pointing, the window drift and one
 defocus of the whole primary the channels agree to a fifth of a pixel,
 3 km/s, and part by up to 0.6 px in the first minute of the flight.  The
-focus of each sector brings them to 0.11 and 0.08 px, 1.7 and 0.8 km/s,
+focus of each sector brings them to 0.11 and 0.10 px, 1.5 and 0.8 km/s,
 with the worst single channel and frame at 4 km/s; a length taken from
 two components each measured to 0.05 px cannot come out below 0.07 px, so
 this is close to what the measurement resolves.  What the sector focus
 leaves is also fit as an empirical offset of each channel's pointing,
-twelve numbers of at most 0.17″ (0.22 px), which bring the registration to
-0.09 and 0.06 px, 1.5 and 0.6 km/s; the model carries them as an option,
+twelve numbers of at most 0.20″ (0.26 px), which bring the registration to
+0.09 and 0.06 px, 1.4 and 0.6 km/s; the model carries them as an option,
 off by default, since no mechanism stands behind them, and an inversion
 can be run with and without them.  The three dark frames that
 close the flight are extrapolated, and He I is measured there only to
 0.8 px in the worst channel; the metric is what would exclude them from
 an inversion.  For scale, the quiet-Sun velocities ESIS measures are of
 order 10 km/s, and the tile-to-tile scatter along the dispersion, which
-contains the real Doppler structure of the scene as well as noise, is 3.4
-and 2.3 km/s per 105″ tile through the middle of the flight.  The
+contains the real Doppler structure of the scene as well as noise, is 3.6
+and 2.8 km/s per 105″ tile through the middle of the flight.  The
 focus of each sector is a physical term, four numbers per frame fitted
 to six measured components and smoothed in time; the motion it accounts
 for, and the caveat that the edges it rests on are soft, are described
@@ -221,8 +229,8 @@ deliberate fiducial, a notch or a step, in each side, would have decided
 it, and would fix the rotation and the scale of every window as well as
 its position.
 
-*Microns matter.*  The primary's focus drifted 26 µm over the flight,
-its sectors by up to 49 µm against one another, and the field stop moved
+*Microns matter.*  The primary's focus drifted 31 µm over the flight,
+its sectors by up to 52 µm against one another, and the field stop moved
 7 µm, and each moved the images by a few tenths of a
 pixel: 1.6 px per 0.1 mm of focus, and a pixel per 4 µm of stop.  Either
 an athermal metering structure between the primary and the stop, or a
