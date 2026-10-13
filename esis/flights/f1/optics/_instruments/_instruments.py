@@ -373,7 +373,8 @@ def as_built_unfocused(
     Load the as-built optical model before it has been focused or pointed.
 
     Based on :func:`design`, but includes efficiency and figure measurements of the
-    primary mirror and gratings, as well as gain measurements of the sensor.
+    primary mirror and gratings, as well as the gain, read noise, and dark current
+    measured for each camera.
 
     The gratings carry their measured radii of curvature but sit where the
     design put them, which is not where the instrument that flew carried
@@ -469,16 +470,26 @@ def as_built_unfocused(
     axis_tap_x = result.camera.axis_tap_x
     axis_tap_y = result.camera.axis_tap_y
 
-    # Results from Laurel Rachmeler presented on 2017-07-06 and 2017-07-12.
+    # The cameras were tested at MSFC by Laurel Rachmeler on 2017-07-06 and
+    # 2017-07-12, and her verification decks for the two tests list their
+    # properties by quadrant. Quadrants 1 and 4 are read out by the first row
+    # of taps and quadrants 2 and 3 by the second, as
+    # `msfc_ccd.TapData.amplifier` lays them out, so each channel below is
+    # [[Q1, Q4], [Q2, Q3]].
+
+    # Fitted to the K-alpha peak of an Fe-55 source, on 2017-07-06 for SN6
+    # and SN7 (slide 18 of its verification deck) and on 2017-07-12 for SN9
+    # and SN10 (slide 24). An earlier summary of the 2017-07-06 test gave the
+    # gains of SN6 to SN7 and those of SN7 to SN6.
     result.camera.gain = na.ScalarArray(
         ndarray=[
             [
-                [2.55, 2.63],
-                [2.57, 2.57],
-            ],
-            [
                 [2.57, 2.53],
                 [2.50, 2.52],
+            ],
+            [
+                [2.55, 2.63],
+                [2.58, 2.57],
             ],
             [
                 [2.57, 2.59],
@@ -494,7 +505,63 @@ def as_built_unfocused(
         axes=(axis_channel, axis_tap_y, axis_tap_x),
     )
 
-    result.camera.sensor.readout_noise = 6 * u.electron
+    # The standard deviation of the pixels outside the image area, in the
+    # first set of dark frames of the test on 2017-07-12, which the decks
+    # plot but do not list. These are the values the analysis behind the
+    # decks saved for that set, in `noise_params_20170712_SN*_quad*.sav`.
+    readout_noise = na.ScalarArray(
+        ndarray=[
+            [
+                [4.02, 3.85],
+                [4.20, 4.24],
+            ],
+            [
+                [4.08, 4.11],
+                [4.20, 4.18],
+            ],
+            [
+                [4.13, 4.27],
+                [4.11, 4.12],
+            ],
+            [
+                [3.90, 4.07],
+                [3.87, 4.21],
+            ],
+        ]
+        * u.DN,
+        axes=(axis_channel, axis_tap_y, axis_tap_x),
+    )
+    result.camera.sensor.readout_noise = result.camera.gain * readout_noise
+
+    # The slope of the dark level against the exposure time, in the same set
+    # of dark frames, with the sensors held at about -50 C (slide 16 of the
+    # verification deck of the test on 2017-07-12).
+    dark_current = na.ScalarArray(
+        ndarray=[
+            [
+                [2.37e-5, 2.41e-5],
+                [2.04e-5, 1.95e-5],
+            ],
+            [
+                [4.58e-5, 6.66e-5],
+                [3.95e-5, 6.06e-5],
+            ],
+            [
+                [2.29e-5, 2.59e-5],
+                [1.98e-5, 2.15e-5],
+            ],
+            [
+                [4.50e-5, 5.94e-5],
+                [3.83e-5, 4.93e-5],
+            ],
+        ]
+        * u.DN
+        / u.ms,
+        axes=(axis_channel, axis_tap_y, axis_tap_x),
+    )
+    result.camera.dark_current = (result.camera.gain * dark_current).to(
+        u.electron / u.s
+    )
 
     return result
 
