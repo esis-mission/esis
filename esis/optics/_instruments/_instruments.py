@@ -324,6 +324,139 @@ class AbstractInstrument(
         result = dispersion / wavelength * astropy.constants.c
         return result.to(u.km / u.s / u.pix)
 
+    def plate_scale(
+        self,
+        wavelength: u.Quantity | na.AbstractScalar,
+        num_field: int = 11,
+        delta: u.Quantity = 30 * u.arcsec,
+    ) -> na.Cartesian2dVectorArray:
+        r"""
+        Compute the field angle imaged onto one pixel, averaged over the field of view.
+
+        This is reported along each axis of the sensor, and is measured from
+        the raytrace, as :meth:`dispersion` is. The field of view is sampled on
+        a grid, and at each field position, field angles a small step either
+        side of it are traced through the center of the pupil. How far their
+        images move on the sensor gives the derivative of the position on the
+        sensor with respect to the field angle. Inverting it gives the step in
+        field angle which moves the image one pixel along each axis of the
+        sensor, which is the plate scale at that field position. The result is
+        the mean of these over the field positions which pass the field stop.
+
+        The plate scale is different along each axis of the sensor, since the
+        grating magnifies the image anamorphically along the dispersion. It
+        varies across the field of view by a few tenths of a percent, with the
+        distortion of the instrument, which is why it is averaged, and it
+        varies with wavelength, which is why it is reported at a wavelength.
+
+        The mean is over the field stop rather than over the field positions
+        which land on the sensor, so that it is defined at every wavelength in
+        the passband, including those whose image of the field stop falls
+        partly or wholly off the sensor.
+
+        Parameters
+        ----------
+        wavelength
+            The wavelength to measure the plate scale at.
+        num_field
+            The number of field positions to sample along each axis of the
+            field of view.
+        delta
+            The step in field angle either side of each field position to
+            measure across. The traced positions are not smooth at the scale
+            of a few hundredths of a pixel, so a step of a few arcseconds or
+            less moves the result by a few parts in a hundred thousand.
+            Between ten arcseconds and a minute of arc it moves the result by
+            less than a part in a million.
+
+        Examples
+        --------
+        The plate scale at the O V line.
+
+        .. jupyter-execute::
+
+            import esis
+
+            instrument = esis.flights.f1.optics.design_single(num_distribution=0)
+
+            instrument.plate_scale(esis.flights.f1.spectrum.O_V.wavelength)
+        """
+        system = self.system
+
+        axis_field = na.Cartesian2dVectorArray(
+            x="_field_x_plate_scale",
+            y="_field_y_plate_scale",
+        )
+        axis_step = "_step_plate_scale"
+
+        # the chief ray of each field position
+        pupil = na.Cartesian2dVectorArray(0, 0)
+
+        raytrace = system.raytrace(
+            wavelength=wavelength,
+            field=na.Cartesian2dVectorLinearSpace(
+                start=-1,
+                stop=1,
+                axis=axis_field,
+                num=num_field,
+                centers=True,
+            ),
+            pupil=pupil,
+            efficiency=False,
+        )
+        field = raytrace.inputs.field
+        index_field_stop = {system.axis_surface: system.index_field_stop}
+        where = raytrace.outputs[index_field_stop].unvignetted
+
+        step = delta * na.ScalarArray(np.array([-1, 1]), axes=(axis_step,))
+        zero = 0 * step
+
+        def derivative(
+            offset: na.AbstractCartesian2dVectorArray,
+        ) -> na.AbstractCartesian2dVectorArray:
+            """
+            Differentiate the position on the sensor along a direction in the field.
+
+            The derivative is taken across the field positions either side of
+            each sample.
+            """
+            rayfunction = system.rayfunction(
+                wavelength=wavelength,
+                field=field + offset,
+                pupil=pupil,
+                normalized_field=False,
+                efficiency=False,
+            )
+            position = rayfunction.outputs.position.xy
+            index = {axis_step: 0}
+            separation = position[{axis_step: 1}] - position[index]
+            return separation / (2 * delta)
+
+        derivative_x = derivative(na.Cartesian2dVectorArray(step, zero))
+        derivative_y = derivative(na.Cartesian2dVectorArray(zero, step))
+
+        # rows are the axes of the sensor and columns the axes of the field
+        jacobian = na.Cartesian2dMatrixArray(
+            x=na.Cartesian2dVectorArray(derivative_x.x, derivative_y.x),
+            y=na.Cartesian2dVectorArray(derivative_x.y, derivative_y.y),
+        )
+        inverse = jacobian.inverse
+
+        width_pixel = self.camera.sensor.width_pixel / u.pix
+        zero_pixel = 0 * width_pixel
+
+        result = na.Cartesian2dVectorArray(
+            x=(inverse @ na.Cartesian2dVectorArray(width_pixel, zero_pixel)).length,
+            y=(inverse @ na.Cartesian2dVectorArray(zero_pixel, width_pixel)).length,
+        )
+
+        result = result.mean(
+            axis=tuple(axis_field.components.values()),
+            where=where,
+        )
+
+        return result.to(u.arcsec / u.pix)
+
     @property
     def wavelength_physical(self) -> na.ScalarArray:
         """The value of :attr:`wavelength` converted to physical units if needed."""

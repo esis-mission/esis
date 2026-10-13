@@ -159,6 +159,55 @@ class AbstractTestAbstractInstrument(
 
         assert np.all(spread(a.dispersion) < spread(a.dispersion_doppler))
 
+    def test_plate_scale(self, a: esis.optics.abc.AbstractInstrument) -> None:
+        wavelength = esis.flights.f1.spectrum.O_V.wavelength
+        result = a.plate_scale(wavelength)
+
+        assert isinstance(result, na.AbstractCartesian2dVectorArray)
+        assert na.unit_normalized(result).is_equivalent(u.arcsec / u.pix)
+        assert np.all(result.x > 0 * u.arcsec / u.pix)
+        assert np.all(result.y > 0 * u.arcsec / u.pix)
+
+    def test_plate_scale_across_dispersion(
+        self,
+        a: esis.optics.abc.AbstractInstrument,
+    ) -> None:
+        """
+        Check the plate scale across the dispersion against the focal length.
+
+        Across the dispersion the grating does not magnify the image
+        anamorphically, so a pixel there subtends its width over the focal
+        length of the primary mirror times the magnification of the grating.
+        The two differ by the distortion of the instrument, which is a few
+        tenths of a percent.
+        """
+        wavelength = esis.flights.f1.spectrum.O_V.wavelength
+        result = a.plate_scale(wavelength).y
+
+        focal_length = np.abs(a.primary_mirror.sag.focal_length) * a.magnification
+        width_pixel = a.camera.sensor.width_pixel / u.pix
+        expected = (width_pixel / focal_length * u.rad).to(u.arcsec / u.pix)
+
+        assert np.allclose(result, expected, rtol=0.005)
+
+    def test_plate_scale_passband_edges(
+        self,
+        a: esis.optics.abc.AbstractInstrument,
+    ) -> None:
+        """
+        Check that the plate scale is defined at the edges of the passband.
+
+        The image of the field stop falls partly off the sensor there.
+        """
+        wavelength = na.stack(
+            arrays=[a.wavelength_min, a.wavelength_max],
+            axis="_edge",
+        )
+        result = a.plate_scale(wavelength)
+
+        assert np.all(np.isfinite(result.x))
+        assert np.all(np.isfinite(result.y))
+
     def test_system(self, a: esis.optics.abc.AbstractInstrument):
         result = a.system
         assert isinstance(result, optika.systems.AbstractSequentialSystem)
