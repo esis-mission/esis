@@ -124,6 +124,28 @@ def test_as_built_unfocused(num_distribution: int):
     assert _is_uncertain(result) == (num_distribution != 0)
 
 
+def test_as_built_unfocused_camera() -> None:
+    """
+    Check the measured properties of each tap of each camera.
+
+    The gain, read noise, and dark current were measured for each tap of each
+    camera, and the read noise reaches the surface as one value for each
+    camera.
+    """
+    camera = esis.flights.f1.optics.as_built_unfocused(num_distribution=0).camera
+    shape = {"channel": 4, camera.axis_tap_y: 2, camera.axis_tap_x: 2}
+
+    assert camera.gain.shape == shape
+    assert camera.sensor.readout_noise.shape == shape
+    assert camera.dark_current.shape == shape
+
+    # the range the verification decks give for every tap of every camera
+    assert camera.gain.min() == 2.50 * u.electron / u.DN
+    assert camera.gain.max() == 2.63 * u.electron / u.DN
+
+    assert camera.surface.read_noise.shape == {"channel": 4}
+
+
 def test_design_focus_grating():
     """The design is already focused, so focusing it should move nothing."""
     design = esis.flights.f1.optics.design(num_distribution=0)
