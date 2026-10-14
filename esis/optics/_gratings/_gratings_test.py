@@ -62,6 +62,33 @@ class AbstractTestAbstractGrating(
     ):
         assert isinstance(a.rulings, optika.rulings.AbstractRulings)
 
+    def test_slope_error(
+        self,
+        a: esis.optics.abc.AbstractGrating,
+    ) -> None:
+        result = a.slope_error
+        if result is not None:
+            assert isinstance(na.as_named_array(result), na.AbstractScalar)
+            assert na.unit_normalized(result).is_equivalent(u.urad)
+
+    def test_roughness(
+        self,
+        a: esis.optics.abc.AbstractGrating,
+    ) -> None:
+        result = a.roughness
+        if result is not None:
+            assert isinstance(na.as_named_array(result), na.AbstractScalar)
+            assert na.unit_normalized(result).is_equivalent(u.nm)
+
+    def test_microroughness(
+        self,
+        a: esis.optics.abc.AbstractGrating,
+    ) -> None:
+        result = a.microroughness
+        if result is not None:
+            assert isinstance(na.as_named_array(result), na.AbstractScalar)
+            assert na.unit_normalized(result).is_equivalent(u.nm)
+
     def test_num_folds(
         self,
         a: esis.optics.abc.AbstractGrating,
@@ -145,6 +172,9 @@ class AbstractTestAbstractGrating(
             clearance=1 * u.mm,
             distance_radial=50 * u.mm,
             yaw=20 * u.deg,
+            slope_error=3 * u.urad,
+            roughness=4 * u.nm,
+            microroughness=1 * u.nm,
         )
     ],
 )
