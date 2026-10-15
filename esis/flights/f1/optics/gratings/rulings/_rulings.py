@@ -69,16 +69,21 @@ def ruling_design(
             ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
             ax.set_ylabel("efficiency");
     """
-    density = uniform(
-        nominal=(2.586608603456000 / u.um).to(1 / u.mm),
-        width=1 / u.mm,
-        num_distribution=num_distribution,
-    )
+    # The density of the rulings is known to within 1 per millimeter, which
+    # is carried as the equivalent tolerance on the spacing, the parameter
+    # of the model, so that it can be read back from the model like the
+    # tolerances on the other coefficients.
+    density = (2.586608603456000 / u.um).to(1 / u.mm)
+    width_density = 1 / u.mm
 
     return optika.rulings.RectangularRulings(
         spacing=optika.rulings.Polynomial1dRulingSpacing(
             coefficients={
-                0: 1 / density,
+                0: uniform(
+                    nominal=1 / density,
+                    width=width_density / np.square(density),
+                    num_distribution=num_distribution,
+                ),
                 1: uniform(
                     nominal=-3.3849e-5 * (u.um / u.mm),
                     width=0.0512e-5 * (u.um / u.mm),
@@ -196,14 +201,16 @@ def ruling_measurement(
     """
     design = ruling_design(num_distribution=num_distribution)
 
-    density = uniform(
-        nominal=2585.5 / u.mm,
-        width=1 / u.mm,
-        num_distribution=num_distribution,
-    )
+    # carried as a tolerance on the spacing, as in the design
+    density = 2585.5 / u.mm
+    width_density = 1 / u.mm
 
     spacing = design.spacing
-    spacing.coefficients[0] = 1 / density
+    spacing.coefficients[0] = uniform(
+        nominal=1 / density,
+        width=width_density / np.square(density),
+        num_distribution=num_distribution,
+    )
 
     efficiency_total = gratings.efficiencies.efficiency_vs_wavelength()
 
