@@ -42,7 +42,7 @@ def flight(directory: pathlib.Path, out: pathlib.Path) -> None:
     for ax, loc, ncol in zip(
         axes,
         ("upper right", "upper center", "upper right", "upper center", "upper center"),
-        (2, 4, 1, 2, 3),
+        (2, 4, 1, 2, 2),
     ):
         ax.legend(frameon=False, fontsize=7, ncol=ncol, loc=loc)
         ax.tick_params(labelsize=8)

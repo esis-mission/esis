@@ -200,7 +200,15 @@ any two channels and shows their difference, with the median tile shift
 of every pair.  The blink page judges the model against the data; the
 coalignment page judges the channels against one another, which is what
 the internal stage sets, and it is the view in which a residual of a tenth
-of a pixel is visible.  Two more commands repeat late stages on a saved
+of a pixel is visible.  Both pages, made from the committed tables, are
+kept with this documentation: the `blink page
+<../_static/distortion_fit/blink.html>`_ holds every frame of the flight
+and the `coalignment page <../_static/distortion_fit/coalign.html>`_ six
+frames across it, and a `summary page
+<../_static/distortion_fit/summary.html>`_ renders the summary below with
+its figures.  The pages are not rebuilt with the documentation, since the
+renders need the Level-1 frames and the AIA scene; they are regenerated
+when the tables are.  Two more commands repeat late stages on a saved
 reference without the capture: ``polish`` reruns the shared polish and the
 alignment from ``start_reference.ecsv`` in the directory, for instance at
 a finer scene (``ESIS_NUM_SCENE``), and ``align`` reruns only the

@@ -284,7 +284,11 @@ A third figure is worth considering if space allows: the degeneracy
 diagram, the singular-value spectrum of one frame's Jacobian beside a
 sketch of which motion moves the edges, the sky, or both.  The interactive
 blink and channel-difference pages made by ``blink.py`` and ``coalign.py``
-are the companion for the website; they cannot go in print.
+are the companion for the website; they cannot go in print.  Both are
+kept with this documentation, made from the committed tables: the `blink
+page <../_static/distortion_fit/blink.html>`_ and the `coalignment page
+<../_static/distortion_fit/coalign.html>`_, with this summary and its
+figures as a `single page <../_static/distortion_fit/summary.html>`_.
 
 Cost and repeatability
 ----------------------
