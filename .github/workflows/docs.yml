@@ -46,6 +46,52 @@ jobs:
           sudo apt-get install graphviz pandoc
           pip install -e .[doc]
 
+      # The synthetic-image report reads the CHIANTI atomic database for the
+      # lines of its scene, and their contribution functions take a quarter
+      # of an hour, so both are cached, and the second is keyed on the first:
+      # lines computed from one version of the database must not be served
+      # beside another.
+      - name: Ask fiasco which database it wants
+        id: chianti
+        run: |
+          python -c "
+          from fiasco.util.setup_db import LATEST_VERSION
+          print(f'version={LATEST_VERSION}')
+          " >> $GITHUB_OUTPUT
+
+      - name: Restore the CHIANTI database
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.fiasco
+          key: chianti-${{ steps.chianti.outputs.version }}
+
+      - name: Download and build the CHIANTI database
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          python -c "
+          import fiasco
+          from fiasco.util import check_database
+          check_database(
+              hdf5_dbase_root=fiasco.defaults['hdf5_dbase_root'],
+              ascii_dbase_root=fiasco.defaults['ascii_dbase_root'],
+              ask_before=False,
+              show_progress=False,
+          )
+          "
+
+      - name: Restore the contribution functions of the scene
+        uses: actions/cache@v4
+        with:
+          path: ~/.esis/cache/esis/data/synth/_scene_dem
+          key: >-
+            scene-dem-${{ steps.chianti.outputs.version }}-${{
+            hashFiles('esis/data/synth/_scene_dem/_scene_dem.py') }}
+          # joblib decides for itself whether what it holds still answers the
+          # question, and recomputes when it does not
+          restore-keys: |
+            scene-dem-${{ steps.chianti.outputs.version }}-
+
       - name: Build with Sphinx
         env:
           JSOC_EMAIL: "roytsmart@gmail.com"
