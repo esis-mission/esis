@@ -14,3 +14,16 @@ def test_uniform(num_distribution: int):
         assert isinstance(result, na.AbstractUncertainScalarArray)
         assert result.nominal == nominal
         assert result.num_distribution == num_distribution
+
+
+def test_uniform_width() -> None:
+    """The samples span the nominal value plus or minus the width."""
+    nominal = 5 * u.mm
+    width = 1 * u.mm
+    result = uniform(nominal=nominal, width=width, num_distribution=101)
+    distribution = result.distribution
+    assert distribution.min() >= nominal - width
+    assert distribution.max() <= nominal + width
+    # a full width would keep every sample within half of it of the nominal
+    # value, so the samples could span at most the width
+    assert distribution.max() - distribution.min() > width

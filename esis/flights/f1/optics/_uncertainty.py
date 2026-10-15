@@ -25,7 +25,8 @@ def uniform(
     nominal
         The nominal value of the parameter.
     width
-        The width of the uniform distribution of possible values.
+        The half-width of the uniform distribution of possible values,
+        which span the nominal value plus or minus this width.
     num_distribution
         The number of samples drawn from the distribution.
     """
