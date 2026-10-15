@@ -20,6 +20,24 @@ __all__ = [
 ]
 
 
+def _any(a: bool | na.AbstractArray) -> bool:
+    """
+    Whether any element of an array is true, in any sample if it is uncertain.
+
+    The truth of an uncertain array is the truth of its nominal value alone,
+    so a condition met by only some of its samples would go unnoticed.
+
+    Parameters
+    ----------
+    a
+        The array to check.
+    """
+    array = na.as_named_array(a)
+    if isinstance(array, na.AbstractUncertainScalarArray):
+        return _any(array.nominal) or _any(array.distribution)
+    return bool(np.any(array))
+
+
 @dataclasses.dataclass(eq=False, repr=False)
 class AbstractInstrument(
     na.Indexable,
@@ -369,7 +387,7 @@ class AbstractInstrument(
         wavelength: None | u.Quantity | na.AbstractScalar = None,
         field: None | na.AbstractCartesian2dVectorArray = None,
         pupil: None | na.AbstractCartesian2dVectorArray = None,
-        bounds: tuple[u.Quantity, u.Quantity] = (-1 * u.mm, 2 * u.mm),
+        bounds: tuple[u.Quantity, u.Quantity] = (-3 * u.mm, 3 * u.mm),
         min_step_size: u.Quantity = 1 * u.um,
     ) -> Self:
         r"""
@@ -405,8 +423,17 @@ class AbstractInstrument(
         bounds
             The bracket of grating translations, relative to the current
             position, within which the best focus is sought.
+            The default is wide enough for the tolerance of :math:`\pm 0.4\%`
+            on the radius of curvature of the ESIS-I gratings, which moves
+            their best focus by up to about 2 mm.
         min_step_size
             The tolerance on the translation of the best focus.
+
+        Raises
+        ------
+        ValueError
+            If the best focus of any grating, in any sample of an uncertain
+            model, is at the edge of `bounds`, and so may lie beyond them.
 
         Examples
         --------
@@ -474,6 +501,15 @@ class AbstractInstrument(
             min_step_size=min_step_size,
         )
 
+        # The search cannot look past the bracket, so a focus beyond it is
+        # found at its edge and would be returned as if it were the best.
+        at_edge = (dz - a < min_step_size) | (b - dz < min_step_size)
+        if _any(at_edge):
+            raise ValueError(
+                f"The best focus of a grating is at the edge of {bounds=}, "
+                "so it may lie beyond them."
+            )
+
         # Deep, so that the caller is given an instrument of their own. The
         # copies taken while searching are shallow and share everything but
         # the grating with this one, which is what makes them cheap, and is
@@ -484,6 +520,7 @@ class AbstractInstrument(
         self,
         z: None | u.Quantity | na.AbstractScalar = None,
         yaw: None | u.Quantity | na.AbstractScalar = None,
+        pitch: None | u.Quantity | na.AbstractScalar = None,
     ) -> Self:
         """
         Copy this instrument, putting its gratings somewhere else.
@@ -507,6 +544,9 @@ class AbstractInstrument(
         yaw
             How far to rotate the gratings about :math:`y`.
             If :obj:`None` (the default), they are left as they are.
+        pitch
+            How far to rotate the gratings about :math:`x`.
+            If :obj:`None` (the default), they are left as they are.
         """
         grating = self.grating
 
@@ -516,10 +556,14 @@ class AbstractInstrument(
         if yaw is None:
             yaw = grating.yaw
 
+        if pitch is None:
+            pitch = grating.pitch
+
         return self.replace(
             grating=grating.replace(
                 translation=grating.translation.replace(z=z),
                 yaw=yaw,
+                pitch=pitch,
             ),
         )
 
@@ -570,10 +614,12 @@ class AbstractInstrument(
         position: None | na.AbstractCartesian2dVectorArray = None,
         field: None | na.AbstractCartesian2dVectorArray = None,
         pupil: None | na.AbstractCartesian2dVectorArray = None,
+        min_step_size: u.Quantity = 1 * u.um,
+        max_iterations: int = 10,
         **kwargs,
     ) -> Self:
         r"""
-        Focus the gratings and then point them back at the sensor.
+        Focus the gratings and point them back at the sensor.
 
         :meth:`focus_grating` moves each grating along the optic axis, which
         also moves the image along the sensor. An instrument which was
@@ -587,12 +633,21 @@ class AbstractInstrument(
         the as-built model it leaves a couple of pixels, which is still tens
         of kilometers per second of apparent Doppler shift.
 
-        The two are solved one after the other rather than together. Rotating
-        a grating about :math:`y` moves the image 915 microns per arcminute
-        while changing the size of a spot by half a micron, so the rotation
-        needed to place the line, of order ten arcseconds, does not disturb
-        the focus. There is no trade to make between the two, and so no
-        weighting between them to choose.
+        Each grating is pointed by tipping and tilting it: rotating it about
+        :math:`y` moves the image along the dispersion, and rotating it about
+        :math:`x` moves the image across it. The image moves in proportion to
+        the rotations, so one step of Newton's method, with the derivatives
+        taken from two more ray traces, lands on the target.
+
+        Rotating a grating moves the image 915 microns per arcminute while
+        changing the size of a spot by half a micron, so the rotation of
+        order ten arcseconds which places the line of the as-built model
+        leaves its focus alone. A grating out of place by a millimeter needs
+        several arcminutes, though, which defocuses the image by enough to
+        blur it by a couple of microns. So the focus and the pointing are
+        repeated until refocusing moves no grating by more than twice
+        `min_step_size`, which is as closely as two searches for the same
+        focus can be expected to agree.
 
         Parameters
         ----------
@@ -610,8 +665,19 @@ class AbstractInstrument(
         pupil
             The normalized pupil positions used to judge the focus.
             Passed to :meth:`focus_grating`.
+        min_step_size
+            The tolerance on the translation of the best focus.
+            Passed to :meth:`focus_grating`.
+        max_iterations
+            The number of times the gratings are refocused and pointed again
+            before giving up on them settling.
         kwargs
             Additional arguments passed to :meth:`focus_grating`.
+
+        Raises
+        ------
+        ValueError
+            If refocusing still moves the gratings after `max_iterations`.
 
         Examples
         --------
@@ -651,26 +717,73 @@ class AbstractInstrument(
                 centers=True,
             )
 
-        result = self.focus_grating(
-            wavelength=wavelength,
-            field=field,
-            pupil=pupil,
-            **kwargs,
+        def focus(instrument: AbstractInstrument) -> AbstractInstrument:
+            return instrument.focus_grating(
+                wavelength=wavelength,
+                field=field,
+                pupil=pupil,
+                min_step_size=min_step_size,
+                **kwargs,
+            )
+
+        result = focus(self)._point_grating(wavelength, position)
+
+        for _ in range(max_iterations):
+            z = result.grating.translation.z
+            result = focus(result)
+            shift = np.abs(result.grating.translation.z - z)
+            result = result._point_grating(wavelength, position)
+            if not _any(shift > 2 * min_step_size):
+                return result
+
+        raise ValueError(
+            f"Refocusing still moved the gratings after {max_iterations=}."
         )
 
-        yaw = result.grating.yaw
+    def _point_grating(
+        self,
+        wavelength: u.Quantity | na.AbstractScalar,
+        position: na.AbstractCartesian2dVectorArray,
+    ) -> Self:
+        """
+        Tip and tilt the gratings to put a line where it is asked for.
 
-        # The image moves along the sensor in proportion to the rotation, so
-        # one step of a secant method lands on the target, and the second
-        # evaluation measures how far off it was.
+        One step of Newton's method, which lands on the target since the line
+        moves along the sensor in proportion to the rotations.
+
+        Parameters
+        ----------
+        wavelength
+            The wavelength of the line.
+        position
+            Where on the sensor to put it.
+        """
+        yaw = self.grating.yaw
+        pitch = self.grating.pitch
+
         step = 1 * u.arcmin
 
-        position_0 = result.position_line(wavelength)
-        position_1 = result.moved_grating(yaw=yaw + step).position_line(wavelength)
+        position_0 = self.position_line(wavelength)
+        position_yaw = self.moved_grating(yaw=yaw + step).position_line(wavelength)
+        position_pitch = self.moved_grating(pitch=pitch + step).position_line(
+            wavelength
+        )
 
-        slope = (position_1.x - position_0.x) / step
+        # How far the line moves along each axis of the sensor per unit of
+        # yaw and of pitch.
+        dx_dyaw = (position_yaw.x - position_0.x) / step
+        dx_dpitch = (position_pitch.x - position_0.x) / step
+        dy_dyaw = (position_yaw.y - position_0.y) / step
+        dy_dpitch = (position_pitch.y - position_0.y) / step
 
-        return result.moved_grating(yaw=yaw + (position.x - position_0.x) / slope)
+        # The rotations which move the line from where it is to where it is
+        # asked for, solving the two linear equations by Cramer's rule.
+        error = position - position_0
+        determinant = dx_dyaw * dy_dpitch - dx_dpitch * dy_dyaw
+        dyaw = (dy_dpitch * error.x - dx_dpitch * error.y) / determinant
+        dpitch = (dx_dyaw * error.y - dy_dyaw * error.x) / determinant
+
+        return self.moved_grating(yaw=yaw + dyaw, pitch=pitch + dpitch)
 
     def schematic_primary(
         self,
