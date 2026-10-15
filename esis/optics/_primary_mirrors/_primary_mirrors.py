@@ -88,6 +88,40 @@ class AbstractPrimaryMirror(
         """The optics material composing this object."""
 
     @property
+    @abc.abstractmethod
+    def slope_error(self) -> None | u.Quantity | na.AbstractScalar:
+        """
+        The RMS slope error of the figure of this mirror.
+
+        It is measured with the step and kernel sizes of the
+        ``parameters_slope_error`` of :attr:`sag`. In a design, this is the
+        specification of the mirror, and in a model of the mirror as built, its
+        measurement.
+        """
+
+    @property
+    @abc.abstractmethod
+    def roughness(self) -> None | u.Quantity | na.AbstractScalar:
+        """
+        The RMS roughness of this mirror.
+
+        It is measured over the periods of the ``parameters_roughness`` of
+        :attr:`sag`. In a design, this is the specification of the mirror, and
+        in a model of the mirror as built, its measurement.
+        """
+
+    @property
+    @abc.abstractmethod
+    def microroughness(self) -> None | u.Quantity | na.AbstractScalar:
+        """
+        The RMS microroughness of this mirror.
+
+        It is measured over the periods of the ``parameters_microroughness`` of
+        :attr:`sag`. In a design, this is the specification of the mirror, and
+        in a model of the mirror as built, its measurement.
+        """
+
+    @property
     def surface(self) -> optika.surfaces.Surface:
         """Represent this object as an :mod:`optika` surface."""
         return optika.surfaces.Surface(
@@ -145,3 +179,21 @@ class PrimaryMirror(
 
     roll: u.Quantity | na.AbstractScalar = 0 * u.deg
     """The roll angle of this object"""
+
+    slope_error: None | u.Quantity | na.AbstractScalar = None
+    """
+    The RMS slope error of the figure of this mirror, with the step and
+    kernel sizes of the ``parameters_slope_error`` of :attr:`sag`.
+    """
+
+    roughness: None | u.Quantity | na.AbstractScalar = None
+    """
+    The RMS roughness of this mirror, over the periods of the
+    ``parameters_roughness`` of :attr:`sag`.
+    """
+
+    microroughness: None | u.Quantity | na.AbstractScalar = None
+    """
+    The RMS microroughness of this mirror, over the periods of the
+    ``parameters_microroughness`` of :attr:`sag`.
+    """

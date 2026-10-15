@@ -261,6 +261,30 @@ def test_as_built_radius_grating(num_distribution: int):
     assert np.all(np.abs(radius - radius_design) < 1 * u.mm)
 
 
+@pytest.mark.parametrize("optic", ["primary_mirror", "grating"])
+@pytest.mark.parametrize("name", ["slope_error", "roughness", "microroughness"])
+def test_as_built_figure_and_finish(optic: str, name: str) -> None:
+    """
+    The figure and finish of each optic as built meet its specifications.
+
+    The measurements are those of the primary mirror and of each grating, and
+    the instrument which flew carries them through its alignment. A grating
+    is measured on its own, so the measurements of the gratings are along the
+    axis of the channels, beside the serial number of each.
+    """
+    design = esis.flights.f1.optics.design(num_distribution=0)
+    as_built = esis.flights.f1.optics.as_built(num_distribution=0)
+
+    specified = getattr(getattr(design, optic), name)
+    measured = getattr(getattr(as_built, optic), name)
+    assert specified is not None
+    assert measured is not None
+    assert np.all(measured <= specified)
+
+    if optic == "grating":
+        assert na.shape(measured) == na.shape(as_built.grating.serial_number)
+
+
 @pytest.mark.parametrize("num_distribution", [0, 11])
 def test_distortion_fit(num_distribution: int):
     result = esis.flights.f1.optics.distortion_fit(

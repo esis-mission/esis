@@ -82,6 +82,10 @@ def design_full(
         width_clear=2 * radius_primary_clear * cos_per_channel,
         width_border=(83.7 * u.mm - radius_primary_clear) * cos_per_channel,
         material=primaries.materials.multilayer_design(),
+        # the specifications of the figure and finish of the primary mirror
+        slope_error=1 * u.urad,
+        roughness=2.5 * u.nm,
+        microroughness=1 * u.nm,
         translation=na.Cartesian3dVectorArray(
             x=uniform(
                 nominal=0 * u.mm,
@@ -162,6 +166,10 @@ def design_full(
         rulings=gratings.rulings.ruling_design(
             num_distribution=num_distribution,
         ),
+        # the specifications of the figure and finish of the gratings
+        slope_error=3 * u.urad,
+        roughness=4 * u.nm,
+        microroughness=1 * u.nm,
         num_folds=num_folds,
         halfwidth_inner=13.02 * u.mm - width_grating_border_inner,
         halfwidth_outer=10.49 * u.mm - width_grating_border,
@@ -415,6 +423,12 @@ def as_built_unfocused(
 
     result.primary_mirror.material = primaries.materials.multilayer_fit()
 
+    # The measured figure and finish of the primary mirror. The
+    # microroughness is the mean of two measurements.
+    result.primary_mirror.slope_error = 0.436 * u.urad
+    result.primary_mirror.roughness = 0.938 * u.nm
+    result.primary_mirror.microroughness = ([5.38, 5.68] * u.AA).mean().to(u.nm)
+
     result.grating.serial_number = na.stack(
         arrays=[
             "89025",
@@ -449,6 +463,20 @@ def as_built_unfocused(
             radius_014.mean(),
         ],
         axis=axis_channel,
+    )
+
+    # the measured figure and finish of each grating, in the same order
+    result.grating.slope_error = na.ScalarArray(
+        ndarray=[2.05, 2.00, 2.05, 2.00] * u.urad,
+        axes=axis_channel,
+    )
+    result.grating.roughness = na.ScalarArray(
+        ndarray=[1.75, 1.75, 1.75, 1.50] * u.nm,
+        axes=axis_channel,
+    )
+    result.grating.microroughness = na.ScalarArray(
+        ndarray=[0.50, 0.45, 0.60, 0.65] * u.nm,
+        axes=axis_channel,
     )
 
     result.grating.material = gratings.materials.multilayer_fit()
