@@ -1,3 +1,4 @@
+from typing import Callable
 import pytest
 import numpy as np
 import astropy.units as u
@@ -63,6 +64,22 @@ def test_design_guess_nominal_geometry():
         assert np.all(np.isclose(coefficients[power], coefficients_certain[power]))
     radius = uncertain.grating.sag.radius
     assert np.all(np.isclose(radius, certain.grating.sag.radius))
+
+
+@pytest.mark.parametrize(
+    "design",
+    [
+        esis.flights.f2.optics.design_guess,
+        esis.flights.f2.optics.design_single,
+        esis.flights.f2.optics.design,
+        esis.flights.f2.optics.design_visible,
+    ],
+)
+def test_timedelta_exposure(design: Callable[..., esis.optics.Instrument]):
+    """Check that every design of ESIS-II, down to its sensor, exposes for 1.2 s."""
+    result = design(num_distribution=0)
+    assert result.camera.timedelta_exposure == 1.2 * u.s
+    assert result.system.sensor.timedelta_exposure == 1.2 * u.s
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
