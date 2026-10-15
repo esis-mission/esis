@@ -217,6 +217,15 @@ def design_full(
         roll=45 * u.deg,
     )
 
+    # The sensors were placed at the focus found by experiment and shimmed
+    # there, so where each one sits along the optic axis is uncertain by the
+    # error of the experiment, the step between the thicknesses of the shims,
+    # and the defocus of the edges of the sensor caused by its tip and tilt.
+    var_sensor_z_experiment = np.square(0.5 * u.mm)
+    var_sensor_z_shim = np.square(50 * u.um)
+    var_sensor_z_edge = np.square(0.1 * u.mm)
+    var_sensor_z = var_sensor_z_experiment + var_sensor_z_shim + var_sensor_z_edge
+    error_sensor_z = np.sqrt(var_sensor_z)
     sensor = esis.optics.Sensor(
         # The physical mask on the ESIS-I detectors was undersized, leaving
         # readout-buffer rows exposed to light.  Science data extends into
@@ -226,9 +235,21 @@ def design_full(
         distance_radial=108 * u.mm,
         azimuth=angle_channel.copy(),
         translation=na.Cartesian3dVectorArray(
-            x=0 * u.mm,
-            y=0 * u.mm,
-            z=filter.translation.z + 200 * u.mm,
+            x=uniform(
+                nominal=0 * u.mm,
+                width=1 * u.mm,
+                num_distribution=num_distribution,
+            ),
+            y=uniform(
+                nominal=0 * u.mm,
+                width=1 * u.mm,
+                num_distribution=num_distribution,
+            ),
+            z=uniform(
+                nominal=filter.translation.z + 200 * u.mm,
+                width=error_sensor_z,
+                num_distribution=num_distribution,
+            ),
         ),
         yaw=-12.252 * u.deg,
         # Where the center of the field of view lands at the O V line, which

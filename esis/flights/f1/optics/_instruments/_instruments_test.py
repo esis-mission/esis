@@ -53,6 +53,28 @@ def test_design_single(num_distribution: int):
     assert _is_uncertain(result) == (num_distribution != 0)
 
 
+def test_design_tolerance_sensor() -> None:
+    """
+    Check the tolerances on the placement of the sensors.
+
+    They are placed to within a millimeter across the optic axis, and to
+    within the error of their focus along it: half a millimeter from the
+    experiment which found it, 50 microns from the shims, and 0.1 mm from
+    their tip and tilt, added in quadrature.
+    """
+    nominal = esis.flights.f1.optics.design(num_distribution=0).camera.sensor
+    sensor = esis.flights.f1.optics.design(num_distribution=11).camera.sensor
+    translation = sensor.translation
+
+    assert translation.x.nominal == nominal.translation.x
+    assert translation.y.nominal == nominal.translation.y
+    assert translation.z.nominal == nominal.translation.z
+
+    assert translation.x.width == 1 * u.mm
+    assert translation.y.width == 1 * u.mm
+    assert np.isclose(translation.z.width, 512 * u.um, atol=1 * u.um)
+
+
 def test_design_distance_grating() -> None:
     """
     Check the arms of the grating against the prescription.
