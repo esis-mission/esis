@@ -8,7 +8,7 @@ import fiasco
 import sdo
 import utu
 import esis
-from esis.data.synth._scene_dem._scene_dem import _emission_measure
+from esis.data.synth._scene_dem._scene_dem import _emission_measure, _lines
 
 
 def _database() -> bool:
@@ -223,3 +223,46 @@ def test_scene_dem(monkeypatch: pytest.MonkeyPatch):
     fraction = radiance.mean(("x", "y")) * 4 * np.pi * u.sr / total.sum("l")
     assert np.all(fraction > 0.005)
     assert rest.size < total.size
+
+
+@needs_database
+def test_lines_ions(monkeypatch: pytest.MonkeyPatch):
+    """
+    Check the ions default to those with a line in the passband.
+
+    :func:`utu.spectrum.ions` is replaced by a list of one ion, so that only
+    that ion is computed, and the cache is bypassed, so that the search runs.
+    """
+    calls = []
+
+    def ions(**kwargs: Any) -> list[str]:
+        """Stand in for the search, finding one ion."""
+        calls.append(kwargs)
+        return ["Ne 7"]
+
+    monkeypatch.setattr(utu.spectrum, "ions", ions)
+
+    wavelength_min = 465 * u.AA
+    wavelength_max = 466 * u.AA
+
+    contribution, mass = _lines.func(
+        temperature=np.geomspace(1e5, 1e6, num=6) * u.K,
+        wavelength_min=wavelength_min,
+        wavelength_max=wavelength_max,
+        ions=None,
+        abundance=esis.data.synth._scene_dem.abundance,
+        pressure=esis.data.synth._scene_dem.pressure,
+        versions=dict(),
+        axis_temperature="t",
+        axis_line="l",
+    )
+
+    (call,) = calls
+    assert call["wavelength_min"] == wavelength_min
+    assert call["wavelength_max"] == wavelength_max
+    assert call["abundance"] == esis.data.synth._scene_dem.abundance
+
+    rest = contribution.inputs
+    assert np.all((rest > wavelength_min) & (rest < wavelength_max))
+    assert na.shape(contribution.outputs) == dict(t=6, l=rest.size)
+    assert np.all(mass == fiasco.Ion("Ne 7", 1e6 * u.K).mass)
