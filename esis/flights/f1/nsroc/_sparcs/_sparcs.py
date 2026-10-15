@@ -10,11 +10,11 @@ def sparcs() -> esis.nsroc.Sparcs:
     """
     Load the specified performance of SPARCS for this flight.
 
-    The jitter and drift of the pointing are the specification of SPARCS VII
-    that the ESIS error budget was built on.
+    The jitter of the pointing is the specification of SPARCS VII, and its
+    drift is the rate NSROC gave for ESIS in 2016.
     The NASA Sounding Rocket Program Handbook (810-HB-SRP, 2015, Section
-    5.12.1.1) gives only that the pointing is stable to tenths of an
-    arcsecond.
+    5.12.1.1) gives no drift, and says only that the pointing is stable to
+    tenths of an arcsecond.
 
     In fine-pointing mode, SPARCS controls the roll with a ring-laser
     gyroscope (:attr:`esis.nsroc.Timeline.timedelta_sparcs_rlg_enable`),
