@@ -761,7 +761,6 @@ def distortion_fit(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
     num_distribution: int = 11,
-    seed: None | int = None,
 ) -> esis.optics.Instrument:
     """
     Apply the best-fit distortion parameters to the ESIS-I :func:`design`.
@@ -781,9 +780,6 @@ def distortion_fit(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
-    seed
-        seed for the random number generator which draws the Monte Carlo
-        samples, or :obj:`None` to draw different samples every time
 
     Examples
     --------
@@ -856,7 +852,6 @@ def distortion_fit(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
-        seed=seed,
     )
 
     model.wavelength = na.ScalarArray(

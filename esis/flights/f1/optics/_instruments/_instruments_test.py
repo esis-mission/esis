@@ -1,6 +1,5 @@
 import collections.abc
 import dataclasses
-import itertools
 import pytest
 import numpy as np
 import astropy.units as u
@@ -74,7 +73,6 @@ def test_design_single(num_distribution: int):
         esis.flights.f1.optics.design,
         esis.flights.f1.optics.design_single,
         esis.flights.f1.optics.as_built_unfocused,
-        esis.flights.f1.optics.distortion_fit,
     ],
 )
 def test_seed(
@@ -124,13 +122,14 @@ def test_seed_independent(
         {"primary_mirror.translation.y", "field_stop.translation.y"},
     ]
 
-    for path_1, path_2 in itertools.combinations(normalized, 2):
-        a_1 = normalized[path_1]
-        a_2 = normalized[path_2]
-        if {path_1, path_2} in tied:
-            assert np.all(a_1 == a_2), (path_1, path_2)
-        else:
-            assert not np.all(np.isclose(a_1, a_2)), (path_1, path_2)
+    # each pair of parameters, once
+    items = list(normalized.items())
+    for i, (path_1, a_1) in enumerate(items):
+        for path_2, a_2 in items[:i]:
+            if {path_1, path_2} in tied:
+                assert np.all(a_1 == a_2), (path_1, path_2)
+            else:
+                assert not np.all(np.isclose(a_1, a_2)), (path_1, path_2)
 
 
 @pytest.mark.parametrize(
