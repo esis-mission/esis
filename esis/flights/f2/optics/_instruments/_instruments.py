@@ -127,7 +127,10 @@ def design_proposed(
 
     dz = z_filter - result.filter.translation.z
     result.filter.translation.z += dz
-    result.camera.sensor.translation.z += dz
+    # not in place, since the position of the sensor is uncertain, and an
+    # uncertain array drawn from a distribution cannot be modified in place
+    sensor = result.camera.sensor
+    sensor.translation.z = sensor.translation.z + dz
 
     result.primary_mirror.material = materials.multilayer_AlSc()
     result.grating.material = materials.multilayer_AlSc()
