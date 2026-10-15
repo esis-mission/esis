@@ -3,7 +3,7 @@ import astropy.units as u
 import named_arrays as na
 import optika
 from esis.flights.f1.optics import gratings
-from ..._uncertainty import uniform
+from ..._uncertainty import spawn_seeds, uniform
 
 __all__ = [
     "ruling_design",
@@ -13,6 +13,7 @@ __all__ = [
 
 def ruling_design(
     num_distribution: int = 11,
+    seed: None | int = None,
 ) -> optika.rulings.AbstractRulings:
     """
     Load a model of the as-designed rulings for the diffraction gratings.
@@ -21,6 +22,9 @@ def ruling_design(
     ----------
     num_distribution
         The number of Monte Carlo samples to draw when computing uncertainties.
+    seed
+        The seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time.
 
     Examples
     --------
@@ -76,6 +80,8 @@ def ruling_design(
     density = (2.586608603456000 / u.um).to(1 / u.mm)
     width_density = 1 / u.mm
 
+    seeds = spawn_seeds(seed)
+
     return optika.rulings.RectangularRulings(
         spacing=optika.rulings.Polynomial1dRulingSpacing(
             coefficients={
@@ -83,16 +89,19 @@ def ruling_design(
                     nominal=1 / density,
                     width=width_density / np.square(density),
                     num_distribution=num_distribution,
+                    seed=next(seeds),
                 ),
                 1: uniform(
                     nominal=-3.3849e-5 * (u.um / u.mm),
                     width=0.0512e-5 * (u.um / u.mm),
                     num_distribution=num_distribution,
+                    seed=next(seeds),
                 ),
                 2: uniform(
                     nominal=-1.3625e-7 * (u.um / u.mm**2),
                     width=0.08558e-7 * (u.um / u.mm**2),
                     num_distribution=num_distribution,
+                    seed=next(seeds),
                 ),
             },
             normal=na.Cartesian3dVectorArray(1, 0, 0),
@@ -101,11 +110,13 @@ def ruling_design(
             nominal=15 * u.nm,
             width=2 * u.nm,
             num_distribution=num_distribution,
+            seed=next(seeds),
         ),
         ratio_duty=uniform(
             nominal=0.5,
             width=0.1,
             num_distribution=num_distribution,
+            seed=next(seeds),
         ),
         diffraction_order=-1,
     )
@@ -113,6 +124,7 @@ def ruling_design(
 
 def ruling_measurement(
     num_distribution: int = 11,
+    seed: None | int = None,
 ):
     """
     Load a model of the rulings based on the total efficiency of the gratings.
@@ -128,6 +140,9 @@ def ruling_measurement(
     ----------
     num_distribution
         The number of Monte Carlo samples to draw when computing uncertainties.
+    seed
+        The seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time.
 
     Examples
     --------
@@ -199,7 +214,12 @@ def ruling_measurement(
             ax.set_ylabel("efficiency");
             ax.legend();
     """
-    design = ruling_design(num_distribution=num_distribution)
+    seeds = spawn_seeds(seed)
+
+    design = ruling_design(
+        num_distribution=num_distribution,
+        seed=next(seeds),
+    )
 
     # carried as a tolerance on the spacing, as in the design
     density = 2585.5 / u.mm
@@ -210,6 +230,7 @@ def ruling_measurement(
         nominal=1 / density,
         width=width_density / np.square(density),
         num_distribution=num_distribution,
+        seed=next(seeds),
     )
 
     efficiency_total = gratings.efficiencies.efficiency_vs_wavelength()
