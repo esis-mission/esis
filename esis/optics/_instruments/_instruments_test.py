@@ -305,6 +305,21 @@ def test_align_grating_decenter(axis: str) -> None:
     assert radius_spot(result) < 1.15 * radius_spot(aligned)
 
 
+def test_align_grating_max_iterations() -> None:
+    """
+    Alignment gives up if nothing confirms that the gratings have settled.
+
+    Without a pass after the first, the gratings are never refocused to
+    check that the pointing left their focus alone.
+    """
+    instrument = esis.flights.f1.optics.design_single(num_distribution=0)
+    with pytest.raises(ValueError, match="Refocusing still moved"):
+        instrument.align_grating(
+            wavelength=esis.flights.f1.spectrum.O_V.wavelength,
+            max_iterations=0,
+        )
+
+
 @pytest.mark.parametrize("channel", [0, 1, 2, 3])
 def test_isel(channel: int):
     """Selecting a channel via the `na.Indexable` interface yields a valid system.
