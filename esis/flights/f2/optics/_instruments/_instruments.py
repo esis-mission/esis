@@ -153,6 +153,7 @@ def design_guess(
      - The gratings are moved forward by 2 holes on the optical bench.
      - The filter position and orientation has been adjusted to account
        for the shallower beam.
+     - The cameras expose each frame for 1.2 s.
 
     To account for these changes, the angle, radius of curvature, and the
     ruling parameters of the grating need to be adjusted.
@@ -415,6 +416,8 @@ def design_guess(
     dz_filter = filt.translation.z - sensor.translation.z
 
     filt.distance_radial = sensor.distance_radial + dz_filter * np.tan(b)
+
+    result.camera.timedelta_exposure = 1.2 * u.s
 
     if grid is None or grid.wavelength is None:
         result.wavelength = na.stack(
