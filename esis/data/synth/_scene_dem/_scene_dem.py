@@ -128,19 +128,20 @@ def scene_dem(
     Notes
     -----
     The lines are computed with the abundances and the pressure the
-    temperature response was computed with, :data:`abundance` and
-    :data:`pressure`, so that they come from the same plasma as the DEM.
+    temperature response was computed with, the extended coronal abundances
+    of Feldman (1992), ``"sun_coronal_1992_feldman_ext"`` in :mod:`fiasco`,
+    and a constant pressure :math:`n_e T = 10^{15} \, \mathrm{K \, cm^{-3}}`,
+    so that they come from the same plasma as the DEM.
 
     :func:`utu.dem.plowman` takes the DEM to be piecewise linear in
     :math:`\log_{10} T` between the temperatures of the response, and
     integrates it against the response exactly. The lines are integrated
     against the DEM in the same way, so the emission measure each temperature
     stands for is the DEM weighted by the mass matrix of those triangle
-    functions, see :func:`_emission_measure`. A pixel whose DEM could not be
-    found emits nothing.
+    functions. A pixel whose DEM could not be found emits nothing.
 
     The contribution functions take minutes to compute, so they are cached
-    with :obj:`esis.memory`.
+    with ``esis.memory``.
     """
     axis_wavelength = filtergram.axis_wavelength
     axis_temperature = "_temperature"
