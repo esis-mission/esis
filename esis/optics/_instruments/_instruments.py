@@ -24,8 +24,10 @@ def _any(a: bool | na.AbstractArray) -> bool:
     """
     Whether any element of an array is true, in any sample if it is uncertain.
 
-    The truth of an uncertain array is the truth of its nominal value alone,
-    so a condition met by only some of its samples would go unnoticed.
+    An uncertain array is true only if its nominal value and every one of
+    its samples are, so :func:`numpy.any` of one is true only if every sample
+    has a true element, and a condition met by only some of the samples
+    would go unnoticed.
 
     Parameters
     ----------

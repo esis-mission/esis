@@ -221,9 +221,9 @@ def test_focus_grating_edge_sample() -> None:
     """
     A sample whose focus is beyond the bounds is caught.
 
-    The nominal focus of this model is inside the bounds, and the truth of an
-    uncertain array is that of its nominal value, so only a check of every
-    sample sees the one that is not.
+    The nominal focus of this model is inside the bounds, and an uncertain
+    array is true only if its nominal value and every sample are, so only a
+    check of each sample sees the one whose focus is not.
     """
     instrument = esis.flights.f1.optics.design_single(num_distribution=0)
     sag = instrument.grating.sag
