@@ -25,12 +25,9 @@ dependencies = [
     "named-arrays~=2.8",
     "optika~=3.1",
     "msfc-ccd~=1.1",
-    # TEMPORARY: the CHIANTI 11 temperature response (sun-data/solar-dynamics-observatory#28),
-    # until it is released as 1.3.0
-    "solar-dynamics-observatory @ git+https://github.com/sun-data/solar-dynamics-observatory.git@c8a0291f188ea77434a377d740d5f8bd55942c29",
+    "solar-dynamics-observatory~=1.3",
     "interface-region-imaging-spectrograph~=1.0,>=1.0.1",
-    # TEMPORARY: utu.spectrum.synthesize (sun-data/utu#14), until it is released as 0.4.0
-    "utu @ git+https://github.com/sun-data/utu.git@feature/synthesize",
+    "utu~=0.4",
     "fiasco~=0.8.2",
 ]
 dynamic = ["version"]
