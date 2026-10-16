@@ -179,21 +179,25 @@ def test_as_built_sensor(
     method: collections.abc.Callable[..., esis.optics.Instrument],
 ) -> None:
     """
-    Check that the tolerance on the sensors is added after the focus and alignment.
+    Check that the tolerance on the focus of the sensors is added after the focus.
 
     The gratings are focused and aligned on the sensors where the design
-    puts them, rather than on each sample of where they might sit, and the
-    tolerance is still there afterward, in the raytrace as well as in the
-    model.
+    puts them along the optic axis, rather than on each sample of where they
+    might sit, but on where each sample puts them across it. The tolerance
+    along the axis is still there afterward, in the raytrace as well as in
+    the model.
     """
     result = function(num_distribution=2, seed=0)
 
     unfocused = esis.flights.f1.optics.as_built_unfocused(num_distribution=2, seed=0)
     camera = unfocused.camera
     sensor = camera.sensor
+    translation = sensor.translation
     nominal = unfocused.replace(
         camera=camera.replace(
-            sensor=sensor.replace(translation=na.nominal(sensor.translation)),
+            sensor=sensor.replace(
+                translation=translation.replace(z=na.nominal(translation.z)),
+            ),
         ),
     )
     expected = method(nominal, wavelength=esis.flights.f1.spectrum.O_V.wavelength)
@@ -204,14 +208,19 @@ def test_as_built_sensor(
     for path in grating_expected:
         assert np.all(grating[path] == grating_expected[path]), path
 
-    translation = _uncertain(result.camera.sensor.translation)
-    translation_expected = _uncertain(sensor.translation)
-    assert translation.keys() == translation_expected.keys() == {"x", "y", "z"}
+    translation_result = _uncertain(result.camera.sensor.translation)
+    translation_expected = _uncertain(translation)
+    assert translation_result.keys() == translation_expected.keys() == {"x", "y", "z"}
     for path in translation_expected:
-        assert np.all(translation[path] == translation_expected[path]), path
+        assert np.all(translation_result[path] == translation_expected[path]), path
 
-    assert _is_uncertain(result.system.sensor)
-    assert not _is_uncertain(nominal.system.sensor)
+    # against a raytrace built from scratch, so that one cached while the
+    # sensors were where the design puts them would show up as a difference
+    surface = _uncertain(result.system.sensor)
+    surface_expected = _uncertain(result.replace().system.sensor)
+    assert surface.keys() == surface_expected.keys()
+    for path in surface_expected:
+        assert np.all(surface[path] == surface_expected[path]), path
 
 
 def test_design_tolerance_sensor() -> None:

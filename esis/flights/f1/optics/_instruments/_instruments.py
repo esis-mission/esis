@@ -630,10 +630,10 @@ def as_built_unfocused(
 
 def _moved_sensor(
     instrument: esis.optics.Instrument,
-    translation: u.Quantity | na.AbstractCartesian3dVectorArray,
+    z: u.Quantity | na.AbstractScalar,
 ) -> esis.optics.Instrument:
     """
-    Copy an instrument, putting its sensors somewhere else.
+    Copy an instrument, putting its sensors somewhere else along the optic axis.
 
     Built rather than changed in place, like
     :meth:`esis.optics.abc.AbstractInstrument.moved_grating`, so that the
@@ -644,13 +644,16 @@ def _moved_sensor(
     ----------
     instrument
         The instrument to copy.
-    translation
-        Where to put the sensors.
+    z
+        Where to put the sensors along the optic axis.
     """
     camera = instrument.camera
+    sensor = camera.sensor
     return instrument.replace(
         camera=camera.replace(
-            sensor=camera.sensor.replace(translation=translation),
+            sensor=sensor.replace(
+                translation=sensor.translation.replace(z=z),
+            ),
         ),
     )
 
@@ -684,11 +687,10 @@ def _as_built_focused(
     for example) carries through to a spread of about :math:`\pm 0.2` mm in
     the focus of each channel.
 
-    The gratings are focused on the sensors where the design puts them, and
-    the tolerance on where each sensor sits is added afterward, since along
-    the optic axis that tolerance is the error of the focus itself, from the
-    experiment which found it, the shims which set it, and the tip and tilt
-    of the sensor.
+    The gratings are focused on the sensors where the design puts them along
+    the optic axis, and the tolerance on that position is added afterward,
+    since it is the error of the focus itself, from the experiment which
+    found it, the shims which set it, and the tip and tilt of the sensor.
 
     Parameters
     ----------
@@ -723,10 +725,10 @@ def _as_built_focused(
         num_distribution=num_distribution,
         seed=seed,
     )
-    translation = result.camera.sensor.translation
-    result = _moved_sensor(result, na.nominal(translation))
+    z = result.camera.sensor.translation.z
+    result = _moved_sensor(result, na.nominal(z))
     result = result.focus_grating(wavelength=O_V.wavelength)
-    return _moved_sensor(result, translation)
+    return _moved_sensor(result, z)
 
 
 def as_built(
@@ -750,10 +752,11 @@ def as_built(
     until the center of the field of view lands where
     :attr:`esis.optics.Sensor.position_image` says it should.
 
-    Like the focus, the alignment is found for the sensors where the design
-    puts them, and the tolerance on where each sensor sits is added
-    afterward, since it is an error which remained after the instrument was
-    focused and aligned.
+    The alignment is found for each sensor wherever the tolerance puts it
+    across the optic axis, since the gratings of the instrument which flew
+    were pointed at the sensors where they sat. Along the axis, the focus is
+    found for the sensors where the design puts them, and the tolerance is
+    added afterward, as in :func:`_as_built_focused`.
 
     This is the model of the instrument that flew, and the one to use.
     :func:`as_built_unfocused` and :func:`_as_built_focused` are the steps on the way
@@ -795,10 +798,10 @@ def as_built(
         num_distribution=num_distribution,
         seed=seed,
     )
-    translation = result.camera.sensor.translation
-    result = _moved_sensor(result, na.nominal(translation))
+    z = result.camera.sensor.translation.z
+    result = _moved_sensor(result, na.nominal(z))
     result = result.align_grating(wavelength=O_V.wavelength)
-    return _moved_sensor(result, translation)
+    return _moved_sensor(result, z)
 
 
 def distortion_fit(
