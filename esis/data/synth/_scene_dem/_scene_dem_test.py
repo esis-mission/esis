@@ -8,7 +8,7 @@ import fiasco
 import sdo
 import utu
 import esis
-from esis.data.synth._scene_dem._scene_dem import _emission_measure, _lines
+from esis.data.synth._scene_dem._scene_dem import _lines
 
 
 def _database() -> bool:
@@ -27,15 +27,6 @@ needs_database = pytest.mark.skipif(
 channels = na.ScalarArray([94, 131, 171, 193, 211, 335] * u.AA, axes="wavelength")
 
 
-def _response() -> na.FunctionArray:
-    """Return the response the DEM is inverted against, from log T 5.5 to 7.5."""
-    response = sdo.aia.temperature_response(
-        wavelength=channels,
-        emissivity="CHIANTI 11",
-    )
-    return response[{"temperature": slice(30, 71)}]
-
-
 def _dem(
     temperature: na.AbstractScalar,
     amplitude: na.AbstractScalar,
@@ -43,69 +34,6 @@ def _dem(
     """Return a Gaussian DEM per unit log T, at half a million kelvin."""
     logt = np.log10(temperature.to(u.K).value)
     return amplitude * np.exp(-np.square((logt - 5.7) / 0.15) / 2) / u.cm**5
-
-
-def test_emission_measure_constant():
-    """A constant DEM holds its value times the span of log T."""
-    response = _response()
-    temperature = response.inputs
-    dem = na.FunctionArray(
-        inputs=temperature,
-        outputs=na.ScalarArray(
-            ndarray=np.full(temperature.shape["temperature"], 3e27) / u.cm**5,
-            axes="temperature",
-        ),
-    )
-
-    result = _emission_measure(dem, "temperature")
-
-    logt = np.log10(temperature.to(u.K).value)
-    span = logt[{"temperature": -1}] - logt[{"temperature": 0}]
-
-    assert np.allclose(result.sum("temperature"), 3e27 / u.cm**5 * span)
-
-    # the ends stand for half an interval, and the rest for a whole one
-    step = 0.05
-    assert np.allclose(result[{"temperature": 0}], 3e27 / u.cm**5 * step / 2)
-    assert np.allclose(result[{"temperature": 5}], 3e27 / u.cm**5 * step)
-
-
-def test_emission_measure_plowman():
-    """
-    Check the emission measures predict the intensities the inversion fit.
-
-    Their reduced chi squared is the one it reports.
-    """
-    response = _response()
-
-    amplitude = na.ScalarArray(np.array([1e27, 3e27, 1e28]), axes="x")
-    em = _emission_measure(
-        na.FunctionArray(response.inputs, _dem(response.inputs, amplitude)),
-        axis="temperature",
-    )
-    intensity = (response.outputs * em).sum("temperature")
-
-    # noise, so that the fit stops short of the data
-    rng = np.random.default_rng(0)
-    uncertainty = 0.05 * intensity
-    noise = na.ScalarArray(rng.normal(size=(6, 3)), axes=("wavelength", "x"))
-    intensity = intensity + noise * uncertainty
-
-    dem, chi2 = utu.dem.plowman(
-        intensity=intensity,
-        uncertainty=uncertainty,
-        response=response,
-        axis_channel="wavelength",
-        axis_temperature="temperature",
-    )
-
-    model = (response.outputs * _emission_measure(dem, "temperature")).sum(
-        "temperature"
-    )
-    expected = np.square((intensity - model) / uncertainty).mean("wavelength")
-
-    assert np.all(chi2 >= 0)
-    assert np.allclose(chi2, expected, rtol=1e-6)
 
 
 def _filtergram() -> sdo.aia.Filtergram:
@@ -203,7 +131,7 @@ def test_scene_dem(monkeypatch: pytest.MonkeyPatch):
         axis="l",
     )
     dem, chi2 = plowman(response=call["response"])
-    em = _emission_measure(dem, axis_temperature)
+    em = utu.dem.emission_measure(dem, axis_temperature)
     em = np.where(chi2 >= 0, em, 0 * em)
 
     radiance = (result.outputs * np.diff(result.inputs.wavelength, axis="v")).sum("v")

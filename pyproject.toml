@@ -27,7 +27,7 @@ dependencies = [
     "msfc-ccd~=1.2",
     "solar-dynamics-observatory~=1.3",
     "interface-region-imaging-spectrograph~=1.0,>=1.0.1",
-    "utu~=0.4",
+    "utu~=0.5",
     "fiasco~=0.8.2",
 ]
 dynamic = ["version"]
