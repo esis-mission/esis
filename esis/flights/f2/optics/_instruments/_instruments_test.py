@@ -1,3 +1,4 @@
+import collections.abc
 from typing import Callable
 import pytest
 import numpy as np
@@ -30,6 +31,35 @@ def _assert_grating_certain(
         assert not isinstance(
             instrument.grating.sag.radius, na.AbstractUncertainScalarArray
         )
+
+
+@pytest.mark.parametrize(
+    argnames="function",
+    argvalues=[
+        esis.flights.f2.optics.design_proposed,
+        esis.flights.f2.optics.design_guess,
+        esis.flights.f2.optics.design_single,
+        esis.flights.f2.optics.design,
+        esis.flights.f2.optics.design_visible,
+    ],
+)
+def test_seed(
+    function: collections.abc.Callable[..., esis.optics.Instrument],
+) -> None:
+    """
+    Check that the same seed draws the same samples, and another seed others.
+
+    Each design draws its samples by way of an ESIS-I design, which draws
+    the placement of the sensors along with everything else.
+    """
+    result = function(num_distribution=11, seed=0).camera.sensor.translation
+    again = function(num_distribution=11, seed=0).camera.sensor.translation
+    other = function(num_distribution=11, seed=1).camera.sensor.translation
+
+    for component in result.components:
+        a = result.components[component]
+        assert np.all(again.components[component] == a), component
+        assert np.all(other.components[component].distribution != a.distribution)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])

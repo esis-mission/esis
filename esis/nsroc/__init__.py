@@ -6,7 +6,9 @@ responsible for providing the launch services for ESIS.
 """
 
 from ._timeline import Timeline
+from ._sparcs import Sparcs
 
 __all__ = [
     "Timeline",
+    "Sparcs",
 ]
