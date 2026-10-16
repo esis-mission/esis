@@ -125,7 +125,7 @@ def ruling_design(
 def ruling_measurement(
     num_distribution: int = 11,
     seed: None | int = None,
-):
+) -> optika.rulings.MeasuredRulings:
     """
     Load a model of the rulings based on the total efficiency of the gratings.
 

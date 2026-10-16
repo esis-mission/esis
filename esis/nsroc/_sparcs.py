@@ -28,7 +28,13 @@ class Sparcs(
     """The rate at which the pointing drifts in pitch and yaw."""
 
     jitter_roll: None | u.Quantity = None
-    """The jitter of the roll angle."""
+    """
+    The jitter of the roll angle.
+
+    The NASA Sounding Rocket Program Handbook gives the jitter of the
+    ring-laser gyroscope which controls the roll only as an upper bound,
+    without saying whether it is peak to peak or RMS.
+    """
 
     drift_roll: None | u.Quantity = None
     """The rate at which the roll angle drifts."""
