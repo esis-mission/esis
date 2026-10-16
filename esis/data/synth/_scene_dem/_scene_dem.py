@@ -138,7 +138,8 @@ def scene_dem(
     integrates it against the response exactly. The lines are integrated
     against the DEM in the same way, so the emission measure each temperature
     stands for is the DEM weighted by the mass matrix of those triangle
-    functions. A pixel whose DEM could not be found emits nothing.
+    functions, :func:`utu.dem.emission_measure`. A pixel whose DEM could not
+    be found emits nothing.
 
     The contribution functions take minutes to compute, so they are cached
     with ``esis.memory``.
@@ -177,7 +178,7 @@ def scene_dem(
 
     temperature = dem.inputs
 
-    emission_measure = _emission_measure(dem, axis_temperature)
+    emission_measure = utu.dem.emission_measure(dem, axis_temperature)
     emission_measure = np.where(chi2 >= 0, emission_measure, 0 * emission_measure)
 
     contribution, mass = _lines(
@@ -228,57 +229,6 @@ def scene_dem(
         ),
         outputs=result.outputs,
     )
-
-
-def _emission_measure(
-    dem: na.FunctionArray[na.AbstractScalar, na.AbstractScalar],
-    axis: str,
-) -> na.AbstractScalar:
-    r"""
-    Weight a piecewise-linear DEM by the mass matrix of its temperatures.
-
-    The result is the emission measure each temperature stands for.
-
-    A DEM which is linear in :math:`\log_{10} T` between its temperatures is
-    a sum of triangle functions, one at each temperature, and so is a
-    contribution function sampled at the same temperatures. The integral of
-    their product is :math:`G^T M D`, where :math:`M` is the mass matrix of
-    the triangles, tridiagonal, and :math:`MD` is the emission measure each
-    temperature stands for. At an interior temperature with neighbors
-    :math:`\Delta` away on either side it is
-    :math:`\Delta (D_{i-1} + 4 D_i + D_{i+1}) / 6`, and at either end it is
-    half what it would be with a neighbor on both sides.
-
-    This is the integral :func:`utu.dem.plowman` fits the intensities with,
-    so a channel of AIA computed from these emission measures and its
-    temperature response is the intensity the inversion found.
-
-    Parameters
-    ----------
-    dem
-        The DEM per unit :math:`\log_{10} T`, as :func:`utu.dem.plowman`
-        returns it.
-    axis
-        The name of the axis of temperature.
-    """
-    logt = np.log10(dem.inputs.to(u.K).value)
-    d = dem.outputs
-
-    first = {axis: slice(None, -1)}
-    last = {axis: slice(1, None)}
-
-    # the width of the interval below and above each temperature, zero
-    # beyond either end
-    step = logt[last] - logt[first]
-    below = na.concatenate([0 * step[{axis: slice(0, 1)}], step], axis=axis)
-    above = na.concatenate([step, 0 * step[{axis: slice(0, 1)}]], axis=axis)
-
-    # the neighbor below and above each temperature, any value beyond either
-    # end, since its interval there is zero
-    d_below = na.concatenate([d[{axis: slice(0, 1)}], d[first]], axis=axis)
-    d_above = na.concatenate([d[last], d[{axis: slice(-1, None)}]], axis=axis)
-
-    return (below * (2 * d + d_below) + above * (2 * d + d_above)) / 6
 
 
 def _chianti_version() -> str:
