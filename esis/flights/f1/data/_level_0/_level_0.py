@@ -32,12 +32,9 @@ def level_0(
         axis_channel=axis_channel,
     )
 
-    # The camera comes from a model drawn with a fixed seed, so that its
-    # Monte Carlo samples are the same every time, and the same as those of
-    # the instrument of Level 1.
     return esis.data.Level_0.from_fits(
         path=path,
-        camera=optics.as_built_unfocused(seed=0).camera,
+        camera=optics.as_built_unfocused().camera,
         axis_x=axis_x,
         axis_y=axis_y,
         timeline=nsroc.timeline(),

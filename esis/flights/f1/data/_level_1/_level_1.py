@@ -38,12 +38,9 @@ def _level_1(versions: dict[str, None | str]) -> esis.data.Level_1:
     versions
         The versions of :data:`_packages`.
     """
-    # The instrument is drawn with a fixed seed, so that its Monte Carlo
-    # samples are the same each time this is computed again, and the same as
-    # those of the camera of Level 0.
     return esis.data.Level_1.from_level_0(
         a=level_0(),
-        instrument=optics.as_built(seed=0),
+        instrument=optics.as_built(),
     )
 
 
