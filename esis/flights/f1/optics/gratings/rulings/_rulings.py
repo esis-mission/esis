@@ -12,7 +12,7 @@ __all__ = [
 
 
 def ruling_design(
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> optika.rulings.AbstractRulings:
     """
     Load a model of the as-designed rulings for the diffraction gratings.
@@ -107,7 +107,7 @@ def ruling_design(
 
 
 def ruling_measurement(
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ):
     """
     Load a model of the rulings based on the total efficiency of the gratings.

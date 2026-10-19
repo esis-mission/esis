@@ -1,12 +1,19 @@
+import pytest
 import optika
 import esis
 
 
-def test_ruling_design():
-    r = esis.flights.f1.optics.gratings.rulings.ruling_design()
+@pytest.mark.parametrize("num_distribution", [0, 11])
+def test_ruling_design(num_distribution: int) -> None:
+    r = esis.flights.f1.optics.gratings.rulings.ruling_design(
+        num_distribution=num_distribution,
+    )
     assert isinstance(r, optika.rulings.AbstractRulings)
 
 
-def test_ruling_measurement():
-    r = esis.flights.f1.optics.gratings.rulings.ruling_measurement()
+@pytest.mark.parametrize("num_distribution", [0, 11])
+def test_ruling_measurement(num_distribution: int) -> None:
+    r = esis.flights.f1.optics.gratings.rulings.ruling_measurement(
+        num_distribution=num_distribution,
+    )
     assert isinstance(r, optika.rulings.AbstractRulings)
