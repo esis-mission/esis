@@ -22,7 +22,7 @@ __all__ = [
 def design_full(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     """
     Load the entire optical design including the inactive channels.
@@ -306,7 +306,7 @@ def design_full(
 def design(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     """
     Load the final optical design prepared by Charles Kankelborg and Hans Courrier.
@@ -341,7 +341,7 @@ def design(
 def design_single(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     """
     Load only a single channel of the optical design.
@@ -381,7 +381,7 @@ def design_single(
 def as_built_unfocused(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     """
     Load the as-built optical model before it has been focused or pointed.
@@ -603,7 +603,7 @@ def as_built_unfocused(
 def _as_built_focused(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     r"""
     Load the as-built optical model with the gratings moved to their best focus.
@@ -663,7 +663,7 @@ def _as_built_focused(
 def as_built(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     r"""
     Load the as-built optical model, focused and pointed at the sensor.

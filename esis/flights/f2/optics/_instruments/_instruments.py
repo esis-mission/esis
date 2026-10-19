@@ -31,7 +31,7 @@ def _blaze_rulings(grating: esis.optics.Grating) -> None:
 def design_proposed(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     """
     Load the proposed optical design for ESIS 2.
@@ -140,7 +140,7 @@ def design_proposed(
 def design_guess(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     r"""
     Load the starting point (or guess) for optimization of the ESIS-II design.
@@ -433,7 +433,7 @@ def design_guess(
 def design_single(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     r"""
     Load a single channel of the ESIS-II design.
@@ -523,7 +523,7 @@ def design_single(
 def design(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     r"""
     Load all six channels of the ESIS-II design.
@@ -568,7 +568,7 @@ def design(
 def design_visible(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
 ) -> esis.optics.Instrument:
     r"""
     Load a visible-light version of the ESIS-II design.
