@@ -394,6 +394,7 @@ def test_as_built(num_distribution: int):
     # the line is put where the sensor says it should be
     error = na.nominal(result.position_line(wavelength) - sensor.position_image)
     assert np.all(np.abs(error.x) < sensor.width_pixel / 100)
+    assert np.all(np.abs(error.y) < sensor.width_pixel / 100)
 
     # which the model it was aligned from is eight pixels away from
     as_built = esis.flights.f1.optics.as_built_unfocused(
@@ -422,6 +423,9 @@ def test_as_built(num_distribution: int):
 
     dyaw = na.nominal(result.grating.yaw - as_built.grating.yaw)
     assert np.all(np.abs(dyaw) < 1 * u.arcmin)
+
+    dpitch = na.nominal(result.grating.pitch - as_built.grating.pitch)
+    assert np.all(np.abs(dpitch) < 1 * u.arcmin)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])

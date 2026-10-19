@@ -712,7 +712,7 @@ def _as_built_focused(
     the measured radii. With ``num_distribution > 0`` every Monte Carlo
     sample of the model is focused independently, so the uncertainty in the
     other parameters (the placement of the gratings and the measured rulings,
-    for example) carries through to a spread of about :math:`\pm 0.2` mm in
+    for example) carries through to a spread of about :math:`\pm 0.1` mm in
     the focus of each channel.
 
     The gratings are focused on the sensors where the design puts them along
@@ -776,8 +776,9 @@ def as_built(
     defocus and the displacement. It stops a pixel or two short.
 
     The instrument which flew was aligned as well as focused, so this model
-    rotates each grating about :math:`y` afterwards, by a few arcseconds,
-    until the center of the field of view lands where
+    tips and tilts each grating afterwards, by a few arcseconds about
+    :math:`y` and hundredths of an arcsecond about :math:`x`, until the
+    center of the field of view lands where
     :attr:`esis.optics.Sensor.position_image` says it should.
 
     The alignment is found for each sensor wherever the tolerance puts it

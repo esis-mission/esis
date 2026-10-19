@@ -165,12 +165,17 @@ class AbstractTestAbstractInstrument(
         assert result.surfaces
 
     def test_focus_grating(self, a: esis.optics.abc.AbstractInstrument):
-        bounds = (-0.5 * u.mm, 0.5 * u.mm)
+        bounds = (-3 * u.mm, 3 * u.mm)
         result = a.focus_grating(bounds=bounds)
         assert isinstance(result, esis.optics.abc.AbstractInstrument)
         dz = result.grating.translation.z - a.grating.translation.z
         assert np.all(dz >= bounds[0])
         assert np.all(dz <= bounds[1])
+
+    def test_focus_grating_edge(self, a: esis.optics.abc.AbstractInstrument):
+        """A focus beyond the bounds is not returned as if it were the best."""
+        with pytest.raises(ValueError, match="edge"):
+            a.focus_grating(bounds=(0.1 * u.mm, 0.5 * u.mm))
 
     def test_position_line(self, a: esis.optics.abc.AbstractInstrument):
         result = a.position_line()
@@ -180,12 +185,13 @@ class AbstractTestAbstractInstrument(
     def test_align_grating(self, a: esis.optics.abc.AbstractInstrument):
         position = a.position_line()
 
-        result = a.align_grating(position=position, bounds=(-0.5 * u.mm, 0.5 * u.mm))
+        result = a.align_grating(position=position)
         assert isinstance(result, esis.optics.abc.AbstractInstrument)
 
         # the line is put where it was asked for, to a hundredth of a pixel
         error = result.position_line() - position
         assert np.all(np.abs(error.x) < a.camera.sensor.width_pixel / 100)
+        assert np.all(np.abs(error.y) < a.camera.sensor.width_pixel / 100)
 
     def test_schematic_primary(self, a: esis.optics.abc.AbstractInstrument):
 
@@ -209,6 +215,109 @@ class TestInstrument(
     AbstractTestAbstractInstrument,
 ):
     pass
+
+
+def test_focus_grating_edge_sample() -> None:
+    """
+    A sample whose focus is beyond the bounds is caught.
+
+    The nominal focus of this model is inside the bounds, and an uncertain
+    array is true only if its nominal value and every sample are, so only a
+    check of each sample sees the one whose focus is not.
+    """
+    instrument = esis.flights.f1.optics.design_single(num_distribution=0)
+    sag = instrument.grating.sag
+    radius = na.UncertainScalarArray(
+        nominal=sag.radius,
+        distribution=na.ScalarArray(
+            ndarray=sag.radius * np.array([1, 1.004]),
+            axes="_distribution",
+        ),
+    )
+    instrument = instrument.replace(
+        grating=instrument.grating.replace(sag=sag.replace(radius=radius)),
+    )
+    with pytest.raises(ValueError, match="edge"):
+        instrument.focus_grating(bounds=(-0.5 * u.mm, 0.5 * u.mm))
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_align_grating_decenter(axis: str) -> None:
+    """
+    A grating a millimeter out of place is pointed back and refocused.
+
+    Decentered along :math:`x`, it needs several arcminutes of yaw, which
+    defocus it unless it is focused again afterwards; decentered along
+    :math:`y`, it needs pitch.
+    """
+    wavelength = esis.flights.f1.spectrum.O_V.wavelength
+    field = na.Cartesian2dVectorLinearSpace(
+        start=-1,
+        stop=1,
+        axis=na.Cartesian2dVectorArray("field_x", "field_y"),
+        num=5,
+        centers=True,
+    )
+    pupil = na.Cartesian2dVectorLinearSpace(
+        start=-1,
+        stop=1,
+        axis=na.Cartesian2dVectorArray("pupil_x", "pupil_y"),
+        num=11,
+        centers=True,
+    )
+
+    def radius_spot(instrument: esis.optics.abc.AbstractInstrument) -> u.Quantity:
+        """Measure the RMS radius of the spots, averaged over the field of view."""
+        rays = instrument.system.rayfunction(
+            wavelength=wavelength,
+            field=field,
+            pupil=pupil,
+            efficiency=False,
+        )
+        position = rays.outputs.position
+        unvignetted = na.as_named_array(rays.outputs.unvignetted)
+        x = np.where(unvignetted, position.x, np.nan)
+        y = np.where(unvignetted, position.y, np.nan)
+        axis = ("pupil_x", "pupil_y")
+        variance = np.nanvar(x, axis=axis) + np.nanvar(y, axis=axis)
+        return np.nanmean(np.sqrt(variance)).ndarray
+
+    design = esis.flights.f1.optics.design_single(num_distribution=0)
+    translation = design.grating.translation
+    decentered = design.replace(
+        grating=design.grating.replace(
+            translation=translation.replace(
+                **{axis: getattr(translation, axis) + 1 * u.mm},
+            ),
+        ),
+    )
+
+    result = decentered.align_grating(wavelength=wavelength)
+
+    width_pixel = result.camera.sensor.width_pixel
+    error = result.position_line(wavelength) - result.camera.sensor.position_image
+    assert np.abs(error.x) < width_pixel / 100
+    assert np.abs(error.y) < width_pixel / 100
+
+    # the spots grow by less than 15 percent, where a single pass of the
+    # focus and the yaw alone left them 30 percent to 2.6 times larger
+    aligned = design.align_grating(wavelength=wavelength)
+    assert radius_spot(result) < 1.15 * radius_spot(aligned)
+
+
+def test_align_grating_max_iterations() -> None:
+    """
+    Alignment gives up if nothing confirms that the gratings have settled.
+
+    Without a pass after the first, the gratings are never refocused to
+    check that the pointing left their focus alone.
+    """
+    instrument = esis.flights.f1.optics.design_single(num_distribution=0)
+    with pytest.raises(ValueError, match="Refocusing still moved"):
+        instrument.align_grating(
+            wavelength=esis.flights.f1.spectrum.O_V.wavelength,
+            max_iterations=0,
+        )
 
 
 @pytest.mark.parametrize("channel", [0, 1, 2, 3])
