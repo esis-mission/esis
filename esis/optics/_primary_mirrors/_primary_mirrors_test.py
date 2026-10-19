@@ -62,6 +62,33 @@ class AbstractTestAbstractPrimaryMirror(
     ):
         assert isinstance(a.material, optika.materials.AbstractMaterial)
 
+    def test_slope_error(
+        self,
+        a: esis.optics.abc.AbstractPrimaryMirror,
+    ) -> None:
+        result = a.slope_error
+        if result is not None:
+            assert isinstance(na.as_named_array(result), na.AbstractScalar)
+            assert na.unit_normalized(result).is_equivalent(u.urad)
+
+    def test_roughness(
+        self,
+        a: esis.optics.abc.AbstractPrimaryMirror,
+    ) -> None:
+        result = a.roughness
+        if result is not None:
+            assert isinstance(na.as_named_array(result), na.AbstractScalar)
+            assert na.unit_normalized(result).is_equivalent(u.nm)
+
+    def test_microroughness(
+        self,
+        a: esis.optics.abc.AbstractPrimaryMirror,
+    ) -> None:
+        result = a.microroughness
+        if result is not None:
+            assert isinstance(na.as_named_array(result), na.AbstractScalar)
+            assert na.unit_normalized(result).is_equivalent(u.nm)
+
     def test_translation(
         self,
         a: esis.optics.abc.AbstractPrimaryMirror,
@@ -84,6 +111,14 @@ class AbstractTestAbstractPrimaryMirror(
             sag=optika.sags.ParabolicSag(1000 * u.mm),
             num_folds=8,
             material=optika.materials.Mirror(),
+        ),
+        esis.optics.PrimaryMirror(
+            sag=optika.sags.ParabolicSag(1000 * u.mm),
+            num_folds=8,
+            material=optika.materials.Mirror(),
+            slope_error=1 * u.urad,
+            roughness=2 * u.nm,
+            microroughness=1 * u.nm,
         ),
     ],
 )

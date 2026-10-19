@@ -12,7 +12,7 @@ __all__ = [
 
 
 def ruling_design(
-    num_distribution: int = 11,
+    num_distribution: int = 0,
     seed: None | int = None,
 ) -> optika.rulings.AbstractRulings:
     """
@@ -123,7 +123,7 @@ def ruling_design(
 
 
 def ruling_measurement(
-    num_distribution: int = 11,
+    num_distribution: int = 0,
     seed: None | int = None,
 ) -> optika.rulings.MeasuredRulings:
     """

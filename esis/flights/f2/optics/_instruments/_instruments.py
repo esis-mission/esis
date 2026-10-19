@@ -31,7 +31,7 @@ def _blaze_rulings(grating: esis.optics.Grating) -> None:
 def design_proposed(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
     seed: None | int = None,
 ) -> esis.optics.Instrument:
     """
@@ -148,7 +148,7 @@ def design_proposed(
 def design_guess(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
     seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""
@@ -446,7 +446,7 @@ def design_guess(
 def design_single(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
     seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""
@@ -541,7 +541,7 @@ def design_single(
 def design(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
     seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""
@@ -592,7 +592,7 @@ def design(
 def design_visible(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
     seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""

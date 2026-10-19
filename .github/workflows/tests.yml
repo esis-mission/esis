@@ -46,6 +46,41 @@ jobs:
           pip install setuptools wheel
           pip install -e .
 
+      # The synthetic scenes of `esis.data.synth.scene_dem` read the CHIANTI
+      # atomic database, which is too large to fetch on every job of the
+      # matrix, so the Linux jobs fetch it once and cache it, and the others
+      # skip the tests which read it.
+      - name: Ask fiasco which database it wants
+        if: runner.os == 'Linux'
+        id: chianti
+        run: |
+          python -c "
+          from fiasco.util.setup_db import LATEST_VERSION
+          print(f'version={LATEST_VERSION}')
+          " >> $GITHUB_OUTPUT
+
+      - name: Restore the CHIANTI database
+        if: runner.os == 'Linux'
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.fiasco
+          key: chianti-${{ steps.chianti.outputs.version }}
+
+      - name: Download and build the CHIANTI database
+        if: runner.os == 'Linux' && steps.cache.outputs.cache-hit != 'true'
+        run: |
+          python -c "
+          import fiasco
+          from fiasco.util import check_database
+          check_database(
+              hdf5_dbase_root=fiasco.defaults['hdf5_dbase_root'],
+              ascii_dbase_root=fiasco.defaults['ascii_dbase_root'],
+              ask_before=False,
+              show_progress=False,
+          )
+          "
+
       - name: Test with pytest
         env:
           MPLBACKEND: "agg"

@@ -61,6 +61,40 @@ class AbstractGrating(
 
     @property
     @abc.abstractmethod
+    def slope_error(self) -> None | u.Quantity | na.AbstractScalar:
+        """
+        The RMS slope error of the figure of this grating.
+
+        It is measured with the step and kernel sizes of the
+        ``parameters_slope_error`` of :attr:`sag`. In a design, this is the
+        specification of the grating, and in a model of the grating as built,
+        its measurement.
+        """
+
+    @property
+    @abc.abstractmethod
+    def roughness(self) -> None | u.Quantity | na.AbstractScalar:
+        """
+        The RMS roughness of this grating.
+
+        It is measured over the periods of the ``parameters_roughness`` of
+        :attr:`sag`. In a design, this is the specification of the grating, and
+        in a model of the grating as built, its measurement.
+        """
+
+    @property
+    @abc.abstractmethod
+    def microroughness(self) -> None | u.Quantity | na.AbstractScalar:
+        """
+        The RMS microroughness of this grating.
+
+        It is measured over the periods of the ``parameters_microroughness`` of
+        :attr:`sag`. In a design, this is the specification of the grating, and
+        in a model of the grating as built, its measurement.
+        """
+
+    @property
+    @abc.abstractmethod
     def num_folds(self) -> int:
         """
         The order of the rotational symmetry of the optical system.
@@ -213,3 +247,21 @@ class Grating(
 
     roll: u.Quantity | na.AbstractScalar = 0 * u.deg
     """The roll angle of this object"""
+
+    slope_error: None | u.Quantity | na.AbstractScalar = None
+    """
+    The RMS slope error of the figure of this grating, with the step and
+    kernel sizes of the ``parameters_slope_error`` of :attr:`sag`.
+    """
+
+    roughness: None | u.Quantity | na.AbstractScalar = None
+    """
+    The RMS roughness of this grating, over the periods of the
+    ``parameters_roughness`` of :attr:`sag`.
+    """
+
+    microroughness: None | u.Quantity | na.AbstractScalar = None
+    """
+    The RMS microroughness of this grating, over the periods of the
+    ``parameters_microroughness`` of :attr:`sag`.
+    """
