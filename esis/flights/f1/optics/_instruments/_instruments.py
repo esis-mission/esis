@@ -830,7 +830,6 @@ def as_built(
 def distortion_fit(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
     axis_time: None | str = None,
     channel_offsets: bool = False,
 ) -> esis.optics.Instrument:
@@ -844,6 +843,11 @@ def distortion_fit(
     time of 2019-09-30T18:08:41.642 UTC). The provenance of the fit is
     recorded in the file header, and the fit is reproduced from the as-built
     model and the data by :func:`fit_distortion_reference`.
+
+    The model is exact, without Monte Carlo samples. The parameters were
+    fitted to the as-built model without samples, so a sample would keep its
+    own decenters under angles that suit only the nominal optics, and would
+    not describe any uncertainty of the fit.
 
     If `axis_time` is given, the per-frame columns of
     ``_data/distortion_pointing.ecsv`` are applied along that axis, one
@@ -869,8 +873,6 @@ def distortion_fit(
         characterize the optical system.
     axis_channel
         The name of the logical axis corresponding to changing camera channel.
-    num_distribution
-        number of Monte Carlo samples to draw when computing uncertainties
     axis_time
         The name of the logical axis corresponding to changing time.
         If :obj:`None`, the model is that of the ``time=15`` reference fit;
@@ -894,7 +896,7 @@ def distortion_fit(
         import esis
 
         l1 = esis.flights.f1.data.level_1()[dict(time=15)]
-        model = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+        model = esis.flights.f1.optics.distortion_fit()
 
         rays = model.system.rayfunction_default.outputs
         position = rays.position.to(u.um).mean(axis=("pupil_x", "pupil_y"))
@@ -950,7 +952,7 @@ def distortion_fit(
     model = as_built(
         grid=grid,
         axis_channel=axis_channel,
-        num_distribution=num_distribution,
+        num_distribution=0,
     )
 
     model.wavelength = na.ScalarArray(

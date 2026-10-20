@@ -481,18 +481,20 @@ def test_as_built_figure_and_finish(optic: str, name: str) -> None:
         assert na.shape(measured) == na.shape(as_built.grating.serial_number)
 
 
-@pytest.mark.parametrize("num_distribution", [0, 11])
-def test_distortion_fit(num_distribution: int):
-    result = esis.flights.f1.optics.distortion_fit(
-        num_distribution=num_distribution,
-    )
+def test_distortion_fit() -> None:
+    result = esis.flights.f1.optics.distortion_fit()
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+    # the fitted model is exact: no Monte Carlo sample of the as-built
+    # tolerances survives into where the light lands
+    position = result.system.rayfunction_default.outputs.position
+    assert not isinstance(position.x, na.AbstractUncertainScalarArray)
+    assert not isinstance(position.y, na.AbstractUncertainScalarArray)
 
 
 def test_distortion_fit_axis_time():
-    result = esis.flights.f1.optics.distortion_fit(num_distribution=0, axis_time="time")
+    result = esis.flights.f1.optics.distortion_fit(axis_time="time")
     assert na.shape(result.pitch) == dict(channel=4, time=30)
-    reference = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+    reference = esis.flights.f1.optics.distortion_fit()
     delta = result.yaw - reference.yaw
     # the yaw drifted monotonically through the flight, changing sign at the
     # reference frame
@@ -532,7 +534,7 @@ def test_distortion_fit_sensor_terms():
     # the loaded reference carries the sensor placement (zero for a file
     # written before it existed) and the primary displacement is measured
     # from the nominal focal length
-    result = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+    result = esis.flights.f1.optics.distortion_fit()
     parameters = esis.optics.DistortionParameters.from_instrument(result)
     assert na.shape(parameters) == dict(channel=4)
     z = na.value(parameters.z_sensor)
@@ -593,11 +595,8 @@ def test_distortion_fit_windows():
 
 
 def test_distortion_fit_channel_offsets():
-    reference = esis.flights.f1.optics.distortion_fit(
-        num_distribution=0, axis_time="time"
-    )
+    reference = esis.flights.f1.optics.distortion_fit(axis_time="time")
     result = esis.flights.f1.optics.distortion_fit(
-        num_distribution=0,
         axis_time="time",
         channel_offsets=True,
     )

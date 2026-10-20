@@ -30,7 +30,8 @@ a ``_coregistered`` suffix, so the two models can be compared.
 
 Environment: ESIS_DEVICE (default ``cuda``; ``cpu`` or empty for the host),
 ESIS_WORKERS (default 6), ESIS_NUM_SCENE (sampling of the AIA scene,
-default 401), ESIS_SEED (seed of the capture, default 0), ESIS_PRIMARY=0 to
+default 401), ESIS_SEED (seed of the capture and of the samples every
+channel is linearized on, in every command, default 0), ESIS_PRIMARY=0 to
 hold the primary at nominal, ESIS_DRIFT_DEGREE (polynomial that smooths the
 window drift, default 3; empty for none), ESIS_DEFOCUS_DEGREE (polynomial
 through each sector's focus, default 2), ESIS_COREGISTRATION_DEGREE (the
@@ -109,6 +110,7 @@ def channel(c: int, directory: pathlib.Path) -> None:
         observation=observation[dict(channel=c)],
         device=DEVICE,
         merit=MERIT,
+        seed=SEED,
     )
     log("free: " + ", ".join(FREE_ABSOLUTE))
     fitted = esis.optics.fit_distortion(
@@ -150,6 +152,7 @@ def edges(directory: pathlib.Path) -> None:
         directory=directory,
         path=directory / "window_edges.ecsv",
         path_drift=directory / "window_drift.ecsv",
+        seed=SEED,
     )
 
 
@@ -169,6 +172,7 @@ def combine(directory: pathlib.Path) -> None:
         primary=PRIMARY,
         path=directory / "distortion_reference.ecsv",
         directory=directory,
+        seed=SEED,
     )
 
 
@@ -191,6 +195,7 @@ def polish(directory: pathlib.Path) -> None:
         primary=False,
         path=path,
         directory=directory,
+        seed=SEED,
     )
     # the windows were placed by the start's outline stage: carry its record
     result = astropy.table.QTable.read(path, format="ascii.ecsv")
@@ -216,6 +221,7 @@ def align(directory: pathlib.Path) -> None:
         free_shared=FREE_SHARED,
         path=path,
         directory=directory,
+        seed=SEED,
     )
 
 
@@ -230,6 +236,7 @@ def defocus(directory: pathlib.Path) -> None:
         degree=DEFOCUS_DEGREE,
         path=directory / "defocus.ecsv",
         directory=directory,
+        seed=SEED,
     )
 
 
@@ -252,6 +259,7 @@ def pointing(t: int, directory: pathlib.Path) -> None:
         relative=False,
         path=directory / f"pointing_{t:02d}.ecsv",
         directory=directory,
+        seed=SEED,
     )
 
 
@@ -284,6 +292,7 @@ def coregister(directory: pathlib.Path) -> None:
         degree=COREGISTRATION_DEGREE,
         path=directory / "coregistration.ecsv",
         directory=directory,
+        seed=SEED,
     )
     path = directory / "distortion_pointing_coregistered.ecsv"
     _fits.apply_coregistration(pointing, table).write(
@@ -310,6 +319,7 @@ def accept(directory: pathlib.Path) -> None:
         merit=MERIT,
         path=directory / f"acceptance{SUFFIX}.ecsv",
         directory=directory,
+        seed=SEED,
     )
 
 

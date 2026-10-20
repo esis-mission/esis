@@ -537,6 +537,7 @@ def align_channels(
     ridge: float = 1e-3,
     damping: float = 0.8,
     degree: int = 2,
+    seed: int = 0,
     mask_windows: bool = True,
     log: None | Callable[[str], None] = None,
 ) -> tuple[list[esis.optics.DistortionParameters], list[float]]:
@@ -589,6 +590,9 @@ def align_channels(
         The fraction of each solved increment that is applied.
     degree
         The degree of the polynomial distortion model.
+    seed
+        The seed of the draws which place the samples every channel is
+        linearized on, see :class:`LinearMerit`.
     mask_windows
         Whether to read each channel's frame only inside the window the
         line illuminates, see :func:`window_mask`.  Outside it the frame
@@ -637,6 +641,8 @@ def align_channels(
             wavelength=instrument.wavelength,
             degree=degree,
             field_stop=True,
+            seed_field=seed,
+            seed_pupil=seed,
         )
 
     x = [na.pack(p).ndarray.copy() for p in parameters]
