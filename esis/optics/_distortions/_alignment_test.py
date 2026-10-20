@@ -141,6 +141,57 @@ def test_align_channels():
     assert aligned[1].displacement_primary == p_wrong.displacement_primary
 
 
+def test_align_channels_seed() -> None:
+    """
+    Measure the shifts on channels linearized with the given seed.
+
+    The seed places the samples every channel is linearized on, so the same
+    seed measures the same shifts and another seed measures them through
+    other samples.
+    """
+    from esis.flights.f1.optics._fits._fits import (
+        _idealized,
+        _wavelength_lines,
+        _wavelengths_alignment,
+    )
+
+    instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
+    instrument.wavelength = _wavelength_lines()
+    channel = instrument[dict(channel=1)]
+    p_anchor = esis.optics.DistortionParameters.from_instrument(channel)
+    p_wrong = na.unpack(na.pack(p_anchor).ndarray.copy(), p_anchor)
+    p_wrong.z_sensor = 2 * u.mm
+
+    scene = _scene(num=81, seed=2)
+    merit = esis.optics.LinearMerit(
+        channel,
+        p_anchor,
+        scene,
+        observation=0 * scene.outputs.sum(("wavelength", "velocity")),
+    )
+    frame = merit.image(p_anchor)
+    frame = np.asarray(na.value(frame).ndarray_aligned(("detector_y", "detector_x")))
+
+    def medians(seed: int) -> list[float]:
+        _, result = esis.optics.align_channels(
+            instruments=[channel, channel],
+            parameters=[p_anchor, p_wrong],
+            frames=[frame, frame],
+            scene_position=scene.inputs.position,
+            wavelengths=_wavelengths_alignment(),
+            anchor=0,
+            num_sky=400,
+            num_tile=4,
+            num_pass=0,
+            seed=seed,
+        )
+        return result
+
+    expected = medians(0)
+    assert np.allclose(medians(0), expected, rtol=0, atol=1e-9)
+    assert not np.allclose(medians(1), expected, rtol=0, atol=1e-9)
+
+
 def test_channel_shifts_agree_on_the_pixel_convention():
     """
     Two channels that disperse at right angles see the same sky in the same place.

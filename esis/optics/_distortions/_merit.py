@@ -157,6 +157,12 @@ class LinearMerit:
         within each spectral line.
     axis_field
         The logical axes of the scene corresponding to field position.
+    seed
+        The seed of the draws which place a field position and a pupil
+        position inside each cell when the channel is linearized, see
+        `seed_field` and `seed_pupil` of
+        :meth:`optika.systems.SequentialSystem.linearize`.  The same seed
+        gives the same merit, and another seed draws other positions.
     """
 
     def __init__(
@@ -170,12 +176,14 @@ class LinearMerit:
         merit: str = "correlation",
         axis_wavelength: str = "velocity",
         axis_field: tuple[str, str] = ("detector_x", "detector_y"),
+        seed: int = 0,
     ):
         self.instrument = instrument
         self.parameters = parameters
         self.observation = na.value(observation)
         self.device = device
         self.degree = degree
+        self.seed = seed
         if merit not in ("correlation", "least_squares"):
             raise ValueError(f"unknown merit {merit!r}")
         self.merit = merit
@@ -261,6 +269,8 @@ class LinearMerit:
             wavelength=instrument.wavelength,
             degree=self.degree,
             field_stop=True,
+            seed_field=self.seed,
+            seed_pupil=self.seed,
         )
         # one effective area for every line, see the class docstring
         area = linear.area_effective

@@ -121,6 +121,25 @@ class TestLinearMerit:
         area = linear.area_effective.area
         assert np.allclose(na.value(area).ndarray, na.value(area).ndarray[0])
 
+    def test_seed(self, merit) -> None:
+        # the seed places the samples the channel is linearized on, so the
+        # same seed gives the same image and another seed moves it
+        m, truth = merit
+        assert m.seed == 0
+        kwargs = dict(
+            instrument=m.instrument,
+            parameters=m.parameters,
+            scene=m.scene,
+            observation=m.observation,
+        )
+        expected = m.image(truth).ndarray_aligned(m.axis_field)
+        same = _merit.LinearMerit(**kwargs, seed=0).image(truth)
+        other = _merit.LinearMerit(**kwargs, seed=1).image(truth)
+        same = same.ndarray_aligned(m.axis_field)
+        other = other.ndarray_aligned(m.axis_field)
+        assert np.allclose(same, expected, rtol=1e-10, atol=0)
+        assert not np.allclose(other, expected, rtol=1e-6, atol=0)
+
 
 def test_correlation():
     a = na.ScalarArray(np.arange(12.0).reshape(3, 4), axes=("x", "y"))

@@ -286,15 +286,15 @@ def _polish_own(
     ----------
     job
         The channel, its parameters, the scene, its frame, the device,
-        the indices of the packed parameters that belong to the channel, and
-        the merit to maximize.
+        the indices of the packed parameters that belong to the channel, the
+        merit to maximize, and the seed of the merit's samples.
 
     Returns
     -------
     The polished parameters, their correlation, and the number of
     evaluations.
     """
-    instrument, parameters, scene, observation, device, index_own, merit = job
+    instrument, parameters, scene, observation, device, index_own, merit, seed = job
     merit = esis.optics.LinearMerit(
         instrument=instrument,
         parameters=parameters,
@@ -302,6 +302,7 @@ def _polish_own(
         observation=observation,
         device=device,
         merit=merit,
+        seed=seed,
     )
     if merit.merit == "least_squares" and np.all(na.value(parameters.degradation) == 1):
         # a start that knows nothing about the level of the frame
@@ -390,13 +391,25 @@ def _outline_own(
     ----------
     job
         The channel, its parameters, the scene, its frame, the device, the
-        merit, its measured edges, and the window and sky terms.
+        merit, its measured edges, the window and sky terms, and the seed of
+        the merit's samples.
 
     Returns
     -------
     The parameters, their merit, the edge residual, and the log messages.
     """
-    instrument, parameters, scene, observation, device, merit, edges, window, sky = job
+    (
+        instrument,
+        parameters,
+        scene,
+        observation,
+        device,
+        merit,
+        edges,
+        window,
+        sky,
+        seed,
+    ) = job
     objective = esis.optics.LinearMerit(
         instrument=instrument,
         parameters=parameters,
@@ -404,6 +417,7 @@ def _outline_own(
         observation=observation,
         device=device,
         merit=merit,
+        seed=seed,
     )
     messages = []
     result = esis.optics.fit_distortion_outline(
@@ -444,14 +458,15 @@ def _width_own(
     ----------
     job
         The channel, its parameters, the scene, its frame, the device, the
-        merit, its measured edges, and the names of the scale terms.
+        merit, its measured edges, the names of the scale terms, and the seed
+        of the merit's samples.
 
     Returns
     -------
     The polished parameters, their merit, and the error of the window
     widths.
     """
-    instrument, parameters, scene, observation, device, merit, edges, terms = job
+    instrument, parameters, scene, observation, device, merit, edges, terms, seed = job
     objective = esis.optics.LinearMerit(
         instrument=instrument,
         parameters=parameters,
@@ -459,6 +474,7 @@ def _width_own(
         observation=observation,
         device=device,
         merit=merit,
+        seed=seed,
     )
     names = [f.name for f in dataclasses.fields(parameters)]
     index = np.array([names.index(n) for n in terms])
@@ -492,6 +508,7 @@ def scan_primary(
     device: None | str = None,
     workers: int = 1,
     merit: str = "correlation",
+    seed: int = 0,
     log: None | Callable[[str], None] = None,
 ) -> tuple[
     list[esis.optics.DistortionParameters], u.Quantity, list[float]
@@ -528,6 +545,9 @@ def scan_primary(
         The number of channels polished side by side.
     merit
         The comparison the polish maximizes.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
     log
         A callable that records progress.
 
@@ -553,6 +573,7 @@ def scan_primary(
                     merit,
                     edges[np.asarray(edges["channel"]) == c],
                     terms,
+                    seed,
                 )
             )
         return _map_channels(_width_own, jobs, workers)
@@ -603,6 +624,7 @@ def _window_centers(
     parameters: list[esis.optics.DistortionParameters],
     scene: na.FunctionArray,
     observation: na.AbstractScalar,
+    seed: int,
 ) -> list[list[list[float]]]:  # pragma: nocover
     """
     Locate the centre of every window on the sensor, in pixels.
@@ -617,6 +639,9 @@ def _window_centers(
         The scene of the reference frame.
     observation
         The reference frame of every channel.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
 
     Returns
     -------
@@ -630,6 +655,7 @@ def _window_centers(
             parameters=p,
             scene=scene,
             observation=observation[dict(channel=c)],
+            seed=seed,
         )
         linear = merit.linearize(p.to_instrument(channel))
         footprints = _footprints(linear, channel.wavelength)
@@ -726,6 +752,7 @@ def measure_window_edges(
     directory: None | str | pathlib.Path = None,
     path: None | str | pathlib.Path = None,
     path_drift: None | str | pathlib.Path = None,
+    seed: int = 0,
 ) -> tuple[astropy.table.QTable, astropy.table.QTable]:  # pragma: nocover
     """
     Measure the edges of every window in every frame of the flight.
@@ -764,6 +791,9 @@ def measure_window_edges(
         Where to save the median edges, if anywhere.
     path_drift
         Where to save the per-frame drift, if anywhere.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
 
     Returns
     -------
@@ -790,6 +820,7 @@ def measure_window_edges(
             parameters=parameters[c],
             scene=scene,
             observation=observation[dict(channel=c)],
+            seed=seed,
         )
         linear = merit.linearize(parameters[c].to_instrument(channel))
         footprints = _footprints(linear, channel.wavelength)
@@ -981,7 +1012,8 @@ def fit_distortion_reference(
         The tolerance at which the capture stops early; zero runs every
         generation.
     seed
-        The seed of the capture.
+        The seed of the capture, and of the samples every channel is
+        linearized on in every stage, see :class:`esis.optics.LinearMerit`.
 
     Raises
     ------
@@ -1023,6 +1055,7 @@ def fit_distortion_reference(
             observation=observation[dict(channel=c)],
             device=device,
             merit=merit,
+            seed=seed,
         )
         log(f"channel {c}: absolute fit")
         parameters[c] = esis.optics.fit_distortion(
@@ -1050,6 +1083,7 @@ def fit_distortion_reference(
                     observation=observation[dict(channel=c)],
                     device=device,
                     merit=merit,
+                    seed=seed,
                 ).correlation(parameters[c])
             )
             for c in range(num_channel)
@@ -1078,6 +1112,7 @@ def fit_distortion_reference(
                 edges[np.asarray(edges["channel"]) == c],
                 window,
                 sky,
+                seed,
             )
             for c in range(num_channel)
         ]
@@ -1102,6 +1137,7 @@ def fit_distortion_reference(
             device=device,
             workers=workers,
             merit=merit,
+            seed=seed,
             log=log,
         )
         scores["primary"] = dict(
@@ -1127,6 +1163,7 @@ def fit_distortion_reference(
             device,
             index_own,
             merit,
+            seed,
         )
         for c in range(num_channel)
     ]
@@ -1144,12 +1181,13 @@ def fit_distortion_reference(
         scene_position=scene.inputs.position,
         wavelengths=_wavelengths_alignment(),
         free=tuple(n for n in own if n not in _PHOTOMETRIC),
+        seed=seed,
         log=log,
     )
     scores["alignment"] = [float(m) for m in medians]
 
     # where the windows land, for a regression test of the committed table
-    windows = _window_centers(instrument, parameters, scene, observation)
+    windows = _window_centers(instrument, parameters, scene, observation, seed)
 
     result = _stack(parameters, axis="channel")
     if path is not None:
@@ -1221,6 +1259,7 @@ def realign_distortion_reference(
     free_shared: tuple[str, ...] = _FREE_SHARED,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
+    seed: int = 0,
 ) -> esis.optics.DistortionParameters:  # pragma: nocover
     """
     Rerun only the internal alignment of a saved reference.
@@ -1247,6 +1286,9 @@ def realign_distortion_reference(
         If given, the realigned reference is written here.
     directory
         A directory where the progress is logged.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
     """
     reference = pathlib.Path(reference)
     start = astropy.table.QTable.read(reference, format="ascii.ecsv")
@@ -1265,9 +1307,10 @@ def realign_distortion_reference(
         scene_position=scene.inputs.position,
         wavelengths=_wavelengths_alignment(),
         free=tuple(own),
+        seed=seed,
         log=log,
     )
-    windows = _window_centers(instrument, parameters, scene, observation)
+    windows = _window_centers(instrument, parameters, scene, observation, seed)
     result = _stack(parameters, axis="channel")
     if path is not None:
         # the writer names the logical axis itself
@@ -1501,6 +1544,7 @@ def _image_jacobians(
     parameters: esis.optics.DistortionParameters,
     channel: esis.optics.Instrument,
     wavelengths: dict[str, u.Quantity],
+    seed: int,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """
     Linearize one channel at given parameters and locate the sky at every line.
@@ -1513,6 +1557,9 @@ def _image_jacobians(
         The channel's instrument model.
     wavelengths
         The lines, by name.
+    seed
+        The seed of the samples the channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
 
     Returns
     -------
@@ -1520,7 +1567,11 @@ def _image_jacobians(
     """
     model = parameters.to_instrument(channel)
     linear = model.system.linearize(
-        wavelength=model.wavelength, degree=2, field_stop=True
+        wavelength=model.wavelength,
+        degree=2,
+        field_stop=True,
+        seed_field=seed,
+        seed_pupil=seed,
     )
     return [_image_jacobian(linear, w) for w in wavelengths.values()]
 
@@ -1532,6 +1583,7 @@ def _defocus_pattern(
     anchor: int = 1,
     step: u.Quantity = 0.1 * u.mm,
     relative: bool = True,
+    seed: int = 0,
 ) -> np.ndarray:
     """
     Measure how a defocus of the primary moves each channel's sky against the anchor's.
@@ -1557,6 +1609,9 @@ def _defocus_pattern(
         Whether to take each channel's shift relative to the anchor's.  If
         :obj:`False`, each channel's own shift per millimetre of the focus
         of its own sector of the primary, in the anchor's pixels.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
 
     Returns
     -------
@@ -1568,7 +1623,7 @@ def _defocus_pattern(
     def where(c, dz):
         p = copy.copy(reference[c])
         p.z_primary = p.z_primary + dz
-        return _image_jacobians(p, instrument[dict(channel=c)], wavelengths)
+        return _image_jacobians(p, instrument[dict(channel=c)], wavelengths, seed)
 
     num_channel = len(reference)
     scale = None
@@ -1600,6 +1655,7 @@ def fit_defocus_history(
     anchor: int = 1,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
+    seed: int = 0,
 ) -> astropy.table.QTable:  # pragma: nocover
     """
     Measure the focus of each sector of the primary through the flight.
@@ -1643,6 +1699,9 @@ def fit_defocus_history(
         per-frame and the fitted defocus.
     directory
         A directory where the progress is logged.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
     """
     if not isinstance(reference, esis.optics.DistortionParameters):
         reference = esis.optics.DistortionParameters.from_file(reference)
@@ -1656,7 +1715,7 @@ def fit_defocus_history(
     wavelengths = _wavelengths_alignment()
 
     pattern = _defocus_pattern(
-        instrument, parameters, wavelengths, anchor, relative=False
+        instrument, parameters, wavelengths, anchor, relative=False, seed=seed
     )
     log(
         "sky shift of each channel per mm of its own sector's focus [px]: "
@@ -1688,6 +1747,7 @@ def fit_defocus_history(
                             parameters=parameters[k],
                             scene=scene,
                             observation=observation[dict(channel=k)],
+                            seed=seed,
                         )
                         for k in range(num_channel)
                     ]
@@ -1698,7 +1758,11 @@ def fit_defocus_history(
             model = p.to_instrument(instrument[dict(channel=c)])
             linears.append(
                 model.system.linearize(
-                    wavelength=model.wavelength, degree=2, field_stop=True
+                    wavelength=model.wavelength,
+                    degree=2,
+                    field_stop=True,
+                    seed_field=seed,
+                    seed_pupil=seed,
                 )
             )
         fields, scales = esis.optics.measure_channel_shifts(
@@ -1854,6 +1918,7 @@ def _pointing_pattern(
     wavelengths: dict[str, u.Quantity],
     anchor: int = 1,
     step: u.Quantity = 1 * u.arcsec,
+    seed: int = 0,
 ) -> np.ndarray:
     """
     Measure how a pointing offset of one channel moves that channel's sky.
@@ -1874,6 +1939,9 @@ def _pointing_pattern(
         The channel whose pixels the shifts are expressed in.
     step
         The offset of the finite difference.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
 
     Returns
     -------
@@ -1885,7 +1953,7 @@ def _pointing_pattern(
     def where(c, name, d):
         p = copy.copy(parameters[c])
         setattr(p, name, getattr(p, name) + d)
-        return _image_jacobians(p, instrument[dict(channel=c)], wavelengths)
+        return _image_jacobians(p, instrument[dict(channel=c)], wavelengths, seed)
 
     num_channel = len(parameters)
     result = np.zeros((num_channel, 2, 2))
@@ -1975,6 +2043,7 @@ def fit_coregistration(
     num_pass: int = 2,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
+    seed: int = 0,
 ) -> astropy.table.QTable:  # pragma: nocover
     """
     Register the channels with one another empirically through the flight.
@@ -2018,6 +2087,9 @@ def fit_coregistration(
         If given, the history is written here as an ECSV table.
     directory
         A directory where the progress is logged.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
 
     Returns
     -------
@@ -2046,6 +2118,7 @@ def fit_coregistration(
         ],
         wavelengths,
         anchor,
+        seed=seed,
     )
     log(
         "sky shift per arcsecond of a channel's own pitch; yaw [px]: "
@@ -2086,7 +2159,11 @@ def fit_coregistration(
                 model = p.to_instrument(instrument[dict(channel=c)])
                 linears.append(
                     model.system.linearize(
-                        wavelength=model.wavelength, degree=2, field_stop=True
+                        wavelength=model.wavelength,
+                        degree=2,
+                        field_stop=True,
+                        seed_field=seed,
+                        seed_pupil=seed,
                     )
                 )
             fields, scales = esis.optics.measure_channel_shifts(
@@ -2246,6 +2323,7 @@ def fit_distortion_pointing(
     defocus: None | str | pathlib.Path | astropy.table.QTable = None,
     relative: bool = True,
     free_roll: bool = False,
+    seed: int = 0,
 ) -> astropy.table.QTable:  # pragma: nocover
     r"""
     Fit the per-frame payload pointing of the whole flight.
@@ -2308,6 +2386,9 @@ def fit_distortion_pointing(
         merit against the proxy scene cannot measure a roll to better than
         an arcminute, so by default the roll is held at the reference's and
         the table's roll column is zero.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
     """
     if instrument is None:
         instrument = _idealized(esis.flights.f1.optics.distortion_fit())
@@ -2350,6 +2431,7 @@ def fit_distortion_pointing(
                 observation=observation[dict(channel=c)],
                 device=device,
                 merit=merit,
+                seed=seed,
             )
             for c in range(num_channel)
         ]
@@ -2537,6 +2619,7 @@ def acceptance(
     anchor: int = 1,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
+    seed: int = 0,
 ) -> astropy.table.QTable:  # pragma: nocover
     """
     Score a reference fit on frames it was not fit to, without an inversion.
@@ -2586,6 +2669,9 @@ def acceptance(
         Where to save the table, if anywhere.
     directory
         The directory the log is written to.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
 
     Returns
     -------
@@ -2620,13 +2706,18 @@ def acceptance(
                     observation=observation[dict(channel=c)],
                     device=device,
                     merit=merit,
+                    seed=seed,
                 )
                 merits.append((m, p))
                 linears.append(m.linearize(model))
             else:
                 linears.append(
                     model.system.linearize(
-                        wavelength=model.wavelength, degree=2, field_stop=True
+                        wavelength=model.wavelength,
+                        degree=2,
+                        field_stop=True,
+                        seed_field=seed,
+                        seed_pupil=seed,
                     )
                 )
         scores = (
@@ -2845,6 +2936,7 @@ def acceptance(
                 scene=scene,
                 observation=observation[dict(channel=c)],
                 device=device,
+                seed=seed,
             )
             linear = m.linearize(p.to_instrument(channel))
             footprints = _footprints(linear, channel.wavelength)
