@@ -2310,9 +2310,7 @@ def fit_distortion_pointing(
         the table's roll column is zero.
     """
     if instrument is None:
-        instrument = _idealized(
-            esis.flights.f1.optics.distortion_fit(num_distribution=0)
-        )
+        instrument = _idealized(esis.flights.f1.optics.distortion_fit())
         instrument.wavelength = _wavelength_lines()
     num_channel = instrument.camera.channel.shape["channel"]
     num_time = esis.flights.f1.data.level_1().shape["time"]

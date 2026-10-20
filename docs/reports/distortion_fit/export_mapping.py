@@ -28,7 +28,7 @@ def main() -> None:
         parameters = esis.optics.DistortionParameters.from_file(sys.argv[2])
         instrument = parameters.to_instrument(_fits._base(None))
     else:
-        instrument = esis.flights.f1.optics.distortion_fit(num_distribution=0)
+        instrument = esis.flights.f1.optics.distortion_fit()
 
     scene, _ = _fits._frame(15, 401)
     extent = scene.inputs.position
