@@ -1,3 +1,4 @@
+import collections.abc
 import dataclasses
 import pathlib
 import pytest
@@ -8,24 +9,36 @@ import named_arrays as na
 import esis
 
 
-def _is_uncertain(a, seen: None | set[int] = None) -> bool:
-    """Whether any part of a (possibly nested) object is an uncertain array."""
+def _uncertain(
+    a: object,
+    path: str = "",
+    seen: None | set[int] = None,
+) -> dict[str, na.AbstractUncertainScalarArray]:
+    """Every uncertain array in a (possibly nested) object, by its path."""
     if seen is None:
         seen = set()
     if id(a) in seen:
-        return False
+        return dict()
     seen.add(id(a))
     if isinstance(a, na.AbstractUncertainScalarArray):
-        return True
+        return {path: a}
     if isinstance(a, dict):
-        return any(_is_uncertain(v, seen) for v in a.values())
-    if isinstance(a, (list, tuple)):
-        return any(_is_uncertain(v, seen) for v in a)
-    if dataclasses.is_dataclass(a) and not isinstance(a, type):
-        return any(
-            _is_uncertain(getattr(a, f.name), seen) for f in dataclasses.fields(a)
-        )
-    return False
+        items = a.items()
+    elif isinstance(a, (list, tuple)):
+        items = enumerate(a)
+    elif dataclasses.is_dataclass(a) and not isinstance(a, type):
+        items = ((f.name, getattr(a, f.name)) for f in dataclasses.fields(a))
+    else:
+        return dict()
+    result = dict()
+    for key, value in items:
+        result |= _uncertain(value, f"{path}.{key}".lstrip("."), seen)
+    return result
+
+
+def _is_uncertain(a: object) -> bool:
+    """Whether any part of a (possibly nested) object is an uncertain array."""
+    return len(_uncertain(a)) > 0
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
@@ -53,6 +66,185 @@ def test_design_single(num_distribution: int):
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
     assert _is_uncertain(result) == (num_distribution != 0)
+
+
+@pytest.mark.parametrize(
+    argnames="function",
+    argvalues=[
+        esis.flights.f1.optics.design_full,
+        esis.flights.f1.optics.design,
+        esis.flights.f1.optics.design_single,
+        esis.flights.f1.optics.as_built_unfocused,
+    ],
+)
+def test_seed(
+    function: collections.abc.Callable[..., esis.optics.Instrument],
+) -> None:
+    """The same seed draws the same samples, and another seed draws others."""
+    result = _uncertain(function(num_distribution=11, seed=0))
+    again = _uncertain(function(num_distribution=11, seed=0))
+    other = _uncertain(function(num_distribution=11, seed=1))
+
+    assert result
+    assert again.keys() == result.keys()
+    assert other.keys() == result.keys()
+
+    for path in result:
+        assert np.all(again[path] == result[path]), path
+        assert np.all(other[path].distribution != result[path].distribution), path
+
+
+@pytest.mark.parametrize(
+    argnames="function",
+    argvalues=[
+        esis.flights.f1.optics.design_full,
+        esis.flights.f1.optics.as_built_unfocused,
+    ],
+)
+def test_seed_independent(
+    function: collections.abc.Callable[..., esis.optics.Instrument],
+) -> None:
+    """
+    Check that the samples of each parameter are independent of the others.
+
+    Each parameter is drawn with a seed of its own, since two drawn with the
+    same seed would have the same samples, except where the model ties one
+    parameter to another: the field stop moves with the primary mirror.
+    """
+    uncertain = _uncertain(function(num_distribution=11, seed=0))
+
+    # the samples of each parameter, scaled to span -1 to 1
+    normalized = dict()
+    for path, a in uncertain.items():
+        assert isinstance(a, na.UniformUncertainScalarArray), path
+        normalized[path] = (a.distribution - a.nominal) / a.width
+
+    tied = [
+        {"primary_mirror.translation.x", "field_stop.translation.x"},
+        {"primary_mirror.translation.y", "field_stop.translation.y"},
+    ]
+
+    # each pair of parameters, once
+    items = list(normalized.items())
+    for i, (path_1, a_1) in enumerate(items):
+        for path_2, a_2 in items[:i]:
+            if {path_1, path_2} in tied:
+                assert np.all(a_1 == a_2), (path_1, path_2)
+            else:
+                assert not np.all(np.isclose(a_1, a_2)), (path_1, path_2)
+
+
+@pytest.mark.parametrize(
+    argnames="function",
+    argvalues=[
+        esis.flights.f1.optics._as_built_focused,
+        esis.flights.f1.optics.as_built,
+    ],
+)
+def test_seed_as_built(
+    function: collections.abc.Callable[..., esis.optics.Instrument],
+) -> None:
+    """
+    Check that the focused and aligned models keep the samples of the unfocused one.
+
+    They are made from the samples which
+    :func:`esis.flights.f1.optics.as_built_unfocused` draws with the same
+    seed, so every uncertain parameter of that model is the same in them,
+    except where the focus puts each grating along the optic axis.
+    """
+    result = _uncertain(function(num_distribution=2, seed=0))
+    unfocused = _uncertain(
+        esis.flights.f1.optics.as_built_unfocused(num_distribution=2, seed=0)
+    )
+
+    del unfocused["grating.translation.z"]
+
+    for path in unfocused:
+        assert np.all(result[path] == unfocused[path]), path
+
+
+@pytest.mark.parametrize(
+    argnames="function,method",
+    argvalues=[
+        (
+            esis.flights.f1.optics._as_built_focused,
+            esis.optics.abc.AbstractInstrument.focus_grating,
+        ),
+        (
+            esis.flights.f1.optics.as_built,
+            esis.optics.abc.AbstractInstrument.align_grating,
+        ),
+    ],
+)
+def test_as_built_sensor(
+    function: collections.abc.Callable[..., esis.optics.Instrument],
+    method: collections.abc.Callable[..., esis.optics.Instrument],
+) -> None:
+    """
+    Check that the tolerance on the focus of the sensors is added after the focus.
+
+    The gratings are focused and aligned on the sensors where the design
+    puts them along the optic axis, rather than on each sample of where they
+    might sit, but on where each sample puts them across it. The tolerance
+    along the axis is still there afterward, in the raytrace as well as in
+    the model.
+    """
+    result = function(num_distribution=2, seed=0)
+
+    unfocused = esis.flights.f1.optics.as_built_unfocused(num_distribution=2, seed=0)
+    camera = unfocused.camera
+    sensor = camera.sensor
+    translation = sensor.translation
+    nominal = unfocused.replace(
+        camera=camera.replace(
+            sensor=sensor.replace(
+                translation=translation.replace(z=na.nominal(translation.z)),
+            ),
+        ),
+    )
+    expected = method(nominal, wavelength=esis.flights.f1.spectrum.O_V.wavelength)
+
+    grating = _uncertain(result.grating)
+    grating_expected = _uncertain(expected.grating)
+    assert grating.keys() == grating_expected.keys()
+    for path in grating_expected:
+        assert np.all(grating[path] == grating_expected[path]), path
+
+    translation_result = _uncertain(result.camera.sensor.translation)
+    translation_expected = _uncertain(translation)
+    assert translation_result.keys() == translation_expected.keys() == {"x", "y", "z"}
+    for path in translation_expected:
+        assert np.all(translation_result[path] == translation_expected[path]), path
+
+    # against a raytrace built from scratch, so that one cached while the
+    # sensors were where the design puts them would show up as a difference
+    surface = _uncertain(result.system.sensor)
+    surface_expected = _uncertain(result.replace().system.sensor)
+    assert surface.keys() == surface_expected.keys()
+    for path in surface_expected:
+        assert np.all(surface[path] == surface_expected[path]), path
+
+
+def test_design_tolerance_sensor() -> None:
+    """
+    Check the tolerances on the placement of the sensors.
+
+    They are placed to within a millimeter across the optic axis, and to
+    within the error of their focus along it: half a millimeter from the
+    experiment which found it, 50 microns from the shims, and 0.1 mm from
+    their tip and tilt, added in quadrature.
+    """
+    nominal = esis.flights.f1.optics.design(num_distribution=0).camera.sensor
+    sensor = esis.flights.f1.optics.design(num_distribution=11).camera.sensor
+    translation = sensor.translation
+
+    assert translation.x.nominal == nominal.translation.x
+    assert translation.y.nominal == nominal.translation.y
+    assert translation.z.nominal == nominal.translation.z
+
+    assert translation.x.width == 1 * u.mm
+    assert translation.y.width == 1 * u.mm
+    assert np.isclose(translation.z.width, 512 * u.um, atol=1 * u.um)
 
 
 def test_design_distance_grating() -> None:
@@ -204,6 +396,7 @@ def test_as_built(num_distribution: int):
     # the line is put where the sensor says it should be
     error = na.nominal(result.position_line(wavelength) - sensor.position_image)
     assert np.all(np.abs(error.x) < sensor.width_pixel / 100)
+    assert np.all(np.abs(error.y) < sensor.width_pixel / 100)
 
     # which the model it was aligned from is eight pixels away from
     as_built = esis.flights.f1.optics.as_built_unfocused(
@@ -232,6 +425,9 @@ def test_as_built(num_distribution: int):
 
     dyaw = na.nominal(result.grating.yaw - as_built.grating.yaw)
     assert np.all(np.abs(dyaw) < 1 * u.arcmin)
+
+    dpitch = na.nominal(result.grating.pitch - as_built.grating.pitch)
+    assert np.all(np.abs(dpitch) < 1 * u.arcmin)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])

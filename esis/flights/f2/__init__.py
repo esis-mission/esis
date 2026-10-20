@@ -2,10 +2,12 @@
 
 from ._wavelength import wavelength_Ne_VII, wavelength_Si_XII, wavelength_HeNe
 from . import optics
+from . import data
 
 __all__ = [
     "wavelength_Ne_VII",
     "wavelength_Si_XII",
     "wavelength_HeNe",
     "optics",
+    "data",
 ]

@@ -9,7 +9,7 @@ from esis.flights.f1.spectrum import He_I, Mg_X, O_V
 from .. import primaries
 from .. import gratings
 from .. import filters
-from .._uncertainty import uniform
+from .._uncertainty import spawn_seeds, uniform
 
 _directory_data = pathlib.Path(__file__).parent / "_data"
 
@@ -26,7 +26,8 @@ __all__ = [
 def design_full(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     """
     Load the entire optical design including the inactive channels.
@@ -43,9 +44,14 @@ def design_full(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
     """
     num_folds = 8
     num_channels = 6
+
+    seeds = spawn_seeds(seed)
 
     name_channel = na.arange(0, num_channels, axis=axis_channel)
 
@@ -91,11 +97,13 @@ def design_full(
                 nominal=0 * u.mm,
                 width=1 * u.mm,
                 num_distribution=num_distribution,
+                seed=next(seeds),
             ),
             y=uniform(
                 nominal=0 * u.mm,
                 width=1 * u.mm,
                 num_distribution=num_distribution,
+                seed=next(seeds),
             ),
             z=0 * u.mm,
         ),
@@ -148,6 +156,7 @@ def design_full(
                 nominal=-radius_grating,
                 width=radius_grating * error_radius_grating,
                 num_distribution=num_distribution,
+                seed=next(seeds),
             ),
             parameters_slope_error=optika.metrology.SlopeErrorParameters(
                 step_size=2 * u.mm,
@@ -165,6 +174,7 @@ def design_full(
         material=gratings.materials.multilayer_design(),
         rulings=gratings.rulings.ruling_design(
             num_distribution=num_distribution,
+            seed=next(seeds),
         ),
         # the specifications of the figure and finish of the gratings
         slope_error=3 * u.urad,
@@ -183,16 +193,19 @@ def design_full(
                 nominal=0 * u.mm,
                 width=1 * u.mm,
                 num_distribution=num_distribution,
+                seed=next(seeds),
             ),
             y=uniform(
                 nominal=0 * u.mm,
                 width=1 * u.mm,
                 num_distribution=num_distribution,
+                seed=next(seeds),
             ),
             z=uniform(
                 nominal=primary.sag.focal_length - 374.7 * u.mm,
                 width=error_grating_z,
                 num_distribution=num_distribution,
+                seed=next(seeds),
             ),
         ),
         yaw=-4.469567242792327 * u.deg,
@@ -200,6 +213,7 @@ def design_full(
             nominal=0 * u.deg,
             width=1.3e-2 * u.rad,
             num_distribution=num_distribution,
+            seed=next(seeds),
         ),
     )
 
@@ -219,6 +233,15 @@ def design_full(
         roll=45 * u.deg,
     )
 
+    # The sensors were placed at the focus found by experiment and shimmed
+    # there, so where each one sits along the optic axis is uncertain by the
+    # error of the experiment, the step between the thicknesses of the shims,
+    # and the defocus of the edges of the sensor caused by its tip and tilt.
+    var_sensor_z_experiment = np.square(0.5 * u.mm)
+    var_sensor_z_shim = np.square(50 * u.um)
+    var_sensor_z_edge = np.square(0.1 * u.mm)
+    var_sensor_z = var_sensor_z_experiment + var_sensor_z_shim + var_sensor_z_edge
+    error_sensor_z = np.sqrt(var_sensor_z)
     sensor = esis.optics.Sensor(
         # The physical mask on the ESIS-I detectors was undersized, leaving
         # readout-buffer rows exposed to light.  Science data extends into
@@ -228,9 +251,24 @@ def design_full(
         distance_radial=108 * u.mm,
         azimuth=angle_channel.copy(),
         translation=na.Cartesian3dVectorArray(
-            x=0 * u.mm,
-            y=0 * u.mm,
-            z=filter.translation.z + 200 * u.mm,
+            x=uniform(
+                nominal=0 * u.mm,
+                width=1 * u.mm,
+                num_distribution=num_distribution,
+                seed=next(seeds),
+            ),
+            y=uniform(
+                nominal=0 * u.mm,
+                width=1 * u.mm,
+                num_distribution=num_distribution,
+                seed=next(seeds),
+            ),
+            z=uniform(
+                nominal=filter.translation.z + 200 * u.mm,
+                width=error_sensor_z,
+                num_distribution=num_distribution,
+                seed=next(seeds),
+            ),
         ),
         yaw=-12.252 * u.deg,
         # Where the center of the field of view lands at the O V line, which
@@ -300,7 +338,8 @@ def design_full(
 def design(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     """
     Load the final optical design prepared by Charles Kankelborg and Hans Courrier.
@@ -314,11 +353,15 @@ def design(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
     """
     result = design_full(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
 
     slice_active = {axis_channel: slice(1, 5)}
@@ -335,7 +378,8 @@ def design(
 def design_single(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     """
     Load only a single channel of the optical design.
@@ -352,11 +396,15 @@ def design_single(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
     """
     result = design(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
 
     index = {axis_channel: 0}
@@ -375,7 +423,8 @@ def design_single(
 def as_built_unfocused(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     """
     Load the as-built optical model before it has been focused or pointed.
@@ -404,6 +453,9 @@ def as_built_unfocused(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
 
     Examples
     --------
@@ -415,10 +467,13 @@ def as_built_unfocused(
 
         esis.flights.f1.optics.as_built()
     """
+    seeds = spawn_seeds(seed)
+
     result = design(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=next(seeds),
     )
 
     result.primary_mirror.material = primaries.materials.multilayer_fit()
@@ -483,6 +538,7 @@ def as_built_unfocused(
 
     result.grating.rulings = gratings.rulings.ruling_measurement(
         num_distribution=num_distribution,
+        seed=next(seeds),
     )
 
     result.camera.sensor.serial_number = na.stack(
@@ -594,10 +650,41 @@ def as_built_unfocused(
     return result
 
 
+def _moved_sensor(
+    instrument: esis.optics.Instrument,
+    z: u.Quantity | na.AbstractScalar,
+) -> esis.optics.Instrument:
+    """
+    Copy an instrument, putting its sensors somewhere else along the optic axis.
+
+    Built rather than changed in place, like
+    :meth:`esis.optics.abc.AbstractInstrument.moved_grating`, so that the
+    raytrace of the copy is not one cached while the sensors were where they
+    were.
+
+    Parameters
+    ----------
+    instrument
+        The instrument to copy.
+    z
+        Where to put the sensors along the optic axis.
+    """
+    camera = instrument.camera
+    sensor = camera.sensor
+    return instrument.replace(
+        camera=camera.replace(
+            sensor=sensor.replace(
+                translation=sensor.translation.replace(z=z),
+            ),
+        ),
+    )
+
+
 def _as_built_focused(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""
     Load the as-built optical model with the gratings moved to their best focus.
@@ -619,8 +706,13 @@ def _as_built_focused(
     the measured radii. With ``num_distribution > 0`` every Monte Carlo
     sample of the model is focused independently, so the uncertainty in the
     other parameters (the placement of the gratings and the measured rulings,
-    for example) carries through to a spread of about :math:`\pm 0.2` mm in
+    for example) carries through to a spread of about :math:`\pm 0.1` mm in
     the focus of each channel.
+
+    The gratings are focused on the sensors where the design puts them along
+    the optic axis, and the tolerance on that position is added afterward,
+    since it is the error of the focus itself, from the experiment which
+    found it, the shims which set it, and the tip and tilt of the sensor.
 
     Parameters
     ----------
@@ -631,6 +723,9 @@ def _as_built_focused(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
 
     Examples
     --------
@@ -650,14 +745,19 @@ def _as_built_focused(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
-    return result.focus_grating(wavelength=O_V.wavelength)
+    z = result.camera.sensor.translation.z
+    result = _moved_sensor(result, na.nominal(z))
+    result = result.focus_grating(wavelength=O_V.wavelength)
+    return _moved_sensor(result, z)
 
 
 def as_built(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""
     Load the as-built optical model, focused and pointed at the sensor.
@@ -670,9 +770,16 @@ def as_built(
     defocus and the displacement. It stops a pixel or two short.
 
     The instrument which flew was aligned as well as focused, so this model
-    rotates each grating about :math:`y` afterwards, by a few arcseconds,
-    until the center of the field of view lands where
+    tips and tilts each grating afterwards, by a few arcseconds about
+    :math:`y` and hundredths of an arcsecond about :math:`x`, until the
+    center of the field of view lands where
     :attr:`esis.optics.Sensor.position_image` says it should.
+
+    The alignment is found for each sensor wherever the tolerance puts it
+    across the optic axis, since the gratings of the instrument which flew
+    were pointed at the sensors where they sat. Along the axis, the focus is
+    found for the sensors where the design puts them, and the tolerance is
+    added afterward, as in :func:`_as_built_focused`.
 
     This is the model of the instrument that flew, and the one to use.
     :func:`as_built_unfocused` and :func:`_as_built_focused` are the steps on the way
@@ -687,6 +794,9 @@ def as_built(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
 
     Examples
     --------
@@ -709,8 +819,12 @@ def as_built(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
-    return result.align_grating(wavelength=O_V.wavelength)
+    z = result.camera.sensor.translation.z
+    result = _moved_sensor(result, na.nominal(z))
+    result = result.align_grating(wavelength=O_V.wavelength)
+    return _moved_sensor(result, z)
 
 
 def distortion_fit(

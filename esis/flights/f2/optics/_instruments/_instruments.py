@@ -31,7 +31,8 @@ def _blaze_rulings(grating: esis.optics.Grating) -> None:
 def design_proposed(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     """
     Load the proposed optical design for ESIS 2.
@@ -45,6 +46,9 @@ def design_proposed(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
 
     Examples
     --------
@@ -106,6 +110,7 @@ def design_proposed(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
 
     c0 = 1 / (2700 / u.mm)
@@ -127,7 +132,10 @@ def design_proposed(
 
     dz = z_filter - result.filter.translation.z
     result.filter.translation.z += dz
-    result.camera.sensor.translation.z += dz
+    # not in place, since the position of the sensor is uncertain, and an
+    # uncertain array drawn from a distribution cannot be modified in place
+    sensor = result.camera.sensor
+    sensor.translation.z = sensor.translation.z + dz
 
     result.primary_mirror.material = materials.multilayer_AlSc()
     result.grating.material = materials.multilayer_AlSc()
@@ -140,7 +148,8 @@ def design_proposed(
 def design_guess(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""
     Load the starting point (or guess) for optimization of the ESIS-II design.
@@ -171,6 +180,9 @@ def design_guess(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
 
     Notes
     -----
@@ -307,6 +319,7 @@ def design_guess(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
 
     result.primary_mirror.material = materials.multilayer_AlSc()
@@ -433,7 +446,8 @@ def design_guess(
 def design_single(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""
     Load a single channel of the ESIS-II design.
@@ -451,6 +465,9 @@ def design_single(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
 
     Examples
     --------
@@ -496,6 +513,7 @@ def design_single(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
 
     yaw_grating = -2.42796088e00 * u.deg
@@ -523,7 +541,8 @@ def design_single(
 def design(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""
     Load all six channels of the ESIS-II design.
@@ -541,17 +560,22 @@ def design(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
     """
     old = esis.flights.f1.optics.design_full(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
 
     result = design_single(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
 
     result.grating.azimuth = old.grating.azimuth
@@ -568,7 +592,8 @@ def design(
 def design_visible(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
-    num_distribution: int = 11,
+    num_distribution: int = 0,
+    seed: None | int = None,
 ) -> esis.optics.Instrument:
     r"""
     Load a visible-light version of the ESIS-II design.
@@ -605,6 +630,9 @@ def design_visible(
         The name of the logical axis corresponding to changing camera channel.
     num_distribution
         number of Monte Carlo samples to draw when computing uncertainties
+    seed
+        seed for the random number generator which draws the Monte Carlo
+        samples, or :obj:`None` to draw different samples every time
 
     Examples
     --------
@@ -640,6 +668,7 @@ def design_visible(
         grid=grid,
         axis_channel=axis_channel,
         num_distribution=num_distribution,
+        seed=seed,
     )
 
     wavelength_center = (wavelength_Ne_VII + wavelength_Si_XII) / 2
