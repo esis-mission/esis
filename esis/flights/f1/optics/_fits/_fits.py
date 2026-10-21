@@ -733,11 +733,12 @@ def _versions() -> dict[str, str]:
     return result
 
 
-def _stamp() -> dict:
-    """Date and environment, which every table's metadata carries."""
+def _stamp(seed: int) -> dict:
+    """Date, environment and seed, which every table's metadata carries."""
     return dict(
         date=datetime.datetime.now().isoformat(timespec="seconds"),
         environment=_environment(),
+        seed=seed,
     )
 
 
@@ -886,7 +887,7 @@ def measure_window_edges(
         lines=list(lines),
         error_max=float(error_max.to_value(u.pix)),
         sides=list(esis.optics.SIDES),
-        **_stamp(),
+        **_stamp(seed),
     )
     median_edges.meta.update(meta)
     drift.meta.update(meta)
@@ -1245,7 +1246,7 @@ def fit_distortion_reference(
                 merit=merit,
                 scores=scores,
                 windows=windows,
-                **_stamp(),
+                **_stamp(seed),
             ),
         )
     return result
@@ -1324,7 +1325,6 @@ def realign_distortion_reference(
         )
         meta["windows"] = windows
         meta["realigned"] = dict(
-            date=datetime.datetime.now().isoformat(timespec="seconds"),
             start=start.meta.get("date"),
             note=(
                 "the internal alignment rerun on the saved reference with the "
@@ -1332,7 +1332,7 @@ def realign_distortion_reference(
                 + ", ".join(f"{m:.2f}" for m in medians)
                 + " px)"
             ),
-            environment=_environment(),
+            **_stamp(seed),
         )
         result.to_file(path, metadata=meta)
     return result
@@ -1846,7 +1846,7 @@ def fit_defocus_history(
             anchor=int(anchor),
             pattern=[[float(v) for v in p] for p in pattern],
             scatter=[float(s) for s in scatter],
-            environment=_environment(),
+            **_stamp(seed),
         )
     )
     if path is not None:
@@ -2258,7 +2258,7 @@ def fit_coregistration(
             scatter=[[float(v) for v in row] for row in scatter],
             rms_first=float(np.sqrt(np.nanmean(shifts_first[:, others] ** 2))),
             rms_last=float(np.sqrt(np.nanmean(shifts_last[:, others] ** 2))),
-            **_stamp(),
+            **_stamp(seed),
         )
     )
     if path is not None:
@@ -2529,7 +2529,7 @@ def fit_distortion_pointing(
                 )
                 + ", per frame, with the measured defocus applied"
             ),
-            environment=_environment(),
+            **_stamp(seed),
         )
     )
     if relative and frame_reference in frames:
@@ -2848,7 +2848,7 @@ def acceptance(
                     "which is near zero when what is left is noise."
                 ),
                 anchor=anchor,
-                environment=_environment(),
+                **_stamp(seed),
             )
         )
         modes.write(
@@ -2867,7 +2867,7 @@ def acceptance(
                 num_sky=num_sky,
                 num_tile=num_tile,
                 fraction_valid=fraction_valid,
-                environment=_environment(),
+                **_stamp(seed),
             )
         )
         tiles.write(
@@ -2977,7 +2977,7 @@ def acceptance(
                 "anchor"
             ),
             outline=outline,
-            **_stamp(),
+            **_stamp(seed),
         )
     )
     if path is not None:

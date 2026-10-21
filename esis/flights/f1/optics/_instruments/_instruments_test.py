@@ -518,7 +518,8 @@ def test_distortion_fit_axis_time():
 
 
 def test_distortion_fit_tables_record_environment():
-    # every committed table names the environment that produced it
+    # every committed table names the environment and the seed that
+    # produced it, so that the run can be repeated
     directory = pathlib.Path(esis.flights.f1.optics._instruments._instruments.__file__)
     paths = sorted((directory.parent / "_data").glob("*.ecsv"))
     assert paths
@@ -528,6 +529,7 @@ def test_distortion_fit_tables_record_environment():
         assert environment is not None, path.name
         assert "optika" in environment["checkouts"], path.name
         assert "optika" in environment["packages"], path.name
+        assert isinstance(table.meta.get("seed"), int), path.name
 
 
 def test_distortion_fit_sensor_terms():

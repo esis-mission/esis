@@ -368,8 +368,9 @@ def test_map_channels():
 
 
 def test_stamp():
-    stamp = _fits._stamp()
-    assert set(stamp) == {"date", "environment"}
+    stamp = _fits._stamp(seed=3)
+    assert set(stamp) == {"date", "environment", "seed"}
+    assert stamp["seed"] == 3
     assert stamp["date"][:4] == str(_fits.datetime.date.today().year)
     assert "optika" in stamp["environment"]["checkouts"]
 
