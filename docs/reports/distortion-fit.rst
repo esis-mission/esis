@@ -222,19 +222,27 @@ environment is the released libraries, ``optika`` 3.1 and later,
 placed every AIA image one pixel, 0.6 arcsec, from where it belongs, and
 the fit made with it had the pointing 0.8 arcsec away and nothing else
 changed.  The committed tables carry the gains, read noise and dark
-current of the cameras from their verification decks (#107); the run
-before them, made with the gains of an earlier summary of those tests,
-which had two cameras' gains swapped, agrees with them to the scatter
-between seeds: three of the four captures landed elsewhere along the
-near-null directions of the problem (channel 2's reproduced to four
-figures), the shared pointing moved 0.35 arcsec, and the held-out
-correlations came out within 0.009, the pointing drifts within 0.08
-arcsec, the sector foci within 5 µm and the registration within 0.01 px
-rms.  The committed tables were made on the cluster's GPUs; the same chain
-on the host (``ESIS_DEVICE=cpu``) reproduced an earlier run of the chain,
-the capture merits to seven figures and the pointing to 0.03 arcsec, in
-about the same time.  Every table's header records the whole environment
-it was made in:
+current of the cameras from their verification decks (#107).  The fit is stochastic: the capture draws its population at random, and
+every linearization samples the field and the pupil at random positions
+inside its cells.  One seed, ``ESIS_SEED`` (0 by default), sets all of
+these draws, and every table records the seed it was made with in its
+header.  The committed tables are the seed-0 run of a set of five, made
+on 2026-10-21 from seeds 0 to 4 with otherwise identical settings.  The
+registration of the channels against one another, the median tile shift
+of each channel against channel 1 at each line and bright frame, varies
+between the runs by 0.03 px rms, against a registration of about 0.1 px;
+the parameters differ more, along the near-null directions of the
+problem.  The capture of channel 0 at seed 3 settled in a false optimum,
+a correlation of 0.65 where every other capture reached 0.79 to 0.85,
+and the chain could not continue from it (the window-drift sensitivity of
+the focus stage pushed the light off the sensor); that run is left out of
+the scatter.  On the cluster's GPUs a seed repeats the fit only to about
+0.0005 in correlation: seed 0 run twice, on code that differed only in
+the table headers, agreed to that and to 0.03 px rms in registration.  The committed tables were made on the cluster's GPUs; the
+same chain on the host (``ESIS_DEVICE=cpu``) reproduced an earlier run of
+the chain, the capture merits to seven figures and the pointing to 0.03
+arcsec, in about the same time.  Every table's header records the whole
+environment it was made in:
 the interpreter, the platform, the version of every installed package and
 the commit of each checkout the fit imported from, so that a table names
 exactly the code that produced it.  A further command, ``coregister``,
@@ -243,9 +251,9 @@ each channel's own pointing, twelve numbers through the flight; it was the
 measurement that led to the sector focus.  Its table,
 ``coregistration.ecsv``, is committed beside the others, and
 :func:`esis.flights.f1.optics.distortion_fit` applies it only when asked
-(``channel_offsets=True``): the offsets are at most 0.16 arcsec, 0.20 px,
+(``channel_offsets=True``): the offsets are at most 0.18 arcsec, 0.24 px,
 and take the registration of the channels over the bright frames from 0.11
-to 0.09 px rms at He I and from 0.09 to 0.06 px at O V (1.6 to 1.4 and
+to 0.09 px rms at He I and from 0.10 to 0.07 px at O V (1.5 to 1.4 and
 0.8 to 0.7 km/s along the dispersion), with the held-out correlations
 unchanged.  They are kept as an option because no mechanism stands behind
 them; ``ESIS_COREGISTERED=1`` makes ``accept`` and ``coalign.py`` score
@@ -265,22 +273,22 @@ Results
 -------
 
 The correlation of each channel with its frame after each stage of the
-committed chain, run on the cluster on 2026-10-13 (the as-built row is the
+committed chain, run on the cluster on 2026-10-21 (the as-built row is the
 starting model, the absolute row the capture of the four channel jobs):
 
 =============  ======  ======  ======  ======
 stage             ch0     ch1     ch2     ch3
 =============  ======  ======  ======  ======
 as-built        0.350   0.419   0.404   0.379
-absolute        0.809   0.848   0.799   0.820
-outline         0.807   0.848   0.798   0.821
-edges [px]       2.05    1.92    2.02    2.56
-shared          0.815   0.848   0.805   0.828
-aligned [px]     0.02    0.00    0.04    0.02
+absolute        0.811   0.848   0.802   0.828
+outline         0.810   0.848   0.801   0.827
+edges [px]       2.51    2.03    2.22    1.89
+shared          0.816   0.848   0.803   0.828
+aligned [px]     0.01    0.00    0.03    0.03
 =============  ======  ======  ======  ======
 
 The merit is the correlation.  The primary displacement is held at nominal, the field-stop roll and the instrument roll at zero,
-and the pointing is shared: pitch -20.7, yaw -16.5 arcsec
+and the pointing is shared: pitch -20.6, yaw -16.3 arcsec
 from the as-built model; the aligned row is the length of the median tile shift of each channel
 against channel 1 after the internal alignment.  The free set of every stage, the seed and
 schedule of the capture, the per-stage scores, the package commits and
@@ -297,36 +305,36 @@ pixels, He I first then O V.
 =====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
 frame  corr 0  corr 1  corr 2  corr 3  He I 0  He I 1  He I 2  He I 3   O V 0   O V 1   O V 2   O V 3
 =====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
-    0     nan     nan     nan     nan    0.21    0.00    0.28    0.15    0.16    0.00    0.20    0.25
-    1     nan     nan     nan     nan    0.09    0.00    0.19    0.12    0.12    0.00    0.17    0.17
-    2     nan     nan     nan     nan    0.17    0.00    0.24    0.07    0.09    0.00    0.14    0.14
-    3     nan     nan     nan     nan    0.13    0.00    0.21    0.07    0.07    0.00    0.12    0.18
-    4     nan     nan     nan     nan    0.14    0.00    0.18    0.08    0.04    0.00    0.10    0.17
-    5     nan     nan     nan     nan    0.08    0.00    0.17    0.07    0.02    0.00    0.07    0.16
-    6     nan     nan     nan     nan    0.06    0.00    0.15    0.06    0.05    0.00    0.08    0.15
-    7     nan     nan     nan     nan    0.11    0.00    0.13    0.09    0.05    0.00    0.06    0.11
-    8     nan     nan     nan     nan    0.10    0.00    0.11    0.11    0.05    0.00    0.05    0.09
-    9   0.804   0.848   0.805   0.828    0.04    0.00    0.09    0.07    0.02    0.00    0.04    0.06
-   10     nan     nan     nan     nan    0.08    0.00    0.05    0.08    0.05    0.00    0.04    0.04
-   11     nan     nan     nan     nan    0.04    0.00    0.14    0.08    0.01    0.00    0.02    0.10
-   12   0.811   0.843   0.799   0.824    0.06    0.00    0.06    0.06    0.04    0.00    0.04    0.14
-   13     nan     nan     nan     nan    0.10    0.00    0.06    0.10    0.02    0.00    0.05    0.07
-   14     nan     nan     nan     nan    0.11    0.00    0.08    0.10    0.02    0.00    0.04    0.07
-   15   0.816   0.848   0.804   0.828    0.09    0.00    0.06    0.12    0.02    0.00    0.03    0.08
-   16     nan     nan     nan     nan    0.08    0.00    0.07    0.07    0.05    0.00    0.02    0.07
-   17     nan     nan     nan     nan    0.05    0.00    0.12    0.03    0.02    0.00    0.04    0.08
-   18   0.813   0.845   0.801   0.826    0.10    0.00    0.08    0.04    0.03    0.00    0.04    0.11
-   19     nan     nan     nan     nan    0.09    0.00    0.09    0.04    0.02    0.00    0.02    0.09
-   20     nan     nan     nan     nan    0.08    0.00    0.08    0.09    0.04    0.00    0.03    0.13
-   21   0.813   0.845   0.800   0.824    0.08    0.00    0.08    0.09    0.04    0.00    0.03    0.13
-   22     nan     nan     nan     nan    0.14    0.00    0.16    0.08    0.04    0.00    0.04    0.12
-   23     nan     nan     nan     nan    0.12    0.00    0.12    0.06    0.05    0.00    0.02    0.08
-   24   0.810   0.840   0.797   0.817    0.17    0.00    0.15    0.12    0.03    0.00    0.02    0.09
-   25     nan     nan     nan     nan    0.12    0.00    0.07    0.04    0.09    0.00    0.02    0.11
-   26     nan     nan     nan     nan    0.15    0.00    0.10    0.01    0.11    0.00    0.05    0.12
-   27     nan     nan     nan     nan    0.06    0.00    0.11    0.08    0.09    0.00    0.08    0.12
-   28     nan     nan     nan     nan    0.13    0.00    0.13    0.13    0.11    0.00    0.14    0.19
-   29     nan     nan     nan     nan    0.84    0.00    0.07    0.34    0.23    0.00    0.17    0.10
+    0     nan     nan     nan     nan    0.17    0.00    0.24    0.22    0.13    0.00    0.13    0.26
+    1     nan     nan     nan     nan    0.12    0.00    0.16    0.11    0.09    0.00    0.14    0.20
+    2     nan     nan     nan     nan    0.21    0.00    0.24    0.04    0.09    0.00    0.12    0.17
+    3     nan     nan     nan     nan    0.13    0.00    0.22    0.05    0.05    0.00    0.09    0.19
+    4     nan     nan     nan     nan    0.16    0.00    0.17    0.05    0.08    0.00    0.10    0.17
+    5     nan     nan     nan     nan    0.10    0.00    0.17    0.07    0.04    0.00    0.07    0.17
+    6     nan     nan     nan     nan    0.11    0.00    0.15    0.01    0.03    0.00    0.08    0.18
+    7     nan     nan     nan     nan    0.17    0.00    0.15    0.10    0.02    0.00    0.06    0.16
+    8     nan     nan     nan     nan    0.15    0.00    0.14    0.10    0.03    0.00    0.04    0.12
+    9   0.805   0.848   0.806   0.828    0.10    0.00    0.12    0.06    0.04    0.00    0.05    0.08
+   10     nan     nan     nan     nan    0.11    0.00    0.13    0.05    0.03    0.00    0.06    0.09
+   11     nan     nan     nan     nan    0.05    0.00    0.14    0.05    0.02    0.00    0.02    0.13
+   12   0.812   0.843   0.800   0.823    0.09    0.00    0.10    0.06    0.02    0.00    0.05    0.14
+   13     nan     nan     nan     nan    0.09    0.00    0.10    0.09    0.02    0.00    0.05    0.07
+   14     nan     nan     nan     nan    0.10    0.00    0.06    0.07    0.03    0.00    0.05    0.07
+   15   0.817   0.848   0.804   0.828    0.09    0.00    0.06    0.10    0.04    0.00    0.05    0.11
+   16     nan     nan     nan     nan    0.11    0.00    0.07    0.06    0.02    0.00    0.04    0.10
+   17     nan     nan     nan     nan    0.04    0.00    0.11    0.03    0.04    0.00    0.05    0.09
+   18   0.813   0.845   0.802   0.826    0.09    0.00    0.12    0.05    0.00    0.00    0.04    0.12
+   19     nan     nan     nan     nan    0.09    0.00    0.10    0.07    0.04    0.00    0.05    0.10
+   20     nan     nan     nan     nan    0.06    0.00    0.09    0.07    0.06    0.00    0.03    0.17
+   21   0.814   0.845   0.801   0.824    0.07    0.00    0.11    0.10    0.04    0.00    0.05    0.16
+   22     nan     nan     nan     nan    0.12    0.00    0.14    0.07    0.03    0.00    0.07    0.13
+   23     nan     nan     nan     nan    0.13    0.00    0.09    0.04    0.05    0.00    0.02    0.11
+   24   0.811   0.840   0.798   0.817    0.16    0.00    0.13    0.10    0.03    0.00    0.03    0.10
+   25     nan     nan     nan     nan    0.10    0.00    0.06    0.03    0.08    0.00    0.03    0.14
+   26     nan     nan     nan     nan    0.12    0.00    0.07    0.04    0.08    0.00    0.03    0.16
+   27     nan     nan     nan     nan    0.08    0.00    0.04    0.09    0.07    0.00    0.06    0.14
+   28     nan     nan     nan     nan    0.10    0.00    0.13    0.18    0.11    0.00    0.17    0.21
+   29     nan     nan     nan     nan    1.04    0.00    0.12    0.38    0.11    0.00    0.18    0.24
 =====  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======  ======
 
 The coalignment metric over 30 frames of the flight, every channel but channel 1: the rms and the
@@ -336,13 +344,13 @@ in detector pixels (about 17 km/s per pixel along the dispersion):
 =====  =======  =======  =======  ==============  ==============  ==============
 line   rms      max      scatter  along disp.     rms velocity    max velocity
 =====  =======  =======  =======  ==============  ==============  ==============
-He I     0.146    0.843    0.325    0.121 px        2.3 km/s       15.9 km/s
-O V      0.098    0.251    0.243    0.059 px        1.0 km/s        3.8 km/s
+He I     0.162    1.042    0.328    0.136 px        2.6 km/s       19.7 km/s
+O V      0.104    0.260    0.251    0.061 px        1.1 km/s        3.7 km/s
 =====  =======  =======  =======  ==============  ==============  ==============
 
 A pixel along the dispersion is 18.9 km/s at He I and 17.4 km/s at O V; only the component of a shift along a channel's dispersion is a velocity error.
 
-The residual of the window outlines against the flight-median edges is 2.2, 2.2, 2.2, 1.9 px on channels 0 to 3, and of the window widths 2.6, 2.7, 2.6, 2.7 px: the modelled windows are about two pixels too large on every
+The residual of the window outlines against the flight-median edges is 2.2, 2.1, 2.2, 1.8 px on channels 0 to 3, and of the window widths 2.6, 2.6, 2.6, 2.6 px: the modelled windows are about two pixels too large on every
 side, which the primary cannot fix, see below.
 
 The focus of each sector of the primary
@@ -382,9 +390,9 @@ each channel's dispersion is at the noise.  The figure modes of the primary
 tried first, astigmatism, coma and trefoil, had failed because they force
 the four sectors into a fixed relation; the sectors want their own
 histories, channel 0's sector holding within 7 µm of its focus at the
-reference frame while channel 1's moves from −25 to +30 µm, channel 2's
-from +1 to +35 and channel 3's from −18 to +15, and each is smooth in time
-to the precision of a single frame, 2 to 3 µm.  Nothing after the field stop can do this, and
+reference frame while channel 1's moves from −22 to +34 µm, channel 2's
+from +1 to +33 and channel 3's from −18 to +19, and each is smooth in time
+to the precision of a single frame, about 3 µm.  Nothing after the field stop can do this, and
 neither can any rigid motion of the mirror or the stop, so if it is real
 it is the figure of the primary changing unevenly with temperature, about
 100 nm of sag between sectors over the flight, the same scale as the common
