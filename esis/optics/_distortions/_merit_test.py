@@ -165,6 +165,26 @@ def test_correlation_raytraced(merit):
     assert 0 < result <= 1
 
 
+def test_correlation_raytraced_seed(merit):
+    # the seed places every ray inside its cell, so the same seed gives the
+    # same correlation and another seed moves the rays
+    m, truth = merit
+    pupil = na.Cartesian2dVectorLinearSpace(
+        -0.25, 0.25, axis=na.Cartesian2dVectorArray("pupil_x", "pupil_y"), num=2
+    )
+    kwargs = dict(
+        instrument=m.instrument,
+        parameters=truth,
+        scene=m.scene,
+        observation=m.observation,
+        pupil=pupil,
+        sigma_psf=2.0,
+    )
+    expected = _merit.correlation_raytraced(**kwargs)
+    assert _merit.correlation_raytraced(**kwargs, seed=0) == expected
+    assert _merit.correlation_raytraced(**kwargs, seed=1) != expected
+
+
 def test_merit_propagates_faults(merit, monkeypatch):
     m, truth = merit
     x = na.pack(truth).ndarray
