@@ -6,6 +6,7 @@ from ._instruments import (
     as_built,
     _as_built_focused as _as_built_focused,
     distortion_fit,
+    distortion_fit_bounds,
 )
 
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     "as_built_unfocused",
     "as_built",
     "distortion_fit",
+    "distortion_fit_bounds",
 ]

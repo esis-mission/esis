@@ -1,0 +1,262 @@
+import dataclasses
+import pytest
+import pathlib
+import numpy as np
+import astropy.units as u
+import astropy.table
+import named_arrays as na
+import esis
+from . import _parameters
+
+
+def _channel() -> esis.optics.Instrument:
+    return esis.flights.f1.optics.design(num_distribution=0)[dict(channel=1)]
+
+
+def test_from_instrument():
+    instrument = _channel()
+    result = esis.optics.DistortionParameters.from_instrument(instrument)
+    assert result.yaw_grating.unit == u.arcmin
+    assert result.pitch.unit == u.arcsec
+    # the sensor terms are measured from the instrument's own placement
+    assert result.z_sensor == 0 * u.mm
+    assert result.yaw_sensor == instrument.camera.sensor.yaw
+
+
+def test_pack_round_trip():
+    instrument = _channel()
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    x = na.pack(parameters).ndarray
+    assert x.shape == (17,)
+    result = na.unpack(x, parameters)
+    for name in ("yaw_grating", "pitch", "z_sensor", "yaw_sensor"):
+        assert getattr(result, name) == getattr(parameters, name)
+
+
+def test_to_instrument():
+    instrument = _channel()
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    parameters.pitch = 5 * u.arcsec
+    parameters.roll_sensor = 0.1 * u.deg
+    parameters.x_sensor = 0.3 * u.mm
+    parameters.z_sensor = 2 * u.mm
+    result = parameters.to_instrument(instrument)
+
+    assert result.pitch == 5 * u.arcsec
+    assert result.camera.sensor.roll == 0.1 * u.deg
+    assert result.camera.sensor.translation.x == 0.3 * u.mm
+    # the compound move: the sensor by the shift, the grating by less
+    assert (
+        result.camera.sensor.translation.z
+        == instrument.camera.sensor.translation.z + 2 * u.mm
+    )
+    assert np.isclose(
+        (result.grating.translation.z - instrument.grating.translation.z).to_value(
+            u.mm
+        ),
+        2 / _parameters.KAPPA_FOCUS,
+    )
+    # the original is untouched
+    assert instrument.pitch == 0 * u.arcsec
+    assert instrument.camera.sensor.roll == 0 * u.deg
+
+
+def test_to_instrument_repeated():
+    # applying parameters to an instrument that already carries some must
+    # measure the sensor terms from the same origin, not accumulate
+    instrument = _channel()
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    parameters.z_sensor = 2 * u.mm
+    once = parameters.to_instrument(instrument)
+    twice = parameters.to_instrument(once)
+    assert twice.camera.sensor.translation.z == once.camera.sensor.translation.z
+    assert twice.grating.translation.z == once.grating.translation.z
+    again = esis.optics.DistortionParameters.from_instrument(twice)
+    assert np.isclose(again.z_sensor.to_value(u.mm), 2)
+
+
+def test_z_primary():
+    """
+    Defocus the primary: it moves at a fixed focal length, and repeatedly.
+
+    The displacement term moves the primary and lengthens its focus
+    together; the defocus term moves it alone.
+    """
+    instrument = _channel()
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    assert parameters.z_primary == 0 * u.mm
+    focal_length = instrument.primary_mirror.sag.focal_length
+    parameters.z_primary = 0.2 * u.mm
+    parameters.displacement_primary = -3 * u.mm
+    once = parameters.to_instrument(instrument)
+    assert once.primary_mirror.sag.focal_length == focal_length - 3 * u.mm
+    assert np.isclose(
+        once.primary_mirror.translation.z.to_value(u.mm),
+        (instrument.primary_mirror.translation.z + 3.2 * u.mm).to_value(u.mm),
+    )
+    again = esis.optics.DistortionParameters.from_instrument(once)
+    assert np.isclose(again.z_primary.to_value(u.mm), 0.2)
+    assert np.isclose(again.displacement_primary.to_value(u.mm), -3)
+    twice = parameters.to_instrument(once)
+    assert twice.primary_mirror.translation.z == once.primary_mirror.translation.z
+    assert twice.primary_mirror.sag.focal_length == once.primary_mirror.sag.focal_length
+
+
+def test_z_primary_moves_the_sky_not_the_windows():
+    """
+    A defocus shifts where the sky lands but not where the window edges land.
+
+    The field stop is an aperture in the plane the grating images, so the
+    grating puts its edge in the same place whatever the primary does; the
+    solar image, defocused, is seen through the channel's sector of the
+    primary and shifts by the sector's offset times the defocus.
+    """
+    from esis.flights.f1.optics._fits._fits import _idealized, _wavelength_lines
+
+    instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
+    instrument.wavelength = _wavelength_lines()
+    channel = instrument[dict(channel=0)]
+    p = esis.optics.DistortionParameters.from_instrument(channel)
+    wavelength = channel.wavelength[dict(wavelength=1)]
+    sky = na.Cartesian2dVectorArray(
+        x=na.ScalarArray(np.zeros(1) * u.arcsec, axes="s"),
+        y=na.ScalarArray(np.zeros(1) * u.arcsec, axes="s"),
+    )
+
+    def where(q):
+        linear = q.to_instrument(channel).system.linearize(
+            wavelength=channel.wavelength, degree=2, field_stop=True
+        )
+        footprint = linear.footprint(wavelength)
+        edge = np.array(
+            [
+                float(np.mean(na.value(footprint.x).ndarray)),
+                float(np.mean(na.value(footprint.y).ndarray)),
+            ]
+        )
+        centre = linear.distortion.distort(
+            na.SpectralPositionalVectorArray(wavelength=wavelength, position=sky)
+        ).position
+        return edge, np.array(
+            [float(na.value(centre.x).ndarray[0]), float(na.value(centre.y).ndarray[0])]
+        )
+
+    edge_0, sky_0 = where(p)
+    p.z_primary = 0.1 * u.mm
+    edge_1, sky_1 = where(p)
+    assert np.all(np.abs(edge_1 - edge_0) < 0.15)
+    assert np.hypot(*(sky_1 - sky_0)) > 1.0
+
+
+def test_from_instrument_after_indexing():
+    """
+    Read the terms back from an indexed channel of an instrument they were applied to.
+
+    The placements the terms are measured from must survive the indexing,
+    or a defocus reads back as a focal length and a sensor shift as zero.
+    """
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    p = esis.optics.DistortionParameters.from_instrument(instrument)
+    p.z_sensor = 2 * u.mm
+    p.z_primary = 0.1 * u.mm
+    p.displacement_primary = -3 * u.mm
+    applied = p.to_instrument(instrument)
+    channel = applied[dict(channel=0)]
+    again = esis.optics.DistortionParameters.from_instrument(channel)
+    assert np.isclose(again.z_sensor.to_value(u.mm), 2)
+    assert np.isclose(again.z_primary.to_value(u.mm), 0.1)
+    assert np.isclose(again.displacement_primary.to_value(u.mm), -3)
+    # and applying them to the indexed channel does not accumulate
+    twice = again.to_instrument(channel)
+    assert np.isclose(
+        twice.primary_mirror.translation.z.to_value(u.mm),
+        channel.primary_mirror.translation.z.to_value(u.mm),
+    )
+    assert np.isclose(
+        twice.camera.sensor.translation.z.to_value(u.mm),
+        channel.camera.sensor.translation.z.to_value(u.mm),
+    )
+
+
+def test_file_round_trip(tmp_path: pathlib.Path):
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    parameters.pitch_sensor = na.ScalarArray(np.arange(4) * 0.1, axes="channel") * u.deg
+    path = tmp_path / "parameters.ecsv"
+    parameters.to_file(path, metadata=dict(provenance="a test"))
+    result = esis.optics.DistortionParameters.from_file(path)
+    assert na.shape(result) == dict(channel=4)
+    assert np.all(result.pitch_sensor == parameters.pitch_sensor)
+    assert np.all(result.yaw_grating == parameters.yaw_grating)
+
+
+def test_from_file_without_sensor_terms(tmp_path: pathlib.Path):
+    # files written before the sensor terms existed load with the defaults
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    path = tmp_path / "parameters.ecsv"
+    parameters.to_file(path)
+    table = astropy.table.QTable.read(path, format="ascii.ecsv")
+    for name in (
+        "z_sensor",
+        "roll_sensor",
+        "pitch_sensor",
+        "yaw_sensor",
+        "x_sensor",
+        "y_sensor",
+        "degradation",
+    ):
+        table.remove_column(name)
+    table.write(path, format="ascii.ecsv", overwrite=True)
+    result = esis.optics.DistortionParameters.from_file(path)
+    assert result.z_sensor == 0 * u.mm
+    assert result.roll_sensor == 0 * u.deg
+    assert result.degradation == 1
+    assert np.all(result.yaw_grating == parameters.yaw_grating)
+
+
+def test_to_file_errors(tmp_path: pathlib.Path):
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    with pytest.raises(ValueError):
+        parameters.to_file(tmp_path / "a.ecsv", metadata=dict(axis="channel"))
+    two_axes = dataclasses.replace(
+        parameters,
+        pitch=na.ScalarArray(np.zeros((2, 3)), axes=("channel", "other")) * u.arcsec,
+    )
+    with pytest.raises(ValueError):
+        two_axes.to_file(tmp_path / "b.ecsv")
+
+
+def test_roll_rotates_the_image():
+    """
+    An instrument roll must turn the image about the centre of the field.
+
+    The roll is a rigid rotation of the optics about the optical axis, which
+    passes through the field stop, so the image of the centre of the field
+    stays put while the corners move.  optika 2.7.0 and 2.8.0 turned a roll
+    into a translation of the whole image instead, which would silently
+    invalidate a reference fit made against them.
+    """
+    instrument = _channel()
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    rolled = dataclasses.replace(parameters, roll=0.4 * u.deg)
+    wavelength = na.ScalarArray([584, 610, 630] * u.AA, axes=("wavelength",))
+    coordinates = na.SpectralPositionalVectorArray(
+        wavelength=wavelength,
+        position=na.Cartesian2dVectorArray(
+            x=na.linspace(-400, 400, axis="field_x", num=3) * u.arcsec,
+            y=na.linspace(-400, 400, axis="field_y", num=3) * u.arcsec,
+        ),
+    )
+
+    def image(p: esis.optics.DistortionParameters) -> na.Cartesian2dVectorArray:
+        model = p.to_instrument(instrument)
+        linear = model.system.linearize(wavelength=wavelength, degree=2)
+        return linear.distortion.distort(coordinates).position
+
+    shift = image(rolled) - image(parameters)
+    centre = shift[dict(field_x=1, field_y=1)]
+    corner = shift[dict(field_x=0, field_y=0)]
+    assert np.abs(centre.length.ndarray).max() < 0.5 * u.pix
+    assert np.abs(corner.length.ndarray).min() > 3 * u.pix
