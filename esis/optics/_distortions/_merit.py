@@ -449,7 +449,10 @@ def correlation_raytraced(
         The standard deviation, in detector pixels, of the Gaussian
         point-spread function convolved with the modeled image.
     seed
-        The seed used to freeze the imaging model's random ray jitter.
+        The seed of the draw which places a ray at a random position inside
+        each cell of the scene and the pupil, passed to the `seed` of
+        :meth:`optika.systems.SequentialSystem.image`.  The same seed gives
+        the same correlation, and another seed draws other positions.
     axis_wavelength
         The logical axis of the scene along which the wavelength varies
         within each spectral line.
@@ -457,18 +460,14 @@ def correlation_raytraced(
         The logical axes of the scene corresponding to field position.
     """
     instrument = parameters.to_instrument(instrument)
-    state = np.random.get_state()
-    np.random.seed(seed)
-    try:
-        image = instrument.system.image(
-            scene=scene,
-            pupil=pupil,
-            axis_wavelength=axis_wavelength,
-            axis_field=axis_field,
-            noise=False,
-        )
-    finally:
-        np.random.set_state(state)
+    image = instrument.system.image(
+        scene=scene,
+        pupil=pupil,
+        axis_wavelength=axis_wavelength,
+        axis_field=axis_field,
+        noise=False,
+        seed=seed,
+    )
     image = na.value(image.outputs)
     observation = na.value(observation)
     extra = tuple(set(na.shape(image)) - set(na.shape(observation)))
