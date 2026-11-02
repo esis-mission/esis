@@ -1,9 +1,11 @@
 import collections.abc
+import copy
 import dataclasses
 import pytest
 import numpy as np
 import astropy.units as u
 import named_arrays as na
+import optika
 import esis
 
 
@@ -459,12 +461,16 @@ def test_as_built_radius_grating(num_distribution: int):
 @pytest.mark.parametrize("name", ["slope_error", "roughness", "microroughness"])
 def test_as_built_figure_and_finish(optic: str, name: str) -> None:
     """
-    The figure and finish of each optic as built meet its specifications.
+    The figure and finish of each optic as built, against its specifications.
 
     The measurements are those of the primary mirror and of each grating, and
     the instrument which flew carries them through its alignment. A grating
     is measured on its own, so the measurements of the gratings are along the
     axis of the channels, beside the serial number of each.
+
+    Each meets its specification except the slope error of the primary
+    mirror. The vendor's measurement of it met the specification, but our own
+    measurement of the mirror, which the model carries, does not.
     """
     design = esis.flights.f1.optics.design(num_distribution=0)
     as_built = esis.flights.f1.optics.as_built(num_distribution=0)
@@ -473,10 +479,73 @@ def test_as_built_figure_and_finish(optic: str, name: str) -> None:
     measured = getattr(getattr(as_built, optic), name)
     assert specified is not None
     assert measured is not None
-    assert np.all(measured <= specified)
+    if (optic, name) == ("primary_mirror", "slope_error"):
+        assert np.all(measured > specified)
+    else:
+        assert np.all(measured <= specified)
 
     if optic == "grating":
         assert na.shape(measured) == na.shape(as_built.grating.serial_number)
+
+
+@pytest.mark.parametrize("num_distribution", [0, 11])
+def test_as_built_figure_primary(num_distribution: int) -> None:
+    """
+    The primary mirror as built carries our measurement of its figure.
+
+    The map sits on top of the designed sag profile, filled with zero where
+    it was not measured, and the slope error of the mirror is worked out from
+    the map over its clear aperture.
+    """
+    design = esis.flights.f1.optics.design(num_distribution=num_distribution)
+    result = esis.flights.f1.optics.as_built_unfocused(
+        num_distribution=num_distribution,
+    )
+    figure = esis.flights.f1.optics.primaries.figures.figure_measurement()
+
+    sag = result.primary_mirror.sag
+    sag_design = design.primary_mirror.sag
+    assert isinstance(sag, optika.sags.FigureErrorSag)
+    assert isinstance(sag.base, optika.sags.ParabolicSag)
+    assert np.all(sag.base.focal_length == sag_design.focal_length)
+    assert sag.axis_ == ("primary_x", "primary_y")
+    assert np.all(sag.figure_error.inputs == figure.inputs)
+    filled = np.where(np.isfinite(figure.outputs), figure.outputs, 0 * u.nm)
+    assert np.all(sag.figure_error.outputs == filled)
+    assert sag.parameters_slope_error is sag.base.parameters_slope_error
+    assert sag.parameters_roughness is sag.base.parameters_roughness
+    assert sag.parameters_microroughness is sag.base.parameters_microroughness
+
+    clear = result.primary_mirror.surface.aperture(
+        na.Cartesian3dVectorArray(figure.inputs.x, figure.inputs.y, 0 * u.mm)
+    )
+    slope_error = optika.metrology.slope_error(
+        figure_error=na.FunctionArray(
+            inputs=figure.inputs,
+            outputs=np.where(clear, figure.outputs, np.nan),
+        ),
+        parameters=sag_design.parameters_slope_error,
+        axis=("primary_x", "primary_y"),
+    )
+    assert np.all(result.primary_mirror.slope_error == slope_error)
+    assert np.isclose(slope_error.ndarray, 1.164 * u.urad, rtol=1e-3, atol=0)
+
+
+def test_as_built_figure_primary_rays() -> None:
+    """
+    The measured figure of the primary mirror moves no ray.
+
+    The map does not tilt the surface, and the primary mirror is not a stop.
+    """
+    instrument = esis.flights.f1.optics.as_built(num_distribution=0)
+    without = copy.deepcopy(instrument)
+    without.primary_mirror.sag = without.primary_mirror.sag.base
+
+    rays = instrument.system.raytrace().outputs
+    rays_without = without.system.raytrace().outputs
+    assert np.all(rays.position == rays_without.position)
+    assert np.all(rays.direction == rays_without.direction)
+    assert np.all(rays.intensity == rays_without.intensity)
 
 
 @pytest.mark.parametrize("num_distribution", [0, 11])
