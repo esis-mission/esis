@@ -493,8 +493,8 @@ def test_as_built_figure_primary(num_distribution: int) -> None:
     """
     The primary mirror as built carries our measurement of its figure.
 
-    The map sits on top of the designed sag profile, filled with zero where
-    it was not measured, and the slope error of the mirror is worked out from
+    The map sits on top of the designed sag profile as it was measured, NaN
+    where it was not, and the slope error of the mirror is worked out from
     the map over its clear aperture.
     """
     design = esis.flights.f1.optics.design(num_distribution=num_distribution)
@@ -510,8 +510,9 @@ def test_as_built_figure_primary(num_distribution: int) -> None:
     assert np.all(sag.base.focal_length == sag_design.focal_length)
     assert sag.axis_ == ("primary_x", "primary_y")
     assert np.all(sag.figure_error.inputs == figure.inputs)
-    filled = np.where(np.isfinite(figure.outputs), figure.outputs, 0 * u.nm)
-    assert np.all(sag.figure_error.outputs == filled)
+    measured = np.isfinite(figure.outputs)
+    assert np.all(np.isfinite(sag.figure_error.outputs) == measured)
+    assert np.all(np.where(measured, sag.figure_error.outputs == figure.outputs, True))
     assert sag.parameters_slope_error is sag.base.parameters_slope_error
     assert sag.parameters_roughness is sag.base.parameters_roughness
     assert sag.parameters_microroughness is sag.base.parameters_microroughness
