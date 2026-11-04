@@ -31,9 +31,10 @@ a ``_coregistered`` suffix, so the two models can be compared.
 Environment: ESIS_DEVICE (default ``cuda``; ``cpu`` or empty for the host),
 ESIS_WORKERS (default 6), ESIS_NUM_SCENE (sampling of the AIA scene,
 default 401), ESIS_SEED (seed of the capture and of the samples every
-channel is linearized on, in every command, default 0), ESIS_PRIMARY=0 to
-hold the primary at nominal, ESIS_DRIFT_DEGREE (polynomial that smooths the
-window drift, default 3; empty for none), ESIS_DEFOCUS_DEGREE (polynomial
+channel is linearized on, in every command, default 0), ESIS_PRIMARY=1 to
+scan the primary, held at nominal otherwise, ESIS_DRIFT_DEGREE (polynomial
+that smooths the window drift, default 3; empty for none),
+ESIS_DEFOCUS_DEGREE (polynomial
 through each sector's focus, default 2), ESIS_COREGISTRATION_DEGREE (the
 same for ``coregister``, default 2), ESIS_COREGISTERED=1 to score the
 co-registered copy of the pointing table, and to depart from the committed
@@ -59,7 +60,7 @@ DEVICE = os.environ.get("ESIS_DEVICE", "cuda")
 DEVICE = None if DEVICE.strip().lower() in ("", "cpu", "none") else DEVICE
 WORKERS = int(os.environ.get("ESIS_WORKERS", "6"))
 MERIT = os.environ.get("ESIS_MERIT", "correlation")
-PRIMARY = os.environ.get("ESIS_PRIMARY", "1") not in ("0", "false", "no")
+PRIMARY = os.environ.get("ESIS_PRIMARY", "0") not in ("0", "false", "no")
 # 401 samples is 2.1 arcsec, about 2.8 ESIS pixels
 NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
 SEED = int(os.environ.get("ESIS_SEED", "0"))

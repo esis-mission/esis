@@ -451,8 +451,8 @@ twelve degrees; with no lateral term to undo that, the merit refuses the
 move that would restore the sky's scale, the widths never change, and the
 width error is flat to a hundredth of a pixel at every displacement,
 which is what was observed.  The committed tables therefore hold the
-primary at nominal, and the stage stays in the package with
-``primary=False`` as the driver's ``ESIS_PRIMARY=0``.  The fix is a
+primary at nominal, the default, and the stage stays in the package
+behind ``primary=True``, the driver's ``ESIS_PRIMARY=1``.  The fix is a
 direct two-observable solve, or a re-polish that frees a lateral term and
 a residual without the clip.  The modelled windows are two to three
 pixels too large on every side against the measured edges, on every

@@ -448,6 +448,38 @@ def test_defocus_pattern():
         assert abs(cosine) < 0.9
 
 
+def test_solve_sector_focus():
+    # channels 0, 2 and 3 against the anchor, channel 1
+    pattern = np.array([[1.0, 0.0], [0.5, 0.5], [0.0, 1.0], [-1.0, 0.5]])
+    design = np.zeros((6, 4))
+    for i, c in enumerate((0, 2, 3)):
+        design[2 * i : 2 * i + 2, c] = pattern[c]
+        design[2 * i : 2 * i + 2, 1] = -pattern[1]
+    truth = np.array([0.01, -0.02, 0.03, 0.005])
+    measured = -design @ truth
+    z, residual = _fits._solve_sector_focus(design, measured)
+    assert np.allclose(z, truth)
+    assert residual == pytest.approx(0, abs=1e-10)
+    # a channel with no tiles has no focus, which is not the same as zero
+    measured[2:4] = np.nan
+    z, _ = _fits._solve_sector_focus(design, measured)
+    assert np.isnan(z[2])
+    assert np.all(np.isfinite(z[[0, 1, 3]]))
+    # too few shifts for any of them
+    measured[:] = np.nan
+    z, residual = _fits._solve_sector_focus(design, measured)
+    assert np.all(np.isnan(z)) and np.isnan(residual)
+
+
+def test_pixels_per_arcsec():
+    position = np.zeros(2)
+    jacobians = [
+        (position, np.array([[3.0, 0.0], [4.0, 2.0]])),
+        (position, np.array([[5.0, 0.0], [0.0, 4.0]])),
+    ]
+    assert np.allclose(_fits._pixels_per_arcsec(jacobians), [5.0, 3.0])
+
+
 def test_dispersion_and_footprints():
     """A redshift at He I displaces a channel's image by about 19 km/s per pixel."""
     instrument = _fits._base(None)

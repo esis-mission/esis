@@ -366,8 +366,8 @@ def measure_channel_shifts(
     Returns
     -------
     For every channel but the anchor, one :class:`ShiftField` per line, in
-    sky-grid samples; and the anchor's detector pixels per sky sample at
-    each line, which converts them to pixels.
+    sky-grid samples; and the anchor's detector pixels per sky sample along
+    each axis of the sky at each line, which converts them to pixels.
     """
     fields = {c: [] for c in range(len(linears)) if c != anchor}
     scales = []
@@ -377,11 +377,16 @@ def measure_channel_shifts(
             xc, yc = sensor_coordinates(linear.distortion, sky, wavelength, axis)
             if c == anchor:
                 scales.append(
-                    float(
-                        np.nanmedian(
-                            np.hypot(np.gradient(xc, axis=0), np.gradient(yc, axis=0))
+                    [
+                        float(
+                            np.nanmedian(
+                                np.hypot(
+                                    np.gradient(xc, axis=k), np.gradient(yc, axis=k)
+                                )
+                            )
                         )
-                    )
+                        for k in range(2)
+                    ]
                 )
             frame = frames[c]
             if mask_windows:
@@ -399,7 +404,7 @@ def measure_channel_shifts(
 
 def median_shifts(
     fields: dict[int, list[ShiftField]],
-    scales: list[float],
+    scales: list[tuple[float, float]],
 ) -> dict[int, np.ndarray]:
     """
     Reduce tile shifts to one median shift per channel, in detector pixels.
@@ -414,9 +419,10 @@ def median_shifts(
     fields
         The tile shifts of every channel, see :func:`measure_channel_shifts`.
     scales
-        The anchor's pixels per sky sample at each line.
+        The anchor's pixels per sky sample along each axis of the sky at each
+        line.
     """
-    scale = float(np.mean(scales))
+    scale = np.mean(scales, axis=0)
     result = {}
     for c, shift_fields in fields.items():
         if not shift_fields:
@@ -430,7 +436,7 @@ def median_shifts(
 
 def shift_modes(
     fields: list[ShiftField],
-    scale: float,
+    scale: float | np.ndarray,
     num_sky: int,
 ) -> dict[str, float]:
     """
@@ -452,7 +458,8 @@ def shift_modes(
         The tile shifts of one channel, one per line, see
         :func:`measure_channel_shifts`.
     scale
-        The anchor's detector pixels per sky sample.
+        The anchor's detector pixels per sky sample, along each axis of the
+        sky if it has two values.
     num_sky
         The number of samples along each axis of the sky grid, whose half
         width is the field's edge.
@@ -468,8 +475,9 @@ def shift_modes(
     """
     i = np.concatenate([f.i for f in fields])
     j = np.concatenate([f.j for f in fields])
-    dx = np.concatenate([f.dx for f in fields])
-    dy = np.concatenate([f.dy for f in fields])
+    scale_x, scale_y = np.broadcast_to(scale, (2,))
+    dx = np.concatenate([f.dx for f in fields]) * scale_x
+    dy = np.concatenate([f.dy for f in fields]) * scale_y
     if dx.size < 6:
         keys = (
             "translation",
@@ -515,10 +523,10 @@ def shift_modes(
     else:  # pragma: nocover
         correlation = float("nan")
     return dict(
-        translation=float(np.hypot(mx, my) * scale),
-        **{k: float(abs(v) * scale) for k, v in modes.items()},
-        scatter=float(np.sqrt(np.mean(rx**2 + ry**2)) * scale),
-        residual=float(np.sqrt(np.mean(residual_x**2 + residual_y**2)) * scale),
+        translation=float(np.hypot(mx, my)),
+        **{k: float(abs(v)) for k, v in modes.items()},
+        scatter=float(np.sqrt(np.mean(rx**2 + ry**2))),
+        residual=float(np.sqrt(np.mean(residual_x**2 + residual_y**2))),
         correlation=correlation,
     )
 

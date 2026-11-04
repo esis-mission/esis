@@ -30,6 +30,7 @@ BLOCK = 4
 """The block-averaging factor of the rendered images."""
 
 NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
+SEED = int(os.environ.get("ESIS_SEED", "0"))
 """The sampling of the AIA scene, as in the fit."""
 
 
@@ -74,6 +75,7 @@ def render(directory: pathlib.Path, device: None | str) -> None:
                 scene=scene,
                 observation=observation[dict(channel=c)],
                 device=device,
+                seed=SEED,
             )
             image = np.asarray(merit.image(p).ndarray_aligned(axes), dtype=float)
             frame = np.asarray(merit.observation.ndarray_aligned(axes), dtype=float)

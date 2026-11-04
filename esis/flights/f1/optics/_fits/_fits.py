@@ -917,7 +917,7 @@ def fit_distortion_reference(
     edges: None | str | pathlib.Path | astropy.table.QTable = None,
     window: tuple[str, ...] = _WINDOW,
     sky: tuple[str, ...] = _SKY,
-    primary: bool = True,
+    primary: bool = False,
     merit: str = "correlation",
     popsize: int = 15,
     maxiter: int = 80,
@@ -1576,6 +1576,25 @@ def _image_jacobians(
     return [_image_jacobian(linear, w) for w in wavelengths.values()]
 
 
+def _pixels_per_arcsec(jacobians: list[tuple[np.ndarray, np.ndarray]]) -> np.ndarray:
+    """
+    Find a channel's detector pixels per arcsecond along each axis of the sky.
+
+    The same units as :func:`esis.optics.median_shifts`, so that a pattern from
+    the model and a measured shift can be compared.
+
+    Parameters
+    ----------
+    jacobians
+        :func:`_image_jacobian` at every line.
+
+    Returns
+    -------
+    An array indexed ``[axis]``, the mean of the lines.
+    """
+    return np.mean([np.linalg.norm(j, axis=0) for _, j in jacobians], axis=0)
+
+
 def _defocus_pattern(
     instrument: esis.optics.Instrument,
     reference: list[esis.optics.DistortionParameters],
@@ -1637,10 +1656,44 @@ def _defocus_pattern(
         shifts[c] = np.mean(per_line, axis=0)
         if c == anchor:
             # the anchor's pixels per arcsecond, the unit the shifts report in
-            scale = float(np.mean([np.sqrt(abs(np.linalg.det(j))) for _, j in before]))
+            scale = _pixels_per_arcsec(before)
     if relative:
         shifts = shifts - shifts[anchor]
     return shifts * scale / step.to_value(u.mm)
+
+
+def _solve_sector_focus(
+    design: np.ndarray,
+    measured: np.ndarray,
+) -> tuple[np.ndarray, float]:
+    """
+    Solve for the focus of each sector of the primary from the channels' shifts.
+
+    Parameters
+    ----------
+    design
+        The shift of each channel against the anchor per unit of each sector's
+        focus, indexed ``[component, sector]``.
+    measured
+        The measured shifts, NaN where a channel has no tiles to measure.
+
+    Returns
+    -------
+    The focus of each sector, NaN where no measured shift constrains it, and
+    the rms of the residual, NaN if there are too few shifts to solve.
+    """
+    num_sector = design.shape[1]
+    ok = np.isfinite(measured)
+    if ok.sum() < num_sector:
+        return np.full(num_sector, np.nan), np.nan
+    # a measured shift s means the anchor shows at r + s what the channel
+    # shows at r (see shift_fft): the channel's image sits at -s
+    z, *_ = np.linalg.lstsq(design[ok], -measured[ok], rcond=None)
+    residual = float(np.sqrt(np.mean((measured[ok] + design[ok] @ z) ** 2)))
+    # lstsq gives a sector with no shift its minimum norm, zero, which is not
+    # a measurement
+    z[~np.any(design[ok], axis=0)] = np.nan
+    return z, residual
 
 
 def fit_defocus_history(
@@ -1752,7 +1805,10 @@ def fit_defocus_history(
                         for k in range(num_channel)
                     ]
                     sensitivity = _drift_sensitivity(instrument, parameters, merits)
-                offset = shift_drift(c, t) / sensitivity[c]
+                # the reference was fitted at its own frame with no grating
+                # offset, so the windows have moved by the drift since then
+                shift = shift_drift(c, t) - shift_drift(c, frame_reference)
+                offset = shift / sensitivity[c]
                 p.yaw_grating = p.yaw_grating + offset[0] * u.arcmin
                 p.pitch_grating = p.pitch_grating + offset[1] * u.arcmin
             model = p.to_instrument(instrument[dict(channel=c)])
@@ -1774,14 +1830,7 @@ def fit_defocus_history(
         )
         medians = esis.optics.median_shifts(fields, scales)
         measured = np.concatenate([medians[c] for c in others])
-        ok = np.isfinite(measured)
-        # a measured shift s means the anchor shows at r + s what the channel
-        # shows at r (see shift_fft): the channel's image sits at -s
-        if ok.sum() >= num_channel:
-            z, *_ = np.linalg.lstsq(design[ok], -measured[ok], rcond=None)
-            residual = float(np.sqrt(np.mean((measured[ok] + design[ok] @ z) ** 2)))
-        else:
-            z, residual = np.full(num_channel, np.nan), np.nan
+        z, residual = _solve_sector_focus(design, measured)
         shifts = np.full((num_channel, 2), np.nan)
         for c in others:
             shifts[c] = medians[c]
@@ -1961,7 +2010,7 @@ def _pointing_pattern(
     for c in range(num_channel):
         before = where(c, "pitch", 0 * step)
         if c == anchor:
-            scale = float(np.mean([np.sqrt(abs(np.linalg.det(j))) for _, j in before]))
+            scale = _pixels_per_arcsec(before)
         for k, name in enumerate(("pitch", "yaw")):
             after = where(c, name, step)
             result[c, :, k] = np.mean(
@@ -1971,7 +2020,7 @@ def _pointing_pattern(
                 ],
                 axis=0,
             )
-    return result * scale / step.to_value(u.arcsec)
+    return result * scale[None, :, None] / step.to_value(u.arcsec)
 
 
 def _fit_through_reference(
@@ -2490,6 +2539,12 @@ def fit_distortion_pointing(
         offset[: len(y)] = y
         rows.append((t, offset, shifts, offsets, z_primary))
 
+    is_relative = relative and frame_reference in frames
+    origin_drift = (
+        f"their position at frame {frame_reference}"
+        if is_relative
+        else "their flight median"
+    )
     table = astropy.table.QTable(
         dict(
             frame=np.array([r[0] for r in rows]),
@@ -2515,7 +2570,7 @@ def fit_distortion_pointing(
                 "and applied here, which moves each channel's sky along its "
                 "dispersion without moving the windows.  drift_x and "
                 "drift_y are the measured motion of each channel's windows "
-                "from their flight median, and yaw_grating and pitch_grating "
+                f"from {origin_drift}, and yaw_grating and pitch_grating "
                 "the per-channel grating offsets that reproduce it."
             ),
             provenance=(
@@ -2532,7 +2587,7 @@ def fit_distortion_pointing(
             **_stamp(seed),
         )
     )
-    if relative and frame_reference in frames:
+    if is_relative:
         table = pointing_relative(table, frame_reference)
     if path is not None:
         table.write(path, format="ascii.ecsv", overwrite=True)
@@ -2746,7 +2801,7 @@ def acceptance(
                 num_tile,
                 fraction_valid=fraction_valid,
             )
-            scale = float(np.mean(scales))
+            scale = np.mean(scales, axis=0)
             for c, per_line in fields.items():
                 modes = _alignment.shift_modes(per_line, scale, num_sky)
                 mode_rows.append((t, c, name, *[modes[k] for k in _MODE_KEYS]))
@@ -2759,8 +2814,8 @@ def acceptance(
                                 name,
                                 field.i[k],
                                 field.j[k],
-                                field.dx[k] * scale,
-                                field.dy[k] * scale,
+                                field.dx[k] * scale[0],
+                                field.dy[k] * scale[1],
                             )
                         )
             for c in range(num_channel):
@@ -2775,21 +2830,19 @@ def acceptance(
                     scatter[c][name] = np.nan
                     along[c][name] = np.nan
                     continue
-                dx = np.concatenate([f.dx for f in fields[c]])
-                dy = np.concatenate([f.dy for f in fields[c]])
+                dx = np.concatenate([f.dx for f in fields[c]]) * scale[0]
+                dy = np.concatenate([f.dy for f in fields[c]]) * scale[1]
                 # the length of the median shift, not the median length: the
                 # latter never falls below the noise of a single tile
-                shifts[c][name] = float(np.hypot(np.median(dx), np.median(dy)) * scale)
+                shifts[c][name] = float(np.hypot(np.median(dx), np.median(dy)))
                 # the part along the channel's own dispersion reads as velocity
                 along[c][name] = float(
                     abs(np.array([np.median(dx), np.median(dy)]) @ dispersion[c][0])
-                    * scale
                 )
                 scatter[c][name] = float(
                     np.sqrt(
                         np.mean((dx - np.median(dx)) ** 2 + (dy - np.median(dy)) ** 2)
                     )
-                    * scale
                 )
         for c in range(num_channel):
             rows.append(

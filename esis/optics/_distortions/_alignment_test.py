@@ -238,6 +238,14 @@ def test_channel_shifts_agree_on_the_pixel_convention():
     assert np.hypot(*shift) < 0.15
 
 
+def test_median_shifts_per_axis():
+    field = _alignment.ShiftField(
+        584 * u.AA, np.zeros(3), np.zeros(3), np.full(3, 2.0), np.full(3, 2.0)
+    )
+    result = esis.optics.median_shifts({0: [field]}, scales=[(0.5, 1.0), (0.5, 2.0)])
+    assert np.allclose(result[0], [1.0, 3.0])
+
+
 def test_shift_modes():
     """Recover a magnification and a rotation from tile shifts, and call noise noise."""
     num_sky = 401

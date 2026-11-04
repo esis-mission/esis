@@ -52,6 +52,7 @@ NUM_SKY = 1600
 """The samples along each axis of the sky grid, as in the alignment."""
 
 NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
+SEED = int(os.environ.get("ESIS_SEED", "0"))
 """The sampling of the AIA scene, whose extent sets the sky grid."""
 
 ANCHOR = 1
@@ -147,7 +148,11 @@ def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:
             model = p.to_instrument(instrument[dict(channel=c)])
             linears.append(
                 model.system.linearize(
-                    wavelength=model.wavelength, degree=2, field_stop=True
+                    wavelength=model.wavelength,
+                    degree=2,
+                    field_stop=True,
+                    seed_field=SEED,
+                    seed_pupil=SEED,
                 )
             )
         distortions = [system.distortion for system in linears]
@@ -170,11 +175,14 @@ def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:
             # detector pixels per sky sample, from the anchor's mapping
             xa, ya = coordinates[ANCHOR]
             scales.append(
-                float(
-                    np.nanmedian(
-                        np.hypot(np.gradient(xa, axis=0), np.gradient(ya, axis=0))
+                [
+                    float(
+                        np.nanmedian(
+                            np.hypot(np.gradient(xa, axis=k), np.gradient(ya, axis=k))
+                        )
                     )
-                )
+                    for k in range(2)
+                ]
             )
             common = np.all([np.isfinite(s) for s in sampled], axis=0)
             # for the shift measurement, as the alignment sees the channels
@@ -238,8 +246,8 @@ def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:
                     if rows:
                         r = np.array(rows)
                         table[f"{b}-{a}"] = [
-                            float(np.median(r[:, 2]) * scales[-1]),
-                            float(np.median(r[:, 3]) * scales[-1]),
+                            float(np.median(r[:, 2]) * scales[-1][0]),
+                            float(np.median(r[:, 3]) * scales[-1][1]),
                         ]
             shifts[name] = table
             dispersions[name] = dispersion
