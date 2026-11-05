@@ -2539,12 +2539,6 @@ def fit_distortion_pointing(
         offset[: len(y)] = y
         rows.append((t, offset, shifts, offsets, z_primary))
 
-    is_relative = relative and frame_reference in frames
-    origin_drift = (
-        f"their position at frame {frame_reference}"
-        if is_relative
-        else "their flight median"
-    )
     table = astropy.table.QTable(
         dict(
             frame=np.array([r[0] for r in rows]),
@@ -2570,7 +2564,7 @@ def fit_distortion_pointing(
                 "and applied here, which moves each channel's sky along its "
                 "dispersion without moving the windows.  drift_x and "
                 "drift_y are the measured motion of each channel's windows "
-                f"from {origin_drift}, and yaw_grating and pitch_grating "
+                "from their flight median, and yaw_grating and pitch_grating "
                 "the per-channel grating offsets that reproduce it."
             ),
             provenance=(
@@ -2587,7 +2581,7 @@ def fit_distortion_pointing(
             **_stamp(seed),
         )
     )
-    if is_relative:
+    if relative and frame_reference in frames:
         table = pointing_relative(table, frame_reference)
     if path is not None:
         table.write(path, format="ascii.ecsv", overwrite=True)
@@ -3078,6 +3072,10 @@ def pointing_relative(table: astropy.table.QTable, frame: int) -> astropy.table.
             continue
         origin[name] = table[name][where[0]]
         result[name] = table[name] - origin[name]
+    if "description" in result.meta:
+        result.meta["description"] = result.meta["description"].replace(
+            "from their flight median", f"from their position at frame {frame}"
+        )
     result.meta["frame_reference"] = int(frame)
     result.meta["offset_reference"] = (
         f"the fit of frame {frame} alone landed at pitch {origin['pitch']:.3f}, "

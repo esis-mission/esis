@@ -85,7 +85,11 @@ def test_pointing_relative():
             roll=np.array([0.1, 0.2, 0.3]) * u.deg,
         )
     )
+    table.meta["description"] = "windows from their flight median, and more"
     result = _fits.pointing_relative(table, frame=1)
+    assert (
+        result.meta["description"] == "windows from their position at frame 1, and more"
+    )
     assert result["pitch"][1] == 0 * u.arcsec
     assert result["yaw"][1] == 0 * u.arcsec
     assert result["roll"][1] == 0 * u.deg

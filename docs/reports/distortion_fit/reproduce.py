@@ -34,8 +34,8 @@ default 401), ESIS_SEED (seed of the capture and of the samples every
 channel is linearized on, in every command, default 0), ESIS_PRIMARY=1 to
 scan the primary, held at nominal otherwise, ESIS_DRIFT_DEGREE (polynomial
 that smooths the window drift, default 3; empty for none),
-ESIS_DEFOCUS_DEGREE (polynomial
-through each sector's focus, default 2), ESIS_COREGISTRATION_DEGREE (the
+ESIS_DEFOCUS_DEGREE (polynomial through each sector's focus, default 2),
+ESIS_COREGISTRATION_DEGREE (the
 same for ``coregister``, default 2), ESIS_COREGISTERED=1 to score the
 co-registered copy of the pointing table, and to depart from the committed
 configuration, ESIS_MERIT (``correlation`` or ``least_squares``),
