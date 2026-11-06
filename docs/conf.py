@@ -30,9 +30,18 @@ _url_pages = (
     "/distortion-pages-v1.0"
 )
 _pages = {
-    "blink.html": "sha256:9fbfe94dc7dcdd3312be64de283ebff84c6e79696ad4cab7f697cb7ac968e903",
-    "coalign.html": "sha256:c3ad7ae2e04f32182be1b054cc26b4bc9958aac65e33024ab8f6febe6d57da5d",
-    "summary.html": "sha256:902ccecca4fd505fba046a7d2101ea0e37c6430831e110d7f4e6b2f53abcaaa8",
+    "blink.html": (
+        "sha256:"
+        "9fbfe94dc7dcdd3312be64de283ebff84c6e79696ad4cab7f697cb7ac968e903"
+    ),
+    "coalign.html": (
+        "sha256:"
+        "c3ad7ae2e04f32182be1b054cc26b4bc9958aac65e33024ab8f6febe6d57da5d"
+    ),
+    "summary.html": (
+        "sha256:"
+        "902ccecca4fd505fba046a7d2101ea0e37c6430831e110d7f4e6b2f53abcaaa8"
+    ),
 }
 for _name, _hash in _pages.items():
     pooch.retrieve(
