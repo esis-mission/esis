@@ -522,15 +522,15 @@ def as_built_unfocused(
 
     # the measured figure and finish of each grating, in the same order
     result.grating.slope_error = na.ScalarArray(
-        ndarray=[2.05, 2.00, 2.05, 2.00] * u.urad,
+        ndarray=[2.05, 2.00, 1.70, 2.00] * u.urad,
         axes=axis_channel,
     )
     result.grating.roughness = na.ScalarArray(
-        ndarray=[1.75, 1.75, 1.75, 1.50] * u.nm,
+        ndarray=[1.75, 1.75, 1.40, 1.50] * u.nm,
         axes=axis_channel,
     )
     result.grating.microroughness = na.ScalarArray(
-        ndarray=[0.50, 0.45, 0.60, 0.65] * u.nm,
+        ndarray=[0.50, 0.45, 0.55, 0.65] * u.nm,
         axes=axis_channel,
     )
 
