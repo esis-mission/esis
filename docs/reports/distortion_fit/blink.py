@@ -30,8 +30,10 @@ BLOCK = 4
 """The block-averaging factor of the rendered images."""
 
 NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
-SEED = int(os.environ.get("ESIS_SEED", "0"))
 """The sampling of the AIA scene, as in the fit."""
+
+SEED = int(os.environ.get("ESIS_SEED", "0"))
+"""The seed of the linearizations, as in the fit."""
 
 
 def _standardize(a: np.ndarray, mask: np.ndarray) -> np.ndarray:
