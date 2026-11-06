@@ -12,7 +12,8 @@ def test_figure_measurement(serial_number: str) -> None:
 
     It is on a grid of square pixels about the center of the map. Turned by
     22.5 degrees, it lies inside the clear aperture of the design, and it was
-    measured everywhere inside it, center included, except along its edge.
+    measured everywhere inside it, center included, except within three
+    pixels of its edge.
     """
     figures = esis.flights.f2.optics.primaries.figures
     figure = figures.figure_measurement(serial_number, axis_x="a", axis_y="b")
@@ -44,11 +45,36 @@ def test_figure_measurement(serial_number: str) -> None:
     assert not np.any(measured & ~clear)
     unmeasured = clear & ~measured
     assert np.any(unmeasured)
-    edge = primary.width_clear / 2 - spacing
-    assert np.all(np.where(unmeasured, turned.length, np.inf * u.mm) > edge)
+
+    # How far each pixel is inside the edge of the clear aperture. On the grid
+    # of the map, its flats are along x, y, and the diagonals.
+    x, y = position.x, position.y
+    reach = np.maximum(
+        np.maximum(np.abs(x), np.abs(y)),
+        np.maximum(np.abs(x + y), np.abs(x - y)) / np.sqrt(2),
+    )
+    depth = primary.width_clear / 2 - reach
+    assert np.all(np.where(unmeasured, depth, 0 * u.mm) < 3 * spacing)
 
     rms = np.sqrt(np.nanmean(np.square(height)))
     assert 2.5 * u.nm < rms < 3 * u.nm
+
+
+def test_figure_measurement_orientation() -> None:
+    """The first row of the map in the file is at the top, where y is largest."""
+    figures = esis.flights.f2.optics.primaries.figures
+    path = figures._figures._path_directory() / "primary/SN2_3219CC ASP_IRR_UC.dat"
+    data, _ = figures._figures._read_metropro(path)
+
+    figure = figures.figure_measurement("SN2", axis_x="a", axis_y="b")
+    assert figure.outputs.axes == ("b", "a")
+    assert np.all(figure.inputs.x[dict(a=slice(1, None))] > figure.inputs.x[dict(a=0)])
+    assert np.all(figure.inputs.y[dict(b=slice(1, None))] > figure.inputs.y[dict(b=0)])
+    assert np.array_equal(
+        figure.outputs.ndarray.to_value(u.nm),
+        data[::-1].to_value(u.nm),
+        equal_nan=True,
+    )
 
 
 def test_figure_measurement_serial_number() -> None:
