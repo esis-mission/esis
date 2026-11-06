@@ -31,15 +31,16 @@ The model and what the data can tell it
 ---------------------------------------
 
 The instrument is modelled in optika as a sequential system of surfaces
-with the real coatings, ruling functions and apertures, and is fit through
+with its ruling functions and apertures, the coatings, filter and sensor
+replaced by ideal ones since the fit needs only the geometry, and is fit through
 a small set of physical parameters per channel: the grating's three angles
 and its ruling spacing, the sensor's position and three angles, the
 instrument's pointing, and the position of the primary along the axis.  A
 forward image is made by linearizing the model, a polynomial mapping from
 sky and wavelength to the sensor with the vignetting and effective area
 that the ray trace gives, and imaging a proxy scene through it: AIA's
-171, 193 and 304 Å images resampled onto the sky as a stand-in for the
-He I, O V and Mg X emission.  The merit of a parameter set is the
+304 Å image resampled onto the sky as a stand-in for the He I and O V
+emission and its 193 Å image for Mg X.  The merit of a parameter set is the
 correlation of that image with the Level-1 frame.
 
 One frame does not determine the parameters.  The singular values of the
@@ -61,7 +62,7 @@ The pipeline
 1. **Capture.**  For each channel, a seeded differential evolution over the
    nine identifiable terms against the reference frame, followed by a
    restarted Nelder–Mead polish.  This takes the model from a correlation
-   of 0.35 to 0.80 with the frame.
+   of about 0.4 to 0.8 with the frame.
 
 2. **Window edges.**  The outline of every window is measured in every
    frame as error-function crossings, medianed over the flight; the
@@ -96,17 +97,17 @@ The pipeline
    which nothing after the field stop can produce.  A focus that differs
    from sector to sector reproduces it to the precision of the
    measurement, so the stage solves one focus per sector: four histories
-   that differ by up to 56 µm, channel 0's holding within 7 µm of its
-   value at the reference frame while channel 1's moves from −22 to
-   +34 µm, channel 2's from +1 to +33 and channel 3's from −18 to +19,
+   of which channel 1's moves the most, by 56 µm: channel 0's holds within
+   4 µm of its value at the reference frame while channel 1's moves from −21
+   to +35 µm, channel 2's from +5 to +36 and channel 3's from −23 to +12,
    each smoothed by a quadratic in time.  A paraboloid has one focus for every
    zone, so if this is real the mirror's figure changed unevenly with
    temperature during the flight, by about 100 nm of sag between sectors;
    the edges the measurement rests on are soft enough that the data do not
    exclude part of it being the edges' apparent motion, see below.
 
-6. **Acceptance.**  The fit is scored on frames it was not fit to, and the
-   coalignment metric is measured in every frame: the whole-channel shift
+6. **Acceptance.**  The fit is scored on frames across the flight with each
+   frame's own pitch and yaw applied, and the coalignment metric is measured in every frame: the whole-channel shift
    of each channel against channel 1, and the scatter of the tiles about
    it, in pixels.
 
@@ -114,36 +115,38 @@ Results
 -------
 
 The committed tables come from the chain run from scratch on the cluster
-on 2026-10-21 with the final code and the released libraries (optika 3.1,
-named-arrays 2.14, regridding 3.5, solar-dynamics-observatory 1.3,
-msfc-ccd 1.2), on GPUs, from seed 0, in seven hours of wall time, against
+on 2026-11-05 with the final code and the released libraries (optika 3.7,
+named-arrays 2.18, regridding 3.6, solar-dynamics-observatory 1.3,
+msfc-ccd 1.2), on GPUs, from seed 0, against
 the AIA images archived beside the flight data and with the gains, read
 noise and dark current of the cameras from their verification decks.
 The correlation with the reference frame after the capture is 0.811,
-0.848, 0.802, 0.828 on channels 0 to 3, after the shared polish 0.816,
-0.848, 0.803, 0.828, and on six frames across the flight that the fit
-never saw, with each frame's pointing applied, a mean of 0.812, 0.845,
-0.802, 0.824.  The internal alignment leaves the channels 0.01, 0.00,
-0.03, 0.03 px from channel 1 at the reference frame.  The focus of each
-sector of the primary drifts over the flight, by −6 to −4 µm on channel 0,
-−22 to +34 on channel 1, +1 to +33 on channel 2 and −18 to +19 on channel
-3, each a quadratic with about 3 µm of scatter; their mean, the defocus of
-the primary as a whole, by −11 to +20 µm.
+0.848, 0.802, 0.828 on channels 0 to 3, after the shared polish 0.815,
+0.848, 0.804, 0.828, and over six frames across the flight, the reference
+frame among them, with each frame's own pitch and yaw applied, a mean of
+0.811, 0.845, 0.802, 0.824.  The internal alignment leaves the channels
+0.01, 0.00, 0.03, 0.02 px from channel 1 at the reference frame.  The focus
+of each sector of the primary drifts over the flight, by +2 to +3 µm on
+channel 0, −21 to +35 on channel 1, +5 to +36 on channel 2 and −23 to +12 on
+channel 3, each a quadratic with about 3 µm of scatter; their mean, the
+defocus of the primary as a whole, by −10 to +22 µm.
 
 The fit is stochastic: the capture draws its population at random, and
 every linearization samples the field and the pupil at random positions.
 One seed sets all of these draws and every table records it.  The chain
-was run from seeds 0 to 4 with otherwise identical settings, and the
-registration of the channels against one another, the median tile shift
-of each channel against channel 1 at each line and bright frame, varies
-between the runs by 0.03 px rms, against a registration of about 0.1 px.
-The parameters differ more, along the near-null directions of the
-problem.  One of the twenty captures, channel 0 at seed 3, settled in a
-false optimum, a correlation of 0.65 where the others reach 0.79 to 0.85,
-and the chain could not continue from it; that run is left out.  On the
-cluster's GPUs a seed repeats the fit only to about 0.0005 in correlation,
-not exactly.  Earlier runs, on the code before the last merges, came out
-the same to this scatter; one of them, with the AIA scene one AIA pixel
+was run from seeds 0, 1, 2, 4 and 5 with otherwise identical settings, and
+the registration of the channels against one another, the median tile shift
+of each channel against channel 1 at each line and frame, varies between
+the runs by 0.02 px rms over the first 29 frames, against a registration of
+about 0.1 px.  The scatter grows as the signal falls late in the flight and
+reaches 0.08 px rms in the last, faintest frame, which holds 14 % of the
+peak signal.  The parameters differ more, along the near-null directions
+of the problem.  In an earlier set of runs one of the twenty captures,
+channel 0 at seed 3, settled in a false optimum, a correlation of 0.65
+where the others reach 0.79 to 0.85, and the chain could not continue from
+it; seed 5 stands in for that seed here, and all twenty captures of this
+set reach 0.79 to 0.85.  On the cluster's GPUs a seed repeats the fit only
+to about 0.0005 in correlation, not exactly.  An earlier run, with the AIA scene one AIA pixel
 (0.6″) away because of an error in an earlier version of the data
 library, had its pointing 0.8″ away and nothing else changed, and the
 same chain on the host without a GPU reproduced one of them to seven
@@ -151,13 +154,13 @@ figures in the capture merits.
 
 The coalignment metric, every channel but the anchor, over the
 twenty-seven frames bright enough to measure, with one focus for the whole
-primary and with one per sector:
+primary, from an earlier run of the chain, and with one per sector:
 
 =====  ================  ================  ====================  ============
 line   rms shift         max shift         rms along dispersion  tile scatter
 =====  ================  ================  ====================  ============
-He I   0.20 to 0.11 px   0.62 to 0.24 px   3.3 to 1.5 km/s       0.33 px
-O V    0.17 to 0.10 px   0.48 to 0.26 px   2.5 to 0.8 km/s       0.25 px
+He I   0.20 to 0.11 px   0.62 to 0.28 px   3.3 to 1.5 km/s       0.26 px
+O V    0.17 to 0.08 px   0.48 to 0.24 px   2.5 to 0.6 km/s       0.22 px
 =====  ================  ================  ====================  ============
 
 Only the part of a misregistration along a channel's dispersion is a
@@ -165,21 +168,22 @@ velocity error, and a pixel along the dispersion is 18.9 km/s at He I
 and 17.4 km/s at O V.  With the pointing, the window drift and one
 defocus of the whole primary the channels agree to a fifth of a pixel,
 3 km/s, and part by up to 0.6 px in the first minute of the flight.  The
-focus of each sector brings them to 0.11 and 0.10 px, 1.5 and 0.8 km/s,
-with the worst single channel and frame at 3 km/s; a length taken from
+focus of each sector brings them to 0.11 and 0.08 px, 1.5 and 0.6 km/s,
+with the worst single channel and frame at 4 km/s; a length taken from
 two components each measured to 0.05 px cannot come out below 0.07 px, so
 this is close to what the measurement resolves.  What the sector focus
 leaves is also fit as an empirical offset of each channel's pointing,
-twelve numbers of at most 0.18″ (0.24 px), which bring the registration to
-0.09 and 0.07 px, 1.4 and 0.7 km/s; the model carries them as an option,
+twelve numbers of at most 0.15″ (0.20 px), which bring the registration to
+0.09 and 0.06 px, 1.4 and 0.7 km/s; the model carries them as an option,
 off by default, since no mechanism stands behind them, and an inversion
 can be run with and without them.  The three dark frames that
-close the flight are extrapolated, and He I is measured there only to
-0.8 px in the worst channel; the metric is what would exclude them from
+close the flight have no window edges to measure, so their drift is
+extrapolated, and He I is measured there only to
+0.9 px in the worst channel; the metric is what would exclude them from
 an inversion.  For scale, the quiet-Sun velocities ESIS measures are of
 order 10 km/s, and the tile-to-tile scatter along the dispersion, which
 contains the real Doppler structure of the scene as well as noise, is 3.4
-and 2.7 km/s per 105″ tile through the middle of the flight.  The
+and 2.3 km/s per 105″ tile through the middle of the flight.  The
 focus of each sector is a physical term, four numbers per frame fitted
 to six measured components and smoothed in time; the motion it accounts
 for, and the caveat that the edges it rests on are soft, are described
@@ -240,7 +244,7 @@ it, and would fix the rotation and the scale of every window as well as
 its position.
 
 *Microns matter.*  The primary's focus drifted 31 µm over the flight,
-its sectors by up to 56 µm against one another, and the field stop moved
+one of its sectors by 56 µm, and the field stop moved
 7 µm, and each moved the images by a few tenths of a
 pixel: 1.6 px per 0.1 mm of focus, and a pixel per 4 µm of stop.  Either
 an athermal metering structure between the primary and the stop, or a
@@ -287,7 +291,7 @@ diagram, the singular-value spectrum of one frame's Jacobian beside a
 sketch of which motion moves the edges, the sky, or both.  The interactive
 blink and channel-difference pages made by ``blink.py`` and ``coalign.py``
 are the companion for the website; they cannot go in print.  Both are
-kept with this documentation, made from the committed tables: the `blink
+made from the committed tables: the `blink
 page <../_static/distortion_fit/blink.html>`_ and the `coalignment page
 <../_static/distortion_fit/coalign.html>`_, with this summary and its
 figures as a `single page <../_static/distortion_fit/summary.html>`_.
@@ -308,13 +312,13 @@ on the cluster, one GPU and 16 cores per job:
 ==================  ==========  ======================================
 stage               wall time   parallel over
 ==================  ==========  ======================================
-capture             1.1–1.9 h   the four channels
-window edges        8 min       —
-outline and shared  2.6 h       the four channels (eight workers)
-focus history       46 min      —
-pointing            8–17 min    the thirty frames
-acceptance          36 min      —
-pages               10–30 min   —
+capture             0.8–2.3 h   the four channels
+window edges        4–9 min     —
+outline and shared  1.0–1.8 h   the four channels (eight workers)
+focus history       20–23 min   —
+pointing            6–23 min    the thirty frames
+acceptance          28–57 min   —
+pages               8–16 min    —
 ==================  ==========  ======================================
 
 With the channels and the frames spread over the cluster the chain is
@@ -327,18 +331,15 @@ in use are 3 GB.  Caching the resampled scene per frame would bring the
 peak to a few gigabytes and the chain within reach of a 32 GB machine in
 a working day.
 
-Repeatability was measured by running the whole chain again from a
-capture with a different seed, on the chain before the focus of each
-sector was added.  Everything the data determine repeats:
-the correlations with the reference frame agree to 0.012 after the
-capture and to 0.002 after the shared polish, the held-out correlations
-to 0.002, the outline residuals to 0.1 px, and the coalignment metric
-over the flight to 0.02 px rms.  The parameters do not: the two seeds
-differ by up to 1.3′ in grating yaw, 1.5 mm in sensor distance and 1 mm
-in sensor position, along the null directions the frame cannot see, and
-the mapping they describe differs by up to a pixel at the edge of the
-field.  The absolute placement of the sky on the sensor is therefore
-repeatable to about half a pixel, which is what the AIA proxy scene can
-give, while the registration of the channels against one another is
-repeatable to a few hundredths.  The whole chain took six hours of
-wall time on the cluster.
+Repeatability was measured by running the whole chain from the five
+seeds.  What the data determine repeats: the correlations with the
+reference frame agree to 0.016 after the capture and to 0.011 after the
+shared polish, the correlations across the flight to 0.007, and the
+registration of the channels to 0.02 px rms over the first 29 frames.  The
+parameters do not: the seeds differ by up to 1.3′ in grating yaw, 1.8 mm in
+sensor distance and 1 mm in sensor position, along the null directions the
+frame cannot see, and the mapping they describe differs by about 0.4 px in
+the median over the field and by up to 1.1 px at its edge.  The absolute
+placement of the sky on the sensor is therefore repeatable to about half a
+pixel, which is what the AIA proxy scene can give, while the registration of
+the channels against one another is repeatable to a couple of hundredths.

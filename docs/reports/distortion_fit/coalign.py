@@ -52,8 +52,10 @@ NUM_SKY = 1600
 """The samples along each axis of the sky grid, as in the alignment."""
 
 NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
-SEED = int(os.environ.get("ESIS_SEED", "0"))
 """The sampling of the AIA scene, whose extent sets the sky grid."""
+
+SEED = int(os.environ.get("ESIS_SEED", "0"))
+"""The seed of the linearizations, as in the fit."""
 
 ANCHOR = 1
 """The channel the alignment anchors on, the default to difference against."""
