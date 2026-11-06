@@ -482,13 +482,33 @@ def as_built_unfocused(
         seed=next(seeds),
     )
 
-    result.primary_mirror.material = primaries.materials.multilayer_fit()
+    primary = result.primary_mirror
+    primary.material = primaries.materials.multilayer_fit()
 
-    # The measured figure and finish of the primary mirror. The
-    # microroughness is the mean of two measurements.
-    result.primary_mirror.slope_error = 0.436 * u.urad
-    result.primary_mirror.roughness = 0.938 * u.nm
-    result.primary_mirror.microroughness = ([5.38, 5.68] * u.AA).mean().to(u.nm)
+    # The measured figure raises the surface of the primary mirror without
+    # tilting it, and since the mirror is not a stop, it does not move the
+    # rays. The pixels which were not measured are behind the central
+    # obscuration or beyond the clear aperture, and the figure error is taken
+    # to be zero there.
+    axis_figure = ("primary_x", "primary_y")
+    primary.sag = optika.sags.FigureErrorSag(
+        base=primary.sag,
+        figure_error=primaries.figures.figure_measurement(*axis_figure),
+        axis=axis_figure,
+        parameters_slope_error=primary.sag.parameters_slope_error,
+        parameters_roughness=primary.sag.parameters_roughness,
+        parameters_microroughness=primary.sag.parameters_microroughness,
+    )
+
+    # The slope error of the primary mirror is worked out from our own
+    # measurement of its figure, over its clear aperture, with the step and
+    # the kernel of its specification. The interferometer cannot resolve the
+    # periods of the roughness or of the microroughness, so those are the
+    # vendor's measurements, and the microroughness is the mean of two of
+    # them.
+    primary.slope_error = primary.sag.slope_error(primary.surface.aperture)
+    primary.roughness = 0.938 * u.nm
+    primary.microroughness = ([5.38, 5.68] * u.AA).mean().to(u.nm)
 
     result.grating.serial_number = na.stack(
         arrays=[
