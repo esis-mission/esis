@@ -136,6 +136,12 @@ def ruling_measurement(
     This function takes the ratio of those two functions to estimate the
     efficiency of the rulings.
 
+    The coating is evaluated on the effective rays of the rulings, given by
+    :meth:`~optika.rulings.AbstractRulings.incident_effective`, as a raytrace
+    evaluates it, so that a grating with these rulings and this coating
+    reflects the measured efficiency in the geometry of the measurement, for
+    every sample of their spacing.
+
     Parameters
     ----------
     num_distribution
@@ -238,18 +244,32 @@ def ruling_measurement(
     wavelength = efficiency_total.inputs.wavelength
     angle = efficiency_total.inputs.direction
 
+    normal = na.Cartesian3dVectorArray(0, 0, -1)
+
+    # the light of the measurement, which struck the center of the grating
+    rays = optika.rays.RayVectorArray(
+        wavelength=wavelength,
+        position=na.Cartesian3dVectorArray() * u.mm,
+        direction=na.Cartesian3dVectorArray(
+            x=np.sin(angle),
+            y=0,
+            z=np.cos(angle),
+        ),
+    )
+
+    # A raytrace evaluates the coating of a grating on the effective rays of
+    # its rulings, so the coating is divided out on the same rays here, with
+    # the spacing of the measured rulings.
+    rays = design.incident_effective(
+        rays=rays,
+        normal=normal,
+    )
+
     coating = gratings.materials.multilayer_fit()
 
     efficiency_coating = coating.efficiency(
-        rays=optika.rays.RayVectorArray(
-            wavelength=wavelength,
-            direction=na.Cartesian3dVectorArray(
-                x=np.sin(angle),
-                y=0,
-                z=np.cos(angle),
-            ),
-        ),
-        normal=na.Cartesian3dVectorArray(0, 0, -1),
+        rays=rays,
+        normal=normal,
     )
 
     efficiency_rulings = na.FunctionArray(

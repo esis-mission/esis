@@ -39,6 +39,16 @@ def _is_uncertain(a: object) -> bool:
     return len(_uncertain(a)) > 0
 
 
+_derived = {"grating.rulings.efficiency_measured.outputs"}
+"""
+The paths of the uncertain arrays which are derived from the parameters
+rather than drawn.
+
+The efficiency of the measured rulings is the measurement divided by the
+coating on the effective rays, which depend on the spacing of the rulings.
+"""
+
+
 @pytest.mark.parametrize("num_distribution", [0, 11])
 def test_design_full(num_distribution: int):
     result = esis.flights.f1.optics.design_full(
@@ -89,7 +99,9 @@ def test_seed(
 
     for path in result:
         assert np.all(again[path] == result[path]), path
-        assert np.all(other[path].distribution != result[path].distribution), path
+        # a derived array needn't vary with the samples it is derived from
+        if path not in _derived:
+            assert np.all(other[path].distribution != result[path].distribution), path
 
 
 @pytest.mark.parametrize(
@@ -114,6 +126,8 @@ def test_seed_independent(
     # the samples of each parameter, scaled to span -1 to 1
     normalized = dict()
     for path, a in uncertain.items():
+        if path in _derived:
+            continue
         assert isinstance(a, na.UniformUncertainScalarArray), path
         normalized[path] = (a.distribution - a.nominal) / a.width
 
