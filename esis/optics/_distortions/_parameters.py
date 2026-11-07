@@ -166,7 +166,9 @@ class DistortionParameters(
         primary_mirror = instrument.primary_mirror
         sensor = instrument.camera.sensor
         focal_length_nominal = _design(instrument, "focal_length")
-        displacement_primary = primary_mirror.sag.focal_length - focal_length_nominal
+        displacement_primary = (
+            _parabola(primary_mirror).focal_length - focal_length_nominal
+        )
         return cls(
             yaw_grating=instrument.grating.yaw.to(u.arcmin),
             pitch_grating=instrument.grating.pitch.to(u.arcmin),
@@ -223,7 +225,9 @@ class DistortionParameters(
         result.grating.roll = p.roll_grating
         result.field_stop.roll = p.roll_field_stop
         result.grating.rulings.spacing.coefficients[0] = p.spacing_rulings
-        primary_mirror.sag.focal_length = focal_length_nominal + p.displacement_primary
+        _parabola(primary_mirror).focal_length = (
+            focal_length_nominal + p.displacement_primary
+        )
         primary_mirror.translation.z = -p.displacement_primary + p.z_primary
         result.pitch = p.pitch
         result.yaw = p.yaw
@@ -351,6 +355,24 @@ class DistortionParameters(
         return cls(**fields)
 
 
+def _parabola(primary_mirror: esis.optics.PrimaryMirror) -> optika.sags.ParabolicSag:
+    """
+    Return the paraboloid of a primary mirror, beneath any measured figure.
+
+    A measured figure does not move the rays, so the focal length is always
+    that of the paraboloid.
+
+    Parameters
+    ----------
+    primary_mirror
+        The primary mirror, with or without a measured figure.
+    """
+    sag = primary_mirror.sag
+    if isinstance(sag, optika.sags.FigureErrorSag):
+        return sag.base_
+    return sag
+
+
 def _design(instrument: esis.optics.abc.AbstractInstrument, name: str):
     """
     Return the placement the instrument was built with, before any sensor term.
@@ -374,5 +396,5 @@ def _design(instrument: esis.optics.abc.AbstractInstrument, name: str):
     if name == "focal_length":
         # before any term is applied the primary is focused on the field stop
         primary_mirror = instrument.primary_mirror
-        return primary_mirror.sag.focal_length + primary_mirror.translation.z
+        return _parabola(primary_mirror).focal_length + primary_mirror.translation.z
     raise ValueError(name)  # pragma: nocover

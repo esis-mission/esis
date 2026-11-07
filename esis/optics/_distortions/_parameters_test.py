@@ -5,6 +5,7 @@ import numpy as np
 import astropy.units as u
 import astropy.table
 import named_arrays as na
+import optika
 import esis
 from . import _parameters
 
@@ -100,6 +101,27 @@ def test_z_primary():
     twice = parameters.to_instrument(once)
     assert twice.primary_mirror.translation.z == once.primary_mirror.translation.z
     assert twice.primary_mirror.sag.focal_length == once.primary_mirror.sag.focal_length
+
+
+def test_primary_with_measured_figure():
+    """
+    The focal length terms act on the paraboloid under a measured figure.
+
+    As-built, the sag of the primary is a figure error on top of a paraboloid.
+    """
+    instrument = _channel()
+    instrument.primary_mirror.sag = optika.sags.FigureErrorSag(
+        base=instrument.primary_mirror.sag,
+    )
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    focal_length = instrument.primary_mirror.sag.base.focal_length
+    parameters.displacement_primary = -3 * u.mm
+    result = parameters.to_instrument(instrument)
+    assert isinstance(result.primary_mirror.sag, optika.sags.FigureErrorSag)
+    assert result.primary_mirror.sag.base.focal_length == focal_length - 3 * u.mm
+    assert instrument.primary_mirror.sag.base.focal_length == focal_length
+    again = esis.optics.DistortionParameters.from_instrument(result)
+    assert np.isclose(again.displacement_primary.to_value(u.mm), -3)
 
 
 def test_z_primary_moves_the_sky_not_the_windows():
