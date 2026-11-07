@@ -12,6 +12,21 @@ from ._instruments import (
     as_built,
     _as_built_focused as _as_built_focused,
     distortion_fit,
+    distortion_fit_bounds,
+)
+from ._fits import (
+    measure_window_edges,
+    fit_distortion_reference,
+    realign_distortion_reference,
+    fit_distortion_pointing,
+    fit_defocus_history,
+    frame_parameters,
+    fit_coregistration,
+    apply_coregistration,
+    acceptance,
+    distortion_fit_table,
+    plot_distortion_flight,
+    plot_coalignment_tiles,
 )
 
 __all__ = [
@@ -25,4 +40,17 @@ __all__ = [
     "as_built_unfocused",
     "as_built",
     "distortion_fit",
+    "distortion_fit_bounds",
+    "measure_window_edges",
+    "fit_distortion_reference",
+    "realign_distortion_reference",
+    "fit_distortion_pointing",
+    "fit_defocus_history",
+    "frame_parameters",
+    "fit_coregistration",
+    "apply_coregistration",
+    "acceptance",
+    "distortion_fit_table",
+    "plot_distortion_flight",
+    "plot_coalignment_tiles",
 ]
