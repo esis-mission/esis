@@ -1,3 +1,4 @@
+import pathlib
 import pytest
 import numpy as np
 import astropy.units as u
@@ -81,3 +82,15 @@ def test_figure_measurement_serial_number() -> None:
     """Only the serial numbers of the mirrors which were measured are accepted."""
     with pytest.raises(ValueError, match="SN1"):
         esis.flights.f2.optics.primaries.figures.figure_measurement("SN1")
+
+
+def test_read_metropro_format(tmp_path: pathlib.Path) -> None:
+    """A file whose header is of another format than 1 is refused."""
+    figures = esis.flights.f2.optics.primaries.figures
+    path = figures._figures._path_directory() / "primary/SN2_3219CC ASP_IRR_UC.dat"
+    data = bytearray(path.read_bytes())
+    data[4:6] = (3).to_bytes(2, "big")
+    path_format = tmp_path / "format_3.dat"
+    path_format.write_bytes(data)
+    with pytest.raises(ValueError, match="format 1"):
+        figures._figures._read_metropro(path_format)
