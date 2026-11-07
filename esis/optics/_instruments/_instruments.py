@@ -872,6 +872,7 @@ class AbstractInstrument(
         na.plt.plot(
             radius_inner * np.cos(az),
             radius_inner * np.sin(az),
+            ax=ax,
             color="tab:cyan",
             label="inner C.A.",
         )
@@ -879,6 +880,7 @@ class AbstractInstrument(
         na.plt.dimension(
             na.Cartesian2dVectorArray(-radius_inner, 0 * u.mm),
             na.Cartesian2dVectorArray(+radius_inner, 0 * u.mm),
+            ax=ax,
         )
 
         if footprint:
@@ -892,9 +894,16 @@ class AbstractInstrument(
 
             rays = rays[index_primary]
 
-            rays = transformation(rays)
+            # The rays are in global coordinates, which already include the
+            # transformation of the instrument, so they are taken into the
+            # coordinates of the primary mirror before they are drawn like
+            # its aperture.
+            if instrument.transformation is not None:
+                rays = instrument.transformation.inverse(rays)
 
             rays = primary.transformation.inverse(rays)
+
+            rays = transformation(rays)
 
             for n, i in enumerate(na.ndindex(shape)):
 
