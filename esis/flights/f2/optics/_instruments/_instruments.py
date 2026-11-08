@@ -137,8 +137,8 @@ def design_proposed(
     sensor = result.camera.sensor
     sensor.translation.z = sensor.translation.z + dz
 
-    result.primary_mirror.material = materials.multilayer_AlSc()
-    result.grating.material = materials.multilayer_AlSc()
+    result.primary_mirror.material = materials.multilayer_SiSc()
+    result.grating.material = materials.multilayer_SiSc()
 
     _blaze_rulings(result.grating)
 
@@ -322,8 +322,8 @@ def design_guess(
         seed=seed,
     )
 
-    result.primary_mirror.material = materials.multilayer_AlSc()
-    result.grating.material = materials.multilayer_AlSc()
+    result.primary_mirror.material = materials.multilayer_SiSc()
+    result.grating.material = materials.multilayer_SiSc()
 
     w1 = wavelength_Ne_VII
     w2 = wavelength_Si_XII
