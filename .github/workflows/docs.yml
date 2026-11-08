@@ -97,8 +97,9 @@ jobs:
       # build, so the images and the searches for them are cached. sdo reuses
       # an image it has downloaded, and caches its searches by their
       # arguments, so a build which restores them all does not contact JSOC.
-      # The Level 1.5 images are left out: sdo prepares them from the Level 1
-      # images without JSOC, and each is several times the size.
+      # Only the Level 1 images are cached, named as files, since a pattern
+      # which names a directory caches all of it: sdo prepares the Level 1.5
+      # images beside them without JSOC, and each is several times the size.
       - name: Ask which version of sdo is installed
         id: sdo
         run: |
@@ -111,8 +112,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.sdo/cache/SUM*
-            !~/.sdo/cache/SUM*/**/*_lev15*.fits
+            ~/.sdo/cache/SUM*/**/image_lev1.fits
             ~/.sdo/cache/sdo/aia/_data/_urls
           # A new key when the reports or sdo change, so that what they search
           # for and download anew is saved; joblib itself decides whether the
