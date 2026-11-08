@@ -12,7 +12,6 @@ difference.
 
 from __future__ import annotations
 import dataclasses
-import warnings
 import numpy as np
 import scipy.optimize
 import scipy.special
@@ -41,59 +40,243 @@ the top and bottom where it crosses a column.
 """
 
 
-def _erf_step(x, a, b, x0, sigma):
-    return a + b * scipy.special.erf((x - x0) / (np.sqrt(2) * sigma))
+_INSIDE = (1, -1, 1, -1)
+"""
+Which way the inside of the window lies across each side of :data:`SIDES`.
+
+``1`` toward larger indices along the row (the left side) or the column
+(the top), ``-1`` toward smaller (the right side and the bottom).
+"""
 
 
-def _fit_edge(
-    profile: np.ndarray,
-    guess: float,
-    half: int,
-) -> tuple[float, float]:
+def _basis(distance: np.ndarray, sigma: float) -> np.ndarray:
     """
-    Fit an error-function step to a profile near a guessed position.
+    Evaluate the terms of the model of a profile across an edge.
+
+    The terms are a constant, a unit step at the edge, and a ramp that
+    starts at the edge and rises by one per pixel inward, the step and the
+    ramp blurred by a Gaussian of standard deviation `sigma`, so that the
+    scene just inside the edge may brighten or darken across it.
 
     Parameters
     ----------
-    profile
-        The intensity along a row or column of the frame.
-    guess
-        The index along the profile where the edge is expected.
-    half
-        Half the length of the profile fit, in pixels.
+    distance
+        The signed distance of every sample from the edge, in pixels,
+        positive inside the window.
+    sigma
+        The standard deviation of the blur, in pixels.
 
     Returns
     -------
-    The position of the step and its formal error, both :obj:`numpy.nan`
-    if the fit fails or is not a step.
+    The three terms, stacked along a new last axis.
     """
-    lo, hi = int(guess - half), int(guess + half)
-    if lo < 2 or hi > profile.size - 2:
-        return np.nan, np.nan
-    x = np.arange(lo, hi)
-    y = profile[lo:hi]
-    if not np.all(np.isfinite(y)):
-        return np.nan, np.nan
-    b0 = (y[-8:].mean() - y[:8].mean()) / 2
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            p, cov = scipy.optimize.curve_fit(
-                _erf_step,
-                x,
-                y,
-                p0=[y.mean(), b0, guess, 2.0],
-                maxfev=4000,
-            )
-    except Exception:
-        return np.nan, np.nan
-    if abs(p[3]) > 12 or abs(p[2] - guess) > half / 2 or abs(p[1]) < 0.2 * abs(p[0]):
-        return np.nan, np.nan
-    # the crossing in optika's sensor coordinates, where pixel i spans
-    # [i, i + 1) and the sample of index i sits at i + 1/2
-    p[2] = p[2] + 0.5
-    error = np.sqrt(cov[2, 2]) if np.all(np.isfinite(cov)) else np.nan
-    return float(p[2]), float(error)
+    z = distance / sigma
+    step = (1 + scipy.special.erf(z / np.sqrt(2))) / 2
+    ramp = distance * step + sigma * np.exp(-(z**2) / 2) / np.sqrt(2 * np.pi)
+    return np.stack([np.ones_like(distance), step, ramp], axis=-1)
+
+
+def _solve(
+    basis: np.ndarray,
+    data: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Fit the terms of every profile by linear least squares.
+
+    Parameters
+    ----------
+    basis
+        The terms of every profile, see :func:`_basis`, indexed
+        ``[profile, sample, term]``.
+    data
+        The profiles, indexed ``[profile, sample]``.
+
+    Returns
+    -------
+    The coefficients of the terms, indexed ``[profile, term]``, and the
+    residuals, indexed like `data`.
+    """
+    normal = np.einsum("jki,jkl->jil", basis, basis)
+    normal = normal + 1e-9 * np.eye(basis.shape[-1])
+    projection = np.einsum("jki,jk->ji", basis, data)
+    coefficients = np.linalg.solve(normal, projection[..., np.newaxis])[..., 0]
+    residual = data - np.einsum("jki,ji->jk", basis, coefficients)
+    return coefficients, residual
+
+
+@dataclasses.dataclass
+class _SideFit:
+    """One side of a window, fit as a single blurred straight edge."""
+
+    position: np.ndarray
+    """The crossing of the edge at every row or column, in pixels."""
+
+    error: np.ndarray
+    """The formal error of every crossing, in pixels."""
+
+    kept: np.ndarray
+    """Whether each row or column was kept by the clip."""
+
+    width: float
+    """The standard deviation of the blur of the edge, normal to it, in pixels."""
+
+    coefficients: np.ndarray
+    """
+    The background, step and ramp of every row or column, see
+    :func:`_basis`, :obj:`numpy.nan` where the profile left the frame.
+    """
+
+
+def _fit_side(
+    frame: np.ndarray,
+    index: np.ndarray,
+    guess: np.ndarray,
+    side: int,
+    half: int = 30,
+    band: int = 6,
+    clip: float = 3.0,
+    minimum: int = 10,
+    num_iteration: int = 4,
+) -> None | _SideFit:
+    """
+    Fit one side of a window as a single blurred straight edge.
+
+    Along every row (the left and right sides) or column (the top and
+    bottom) that crosses the side, within `band` pixels of the edge, the
+    frame is modelled with the terms of :func:`_basis`: a background, the
+    step of the field stop and a ramp of the scene inside it, blurred.  The
+    position and slope of the edge and the width of its blur are shared by
+    the whole side; the brightness of each row or column is its own, solved
+    for exactly at every trial edge.  Bright structure next to the edge in
+    a few rows or columns cannot pull a straight edge that hundreds share,
+    and the ramp keeps the scene's brightening inward from widening it.
+
+    The edge is first found within `half` pixels of the guesses, as the
+    steepest rise of the median profile across them.  Then, until the rows
+    or columns left out stop changing, those whose residual from the edge
+    is more than `clip` times the median are left out and the edge is refit
+    to the rest.
+
+    Parameters
+    ----------
+    frame
+        The frame, indexed ``[y, x]``.
+    index
+        The rows or columns that cross the side.
+    guess
+        The predicted crossing of each, in pixels, in the coordinates of
+        :func:`predict_edges`, where pixel ``i`` spans ``[i, i + 1)``.
+    side
+        The index of the side in :data:`SIDES`.
+    half
+        How far from the guesses the edge is searched for, in pixels.
+    band
+        Half the length of the profile fit across the edge, in pixels.
+    clip
+        The residual, as a multiple of the median over the rows or columns,
+        beyond which a row or column is left out.
+    minimum
+        The fewest rows or columns a side is fit with.
+    num_iteration
+        The most refits.
+
+    Returns
+    -------
+    The fit, or :obj:`None` if fewer than `minimum` rows or columns cross
+    the side inside the frame or are left by the clip, or if no edge is
+    found: a step less than a fifth of the brightness just inside it, or
+    one softer than half the band.
+    """
+    index = np.asarray(index, dtype=int)
+    guess = np.asarray(guess, dtype=float)
+    if index.size < minimum:
+        return None
+    image = frame if side < 2 else frame.T
+    inside = _INSIDE[side]
+    num = image.shape[1]
+    along = index + 1 / 2
+    center = along.mean()
+    slope, offset = np.polyfit(along - center, guess, deg=1)
+
+    def profiles(
+        parameters: np.ndarray,
+        width: int,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Read the profiles within `width` pixels of an edge, and which are whole."""
+        line = parameters[0] + parameters[1] * (along - center)
+        start = np.round(line - 1 / 2).astype(int)
+        samples = start[:, np.newaxis] + np.arange(-width, width + 1)
+        whole = (samples.min(axis=1) >= 0) & (samples.max(axis=1) < num)
+        samples = np.clip(samples, 0, num - 1)
+        data = image[index[:, np.newaxis], samples]
+        whole &= np.all(np.isfinite(data), axis=1)
+        return samples + 1 / 2, np.where(whole[:, np.newaxis], data, 0), whole
+
+    def fit(
+        parameters: np.ndarray,
+        across: np.ndarray,
+        data: np.ndarray,
+        which: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Fit the profiles `which` for an edge: their coefficients and residuals."""
+        position, slope, sigma = parameters
+        line = position + slope * (along[which] - center)
+        distance = across[which] - line[:, np.newaxis]
+        distance = inside * distance / np.sqrt(1 + slope**2)
+        return _solve(_basis(distance, sigma), data[which])
+
+    # find the edge near the guesses
+    _, data, whole = profiles(np.array([offset, slope]), half)
+    if whole.sum() < minimum:
+        return None
+    data = data[whole]
+    scale = np.mean(np.abs(data), axis=1, keepdims=True)
+    median = np.median(data / np.where(scale > 0, scale, 1), axis=0)
+    rise = inside * np.gradient(scipy.ndimage.uniform_filter1d(median, 3))
+    shift = np.arange(-half, half + 1)[band:-band]
+    parameters = np.array([offset + shift[np.argmax(rise[band:-band])], slope, 1])
+
+    # leave out the rows or columns that do not fit, then refit the rest
+    kept = whole
+    result = None
+    for _ in range(num_iteration):
+        across, data, whole = profiles(parameters, band)
+        rms = np.sqrt(np.mean(fit(parameters, across, data, whole)[1] ** 2, axis=1))
+        clipped = np.zeros_like(whole)
+        clipped[whole] = rms <= clip * np.median(rms[kept[whole]])
+        if result is not None and np.array_equal(clipped, kept):
+            break
+        kept = clipped
+        if kept.sum() < minimum:
+            return None
+        result = scipy.optimize.least_squares(
+            lambda p, *args: fit(p, *args)[1].ravel(),
+            parameters,
+            bounds=([-np.inf, -np.inf, 0.1], [np.inf, np.inf, band]),
+            args=(across, data, kept),
+        )
+        parameters = result.x
+
+    position, slope, sigma = parameters
+    across, data, whole = profiles(parameters, band)
+    coefficients = np.full((index.size, 3), np.nan)
+    coefficients[whole] = fit(parameters, across, data, whole)[0]
+    background, step, _ = np.median(coefficients[kept & whole], axis=0)
+    if sigma > band / 2 or step < 0.2 * (background + step):
+        return None
+    jacobian = result.jac
+    num_free = jacobian.shape[1] + coefficients.shape[1] * kept.sum()
+    variance = np.sum(result.fun**2) / max(result.fun.size - num_free, 1)
+    covariance = np.linalg.pinv(jacobian.T @ jacobian) * variance
+    d = along - center
+    error = covariance[0, 0] + 2 * d * covariance[0, 1] + d**2 * covariance[1, 1]
+    return _SideFit(
+        position=position + slope * d,
+        error=np.sqrt(error),
+        kept=kept,
+        width=float(sigma),
+        coefficients=coefficients,
+    )
 
 
 def _polygon(
@@ -124,6 +307,69 @@ def _crossings(
     return float(xs.min()), float(xs.max())
 
 
+def _side_crossings(
+    px: np.ndarray,
+    py: np.ndarray,
+    shape: tuple[int, int],
+    fraction: float = 0.35,
+    skip: int = 25,
+    stride: int = 2,
+    margin: int = 40,
+) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+    """
+    Choose the rows and columns that cross each side of an outline.
+
+    Parameters
+    ----------
+    px
+        The x of the outline's vertices, in pixels.
+    py
+        The y of the outline's vertices, in pixels.
+    shape
+        The shape of the frame, ``(num_y, num_x)``.
+    fraction
+        See :func:`measure_edges`.
+    skip
+        See :func:`measure_edges`.
+    stride
+        See :func:`measure_edges`.
+    margin
+        See :func:`measure_edges`.
+
+    Returns
+    -------
+    For each side of :data:`SIDES`, by its index, the rows or columns that
+    cross it and the outline's crossing of each, in pixels.
+    """
+    num_y, num_x = shape
+    xc, yc = px.mean(), py.mean()
+    ry = 0.5 * (py.max() - py.min())
+    rx = 0.5 * (px.max() - px.min())
+    crossings = {side: ([], []) for side in range(len(SIDES))}
+    for dy in range(-int(fraction * ry), int(fraction * ry)):
+        if abs(dy) < skip:
+            continue
+        y = int(round(yc + dy))
+        if y < 0 or y >= num_y:  # pragma: nocover
+            continue
+        for side, guess in zip((0, 1), _crossings(px, py, y)):
+            if np.isfinite(guess) and margin <= guess <= num_x - margin:
+                crossings[side][0].append(y)
+                crossings[side][1].append(guess)
+    for dx in range(-int(fraction * rx), int(fraction * rx), stride):
+        x = int(round(xc + dx))
+        if x < 0 or x >= num_x:  # pragma: nocover
+            continue
+        for side, guess in zip((2, 3), _crossings(py, px, x)):
+            if np.isfinite(guess) and margin <= guess <= num_y - margin:
+                crossings[side][0].append(x)
+                crossings[side][1].append(guess)
+    return {
+        side: (np.array(index, dtype=int), np.array(guess, dtype=float))
+        for side, (index, guess) in crossings.items()
+    }
+
+
 def measure_edges(
     frame: np.ndarray,
     footprints: list[na.AbstractCartesian2dVectorArray],
@@ -132,15 +378,18 @@ def measure_edges(
     skip: int = 25,
     stride: int = 2,
     half: int = 30,
+    band: int = 6,
+    clip: float = 3.0,
     margin: int = 40,
 ) -> astropy.table.QTable:
     """
     Measure where the edges of every window cross the rows and columns of a frame.
 
-    Near each predicted outline, an error-function step is fit along the
-    rows that cross the left and right sides and along the columns that
-    cross the top and bottom, within a band about the window's centre so
-    that the corners of the octagon, where two sides meet, are left out.
+    Each side of each predicted outline is fit as one blurred straight
+    edge, see :func:`_fit_side`, along the rows that cross the left and
+    right sides and the columns that cross the top and bottom, within a
+    band about the window's centre so that the corners of the octagon,
+    where two sides meet, are left out.
 
     Parameters
     ----------
@@ -155,12 +404,18 @@ def measure_edges(
         The half-height of the band of rows (columns) about the window's
         centre, as a fraction of the window's half-extent.
     skip
-        Rows and columns within this distance of the window's centre are
-        left out.
+        Rows within this distance of the window's centre are left out of
+        the left and right sides.
     stride
         Every ``stride``-th column is fit on the top and bottom sides.
     half
-        Half the length of every profile fit, in pixels.
+        How far from the predicted outline each edge is searched for, in
+        pixels.
+    band
+        Half the length of the profile fit across each edge, in pixels.
+    clip
+        Rows and columns whose residual is more than this multiple of the
+        side's median are left out.
     margin
         Crossings closer than this to the edge of the frame are left out.
 
@@ -168,50 +423,35 @@ def measure_edges(
     -------
     A table with a row per crossing: ``line``, ``side``, ``index`` (the row
     for the left and right sides, the column for the top and bottom),
-    ``position`` and ``error`` in pixels.
+    ``position`` and ``error``, where the side's straight edge crosses that
+    row or column, and ``width``, the standard deviation of the side's
+    blur normal to the edge, all in pixels.  The width includes the
+    pixels' own, 1/sqrt(12) px in quadrature, and on the left and
+    right sides the width of the spectral line.  Only the rows and columns
+    the clip kept are listed.
     """
-    frame = scipy.ndimage.median_filter(np.asarray(frame, dtype=float), size=(3, 1))
-    num_y, num_x = frame.shape
+    frame = np.asarray(frame, dtype=float)
     rows = []
-
-    def fit(line: int, side: int, index: int, profile: np.ndarray, guess: float):
-        limit = profile.size - margin
-        if not np.isfinite(guess) or guess < margin or guess > limit:
-            return
-        position, error = _fit_edge(profile, guess, half)
-        if np.isfinite(position) and np.isfinite(error):
-            rows.append((line, side, index, position, error))
-
     for line, footprint in enumerate(footprints):
         px, py = _polygon(footprint)
         if not np.all(np.isfinite(px)):  # pragma: nocover
             continue
-        xc, yc = px.mean(), py.mean()
-        ry = 0.5 * (py.max() - py.min())
-        rx = 0.5 * (px.max() - px.min())
-        for dy in range(-int(fraction * ry), int(fraction * ry)):
-            if abs(dy) < skip:
+        sides = _side_crossings(px, py, frame.shape, fraction, skip, stride, margin)
+        for side, (index, guess) in sides.items():
+            fit = _fit_side(frame, index, guess, side, half=half, band=band, clip=clip)
+            if fit is None:
                 continue
-            y = int(round(yc + dy))
-            if y < 0 or y >= num_y:  # pragma: nocover
-                continue
-            left, right = _crossings(px, py, y)
-            fit(line, 0, y, frame[y], left)
-            fit(line, 1, y, frame[y], right)
-        for dx in range(-int(fraction * rx), int(fraction * rx), stride):
-            x = int(round(xc + dx))
-            if x < 0 or x >= num_x:  # pragma: nocover
-                continue
-            top, bottom = _crossings(py, px, x)
-            fit(line, 2, x, frame[:, x], top)
-            fit(line, 3, x, frame[:, x], bottom)
+            for k in np.flatnonzero(fit.kept):
+                rows.append(
+                    (line, side, index[k], fit.position[k], fit.error[k], fit.width)
+                )
     result = astropy.table.QTable(
         rows=rows or None,
-        names=("line", "side", "index", "position", "error"),
-        dtype=(int, int, int, float, float),
+        names=("line", "side", "index", "position", "error", "width"),
+        dtype=(int, int, int, float, float, float),
     )
-    result["position"].unit = u.pix
-    result["error"].unit = u.pix
+    for name in ("position", "error", "width"):
+        result[name].unit = u.pix
     result.meta["axis_field"] = list(axis_field)
     return result
 

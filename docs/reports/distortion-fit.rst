@@ -98,12 +98,16 @@ writes.
     per dimension, then a restarted Nelder-Mead polish.  Every other term
     stays at the as-built model.
 
-2.  **Edges.**  :func:`esis.flights.f1.optics.measure_window_edges` fits an
-    error-function step where each window's predicted outline crosses the
-    rows and columns of every frame whose signal is at least half the
-    flight's median, and takes the median over the frames per crossing,
-    with the per-frame departures kept as the drift of the windows.  The
-    middle window sits on its neighbours and is left out.
+2.  **Edges.**  :func:`esis.flights.f1.optics.measure_window_edges` fits
+    each side of each window's predicted outline, in every frame whose
+    signal is at least half the flight's median, as one blurred straight
+    edge: its position, slope and width are shared along the side, and each
+    row or column crossing it has its own background, step and ramp
+    inside, so that bright structure next to the edge in a few rows or
+    columns cannot pull it.  The crossings of the fitted edges are medianed
+    over the frames per row or column, with the per-frame departures kept
+    as the drift of the windows and the width of each side's blur kept
+    beside them.  The middle window sits on its neighbours and is left out.
 
 3.  **Outline.**  :func:`esis.optics.fit_distortion_outline` places each
     channel's windows on the median edges through the grating's yaw and
