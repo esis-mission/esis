@@ -19,20 +19,17 @@ image and no window; the field stop every window and no image; a grating or
 camera its channel's image and window together.
 
 ``edges`` asks whether the edges are the fiducials the fit takes them for:
-for every frame, channel, line and side it fits the error-function step of
-:func:`esis.optics.measure_edges` along the rows or columns crossing the
-edge, keeping its width, and stacks the profiles about the crossing,
-normalized from the dark side to the lit side.
+for every frame, channel, line and side it fits the blurred straight edge
+of :func:`esis.optics.measure_edges`, keeping its width, and stacks the
+profiles of the rows or columns crossing it about the crossing, normalized
+from the background to the top of the step.
 """
 
 import pathlib
 import sys
-import warnings
 
 import numpy as np
 import scipy.ndimage
-import scipy.optimize
-import scipy.special
 import astropy.table
 import astropy.units as u
 import named_arrays as na
@@ -268,36 +265,32 @@ def report_image(
     print(f"-> {out}")
 
 
-def _step(x, a, b, x0, sigma):
-    return a + b * scipy.special.erf((x - x0) / (np.sqrt(2) * sigma))
+def _sides(frame: np.ndarray, px: np.ndarray, py: np.ndarray) -> dict:
+    """
+    Fit every side of a window as :func:`esis.optics.measure_edges` does.
 
-
-def _fit_edge(profile: np.ndarray, guess: float, half: int = 30):
-    """Fit the step of :func:`esis.optics.measure_edges`, keeping every parameter."""
-    lo, hi = int(guess - half), int(guess + half)
-    if lo < 2 or hi > profile.size - 2:
-        return None
-    x = np.arange(lo, hi)
-    y = profile[lo:hi]
-    if not np.all(np.isfinite(y)):
-        return None
-    b0 = (y[-8:].mean() - y[:8].mean()) / 2
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            p, _ = scipy.optimize.curve_fit(
-                _step, x, y, p0=[y.mean(), b0, guess, 2.0], maxfev=4000
-            )
-    except Exception:
-        return None
-    if abs(p[3]) > 12 or abs(p[2] - guess) > half / 2 or abs(p[1]) < 0.2 * abs(p[0]):
-        return None
-    # the profile from the dark side (0) to the lit side (1), about the crossing
-    normalized = (y - (p[0] - abs(p[1]))) / (2 * abs(p[1]))
-    distance = x - p[2]
-    if p[1] < 0:
-        distance, normalized = -distance[::-1], normalized[::-1]
-    return p[2] + 0.5, abs(p[3]), np.interp(OFFSETS, distance, normalized)
+    Returns, for each side that was fit, the rows or columns kept, their
+    crossings, the width of the edge, and the profile across the edge of
+    each, normalized from the background (0) to the top of the step (1) and
+    sampled at :data:`OFFSETS` from the crossing, positive inside.
+    """
+    found = {}
+    for side, (index, guess) in _outline._side_crossings(px, py, frame.shape).items():
+        fit = _outline._fit_side(frame, index, guess, side)
+        if fit is None:
+            continue
+        image = frame if side < 2 else frame.T
+        across = np.arange(image.shape[1]) + 0.5
+        kept = np.flatnonzero(fit.kept)
+        profiles = []
+        for k in kept:
+            background, step, _ = fit.coefficients[k]
+            distance = _outline._INSIDE[side] * (across - fit.position[k])
+            order = np.argsort(distance)
+            normalized = (image[index[k]] - background) / step
+            profiles.append(np.interp(OFFSETS, distance[order], normalized[order]))
+        found[side] = (index[kept], fit.position[kept], fit.width, profiles)
+    return found
 
 
 def edges(directory: pathlib.Path, out: pathlib.Path) -> None:
@@ -316,18 +309,14 @@ def edges(directory: pathlib.Path, out: pathlib.Path) -> None:
     for t in order:
         frames = _frames(level_1, t, num_channel)
         for c in range(num_channel):
-            frame = scipy.ndimage.median_filter(
-                np.asarray(frames[c], dtype=float), size=(3, 1)
-            )
+            frame = np.asarray(frames[c], dtype=float)
             for j, name in enumerate(LINES):
                 px, py = polygons[c, name]
-                found = _crossings(frame, px, py)
-                for s in range(len(SIDES)):
-                    rows = found[s]
-                    if len(rows) < 20:
+                found = _sides(frame, px, py)
+                for s, (index, crossing, width, profiles) in found.items():
+                    if len(index) < 20:
                         continue
-                    index = [r[0] for r in rows]
-                    where = dict(zip(index, (r[1] for r in rows)))
+                    where = dict(zip(index, crossing))
                     if t == REFERENCE:
                         reference[c, j, s] = where
                     known = reference.get((c, j, s), {})
@@ -336,39 +325,12 @@ def edges(directory: pathlib.Path, out: pathlib.Path) -> None:
                     if len(delta) < 20:
                         continue
                     position[t, c, j, s] = np.median(delta)
-                    sigma[t, c, j, s] = np.median([r[2] for r in rows])
-                    profile[t, c, j, s] = np.nanmedian([r[3] for r in rows], axis=0)
+                    sigma[t, c, j, s] = width
+                    profile[t, c, j, s] = np.nanmedian(profiles, axis=0)
         print(f"frame {t}: sigma {np.round(sigma[t, :, 0], 2).tolist()}", flush=True)
 
     np.savez(out, position=position, sigma=sigma, profile=profile, offsets=OFFSETS)
     print(f"-> {out}")
-
-
-def _crossings(frame: np.ndarray, px: np.ndarray, py: np.ndarray) -> dict:
-    """Fit every row and column crossing a side of a window, as measure_edges does."""
-    fraction, skip, stride, margin = 0.35, 25, 2, 40
-    xc, yc = px.mean(), py.mean()
-    rx, ry = 0.5 * np.ptp(px), 0.5 * np.ptp(py)
-    found = {s: [] for s in range(len(SIDES))}
-    for dy in range(-int(fraction * ry), int(fraction * ry)):
-        y = int(round(yc + dy))
-        if abs(dy) < skip or y < 0 or y >= frame.shape[0]:
-            continue
-        for s, guess in zip((0, 1), _outline._crossings(px, py, y)):
-            if np.isfinite(guess) and margin <= guess <= frame.shape[1] - margin:
-                r = _fit_edge(frame[y], guess)
-                if r is not None:
-                    found[s].append((y,) + r)
-    for dx in range(-int(fraction * rx), int(fraction * rx), stride):
-        x = int(round(xc + dx))
-        if x < 0 or x >= frame.shape[1]:
-            continue
-        for s, guess in zip((2, 3), _outline._crossings(py, px, x)):
-            if np.isfinite(guess) and margin <= guess <= frame.shape[0] - margin:
-                r = _fit_edge(frame[:, x], guess)
-                if r is not None:
-                    found[s].append((x,) + r)
-    return found
 
 
 def _level(profile: np.ndarray, offsets: np.ndarray, level: float) -> float:
@@ -442,7 +404,7 @@ def report_edges(path: pathlib.Path, out: pathlib.Path) -> None:
         axes[0, c].set_title(
             f"channel {c}: edge motion against frame {REFERENCE}", fontsize=9
         )
-        axes[1, c].set_title("edge sharpness (error-function sigma)", fontsize=9)
+        axes[1, c].set_title("edge sharpness (sigma of the blurred edge)", fontsize=9)
         axes[1, c].set_xlabel("frame")
         for s in range(len(SIDES)):
             for t0, ls in ((0, ":"), (14, "-"), (24, "--")):

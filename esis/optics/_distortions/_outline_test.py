@@ -151,12 +151,90 @@ def test_fit_distortion_outline():
     assert result.z_sensor == start.z_sensor
 
 
-def test_fit_edge_guards():
-    profile = np.concatenate([np.zeros(40), np.ones(40)])
-    # a guess too close to the ends of the profile cannot be fit
-    assert np.all(np.isnan(_outline._fit_edge(profile, guess=3, half=10)))
-    assert np.all(np.isnan(_outline._fit_edge(profile, guess=77, half=10)))
-    # nor can a profile with a hole in it
-    holed = profile.copy()
-    holed[42] = np.nan
-    assert np.all(np.isnan(_outline._fit_edge(holed, guess=40, half=10)))
+def _blobs(frame: np.ndarray, columns: np.ndarray, depth: float = 4):
+    """Add bright patches just inside the top of the octagon of _frame."""
+    y, x = np.mgrid[: frame.shape[0], : frame.shape[1]] + 0.5
+    inside = 200 - 120 * np.cos(np.deg2rad(22.5)) + depth
+    patches = sum(
+        np.exp(-((x - c - 0.5) ** 2) / (2 * 0.7**2) - (y - inside) ** 2 / 8)
+        for c in columns
+    )
+    return frame + 300 * patches
+
+
+def _top(footprint: na.Cartesian2dVectorArray) -> tuple[np.ndarray, np.ndarray]:
+    """Choose the columns across the top of an octagon, and find its crossings."""
+    px, py = _outline._polygon(footprint)
+    index = np.arange(260, 340, 2)
+    guess = np.array([_outline._crossings(py, px, i + 0.5)[0] for i in index])
+    return index, guess
+
+
+def test_measure_edges_width():
+    # the frame's edges are blurred by a Gaussian of 1.5 px, normal to each side
+    footprint = _octagon(300, 200, 120)
+    edges = _outline.measure_edges(_frame(footprint), [footprint])
+    assert set(np.asarray(edges["side"])) == {0, 1, 2, 3}
+    assert np.allclose(edges["width"].to_value(u.pix), 1.5, atol=0.01)
+    assert np.all(edges["error"].to_value(u.pix) < 0.01)
+
+
+def test_measure_edges_bright_structure():
+    # bright patches just inside the top side, like the network next to a
+    # window's edge, neither move nor widen the edge
+    footprint = _octagon(300, 200, 120)
+    patches = np.array([270, 290, 310, 330])
+    frame = _blobs(_frame(footprint), patches)
+    edges = _outline.measure_edges(frame, [footprint])
+    model = _outline.predict_edges([footprint], edges)
+    residual = model - edges["position"].to_value(u.pix)
+    assert np.max(np.abs(residual)) < 0.01
+    assert np.allclose(edges["width"].to_value(u.pix), 1.5, atol=0.01)
+    # and the columns through them are left out
+    top = edges[edges["side"] == 2]
+    assert len(top) > 20
+    assert not np.any(np.isin(top["index"], patches))
+
+
+def test_fit_side():
+    footprint = _octagon(300, 200, 120)
+    index, guess = _top(footprint)
+    fit = _outline._fit_side(_frame(footprint), index, guess + 7, side=2)
+    # found from seven pixels away
+    assert np.allclose(fit.position, guess, atol=0.01)
+    assert fit.kept.all()
+    assert abs(fit.width - 1.5) < 0.01
+    # the background of 10 and the step of 100 of the frame
+    background, step, ramp = np.median(fit.coefficients, axis=0)
+    assert abs(background - 10) < 0.1
+    assert abs(step - 100 * (1 + 0.001 * 300)) < 1
+    assert abs(ramp) < 0.1
+
+
+def test_fit_side_guards():
+    footprint = _octagon(300, 200, 120)
+    frame = _frame(footprint)
+    index, guess = _top(footprint)
+    # too few columns
+    assert _outline._fit_side(frame, index[:5], guess[:5], side=2) is None
+    # guesses too close to the end of the columns
+    assert _outline._fit_side(frame, index, guess - 75, side=2) is None
+    # no edge to find
+    flat = np.full_like(frame, 50)
+    assert _outline._fit_side(flat, index, guess, side=2) is None
+    # an edge softer than half the band
+    soft = _frame(footprint, sigma=4)
+    assert _outline._fit_side(soft, index, guess, side=2) is None
+    # columns with a hole in them are left out
+    holed = frame.copy()
+    holed[:200, index[:3]] = np.nan
+    fit = _outline._fit_side(holed, index, guess, side=2)
+    assert not fit.kept[:3].any()
+    assert fit.kept[3:].all()
+    assert np.all(np.isnan(fit.coefficients[:3]))
+    # too few columns left once the clip has left out the bright ones
+    bright = _blobs(frame, index[::8])
+    fit = _outline._fit_side(bright, index, guess, side=2)
+    assert not fit.kept[::8].any()
+    num = fit.kept.sum()
+    assert _outline._fit_side(bright, index, guess, side=2, minimum=num + 1) is None

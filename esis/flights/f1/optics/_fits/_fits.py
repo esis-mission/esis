@@ -761,7 +761,10 @@ def measure_window_edges(
     The windows are the image of the field stop, and do not move with the
     pointing, so the same edge is measured once per frame against a
     different backdrop of solar structure each time and the median over the
-    frames is what the outline stage fits.  The per-frame departures from
+    frames is what the outline stage fits.  Each side of each window is fit
+    in each frame as one blurred straight edge, see
+    :func:`esis.optics.measure_edges`, and the median of the width of its
+    blur over the frames is kept with it.  The per-frame departures from
     that median are kept too, as the drift of the windows through the
     flight.
 
@@ -799,7 +802,8 @@ def measure_window_edges(
     Returns
     -------
     The median edges, one row per channel, line, side and row or column,
-    and the drift, one row per channel, frame and side.
+    with the median width of the side, and the drift, one row per channel,
+    frame and side.
     """
     instrument = _base(instrument)
     num_channel = instrument.camera.channel.shape["channel"]
@@ -840,6 +844,7 @@ def measure_window_edges(
     )
     unique, inverse = np.unique(keys, axis=0, return_inverse=True)
     position = np.asarray(every["position"].to_value(u.pix))
+    width = np.asarray(every["width"].to_value(u.pix))
     order = np.argsort(inverse, kind="stable")
     bounds = np.searchsorted(inverse[order], np.arange(len(unique) + 1))
     rows = []
@@ -849,15 +854,16 @@ def measure_window_edges(
         values = position[members]
         median = float(np.median(values))
         spread = 1.4826 * float(np.median(np.abs(values - median)))
-        rows.append((*unique[g], median, spread / np.sqrt(len(values)), len(values)))
+        error = spread / np.sqrt(len(values))
+        rows.append((*unique[g], median, error, np.median(width[members]), len(values)))
         center[members] = median
     median_edges = astropy.table.QTable(
         rows=rows,
-        names=("channel", "line", "side", "index", "position", "error", "num"),
-        dtype=(int, int, int, int, float, float, int),
+        names=("channel", "line", "side", "index", "position", "error", "width", "num"),
+        dtype=(int, int, int, int, float, float, float, int),
     )
-    median_edges["position"].unit = u.pix
-    median_edges["error"].unit = u.pix
+    for name in ("position", "error", "width"):
+        median_edges[name].unit = u.pix
     departure = position - center
     drift_rows = []
     for c in range(num_channel):
@@ -881,7 +887,8 @@ def measure_window_edges(
     meta = dict(
         description=(
             "Where the edges of each window cross the rows and columns of the "
-            "ESIS-I frames."
+            "ESIS-I frames, each side fit as one blurred straight edge, and the "
+            "width of its blur."
         ),
         frames=list(frames),
         lines=list(lines),

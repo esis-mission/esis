@@ -65,8 +65,8 @@ The pipeline
    of about 0.4 to 0.8 with the frame.
 
 2. **Window edges.**  The outline of every window is measured in every
-   frame as error-function crossings, medianed over the flight; the
-   per-frame departures from the median are kept as the drift of the
+   frame as one blurred straight edge per side, medianed over the flight;
+   the per-frame departures from the median are kept as the drift of the
    windows.
 
 3. **Outline and shared stages.**  The windows are placed on the measured
