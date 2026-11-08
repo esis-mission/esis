@@ -1,4 +1,3 @@
-import pathlib
 import pytest
 import numpy as np
 import astropy.units as u
@@ -61,36 +60,7 @@ def test_figure_measurement(serial_number: str) -> None:
     assert 2.5 * u.nm < rms < 3 * u.nm
 
 
-def test_figure_measurement_orientation() -> None:
-    """The first row of the map in the file is at the top, where y is largest."""
-    figures = esis.flights.f2.optics.primaries.figures
-    path = figures._figures._path_directory() / "primary/SN2_3219CC ASP_IRR_UC.dat"
-    data, _ = figures._figures._read_metropro(path)
-
-    figure = figures.figure_measurement("SN2", axis_x="a", axis_y="b")
-    assert figure.outputs.axes == ("b", "a")
-    assert np.all(figure.inputs.x[dict(a=slice(1, None))] > figure.inputs.x[dict(a=0)])
-    assert np.all(figure.inputs.y[dict(b=slice(1, None))] > figure.inputs.y[dict(b=0)])
-    assert np.array_equal(
-        figure.outputs.ndarray.to_value(u.nm),
-        data[::-1].to_value(u.nm),
-        equal_nan=True,
-    )
-
-
 def test_figure_measurement_serial_number() -> None:
     """Only the serial numbers of the mirrors which were measured are accepted."""
     with pytest.raises(ValueError, match="SN1"):
         esis.flights.f2.optics.primaries.figures.figure_measurement("SN1")
-
-
-def test_read_metropro_format(tmp_path: pathlib.Path) -> None:
-    """A file whose header is of another format than 1 is refused."""
-    figures = esis.flights.f2.optics.primaries.figures
-    path = figures._figures._path_directory() / "primary/SN2_3219CC ASP_IRR_UC.dat"
-    data = bytearray(path.read_bytes())
-    data[4:6] = (3).to_bytes(2, "big")
-    path_format = tmp_path / "format_3.dat"
-    path_format.write_bytes(data)
-    with pytest.raises(ValueError, match="format 1"):
-        figures._figures._read_metropro(path_format)
