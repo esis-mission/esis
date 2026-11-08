@@ -43,23 +43,6 @@ It is Eric Gullikson's estimate for the sample of
 _ratio_oxide = 0.44
 """The thickness of Si consumed in growing a unit thickness of its oxide."""
 
-_width_Si = 1.9 * u.nm
-"""
-The width of the erf interface on top of each Si layer of a Si/Sc coating.
-
-Sc is deposited on Si there, except on the top layer, which is under its
-native oxide.
-It is what :func:`multilayer_SiSc_sample_fit` finds, rounded.
-"""
-
-_width_Sc = 0.8 * u.nm
-"""
-The width of the erf interface on top of each Sc layer of a Si/Sc coating,
-where Si is deposited on Sc.
-
-It is what :func:`multilayer_SiSc_sample_fit` finds, rounded.
-"""
-
 _fraction_s = (1 + 0.98) / 2
 """
 The fraction of the intensity of the beam which measured the sample of
@@ -312,9 +295,9 @@ def multilayer_SiSc() -> optika.materials.MultilayerMirror:
     - the Si is amorphous;
     - the top Si layer is under 1.5 nm of its native oxide, which consumed
       0.66 nm of it;
-    - the widths of the erf interfaces on top of the Si and the Sc layers,
-      1.9 nm and 0.8 nm, are what :func:`multilayer_SiSc_sample_fit` finds,
-      rounded.
+    - the widths of the erf interfaces on top of the Si layers (Sc on Si) and
+      on top of the Sc layers (Si on Sc) are those
+      :func:`multilayer_SiSc_sample_fit` finds for the sample.
 
     Examples
     --------
@@ -352,12 +335,13 @@ def multilayer_SiSc() -> optika.materials.MultilayerMirror:
         ax.set_xlabel(f"wavelength ({wavelength.unit:latex_inline})");
         ax.set_ylabel("reflectivity");
     """
+    Si, Sc = multilayer_SiSc_sample_fit().layers[~0].layers
     return _multilayer_SiSc(
         period=26 * u.nm,
         ratio=0.5,
         num_periods=5,
-        width_Si=_width_Si,
-        width_Sc=_width_Sc,
+        width_Si=Si.interface.width,
+        width_Sc=Sc.interface.width,
         substrate=optika.materials.Layer(
             chemical=optika.chemicals.Chemical("SiO2", is_amorphous=True),
             thickness=30 * u.mm,

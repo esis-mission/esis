@@ -1,3 +1,4 @@
+from typing import Callable
 import pytest
 import numpy as np
 import astropy.units as u
@@ -56,8 +57,15 @@ def test_multilayer_AlSc_oxide(wavelength: u.Quantity):
 
 
 def test_multilayer_SiSc():
+    """The design has the interfaces fitted to the sample."""
     result = materials.multilayer_SiSc()
     assert isinstance(result, optika.materials.MultilayerMirror)
+    for layer, layer_sample in zip(
+        result.layers[~0].layers,
+        materials.multilayer_SiSc_sample_fit().layers[~0].layers,
+    ):
+        assert layer.chemical == layer_sample.chemical
+        assert layer.interface.width == layer_sample.interface.width
 
 
 @pytest.mark.parametrize(
@@ -68,22 +76,18 @@ def test_multilayer_SiSc():
     ],
 )
 @pytest.mark.parametrize(
-    argnames="multilayer",
+    argnames="function",
     argvalues=[
-        materials.multilayer_SiSc(),
-        materials._materials._multilayer_SiSc_sample(
-            period=26 * u.nm,
-            width_Si=1 * u.nm,
-            width_Sc=1 * u.nm,
-        ),
+        materials.multilayer_SiSc,
+        materials.multilayer_SiSc_sample_fit,
     ],
 )
 def test_multilayer_SiSc_layers(
-    multilayer: optika.materials.MultilayerMirror,
+    function: Callable[[], optika.materials.MultilayerMirror],
     wavelength: u.Quantity,
 ):
     """Every layer has a physical index of refraction in the passband."""
-    for layer in _layers(multilayer):
+    for layer in _layers(function()):
         n = layer.n(wavelength).ndarray
         assert 0.6 < n.real < 1.1
         assert 0 < n.imag < 0.5
@@ -131,7 +135,7 @@ def test_multilayer_SiSc_sample_measured():
 
 
 def test_multilayer_SiSc_sample_fit():
-    """The fit follows the measurement, and has the interfaces of the design."""
+    """The fit follows the measurement, without reaching the bounds of the fit."""
     result = materials.multilayer_SiSc_sample_fit()
     assert isinstance(result, optika.materials.MultilayerMirror)
 
@@ -150,8 +154,7 @@ def test_multilayer_SiSc_sample_fit():
     ratio = measurement.outputs[index] / r
     assert np.sqrt(np.mean(np.square(np.log(ratio)))).ndarray < 0.1
 
-    top_Si, top_Sc, periods = result.layers[1:]
-    period = periods.layers[0].thickness + periods.layers[1].thickness
-    assert 25 * u.nm < period < 27 * u.nm
-    assert np.isclose(top_Si.interface.width, _materials._width_Si, atol=0.1 * u.nm)
-    assert np.isclose(top_Sc.interface.width, _materials._width_Sc, atol=0.1 * u.nm)
+    Si, Sc = result.layers[~0].layers
+    assert 25 * u.nm < Si.thickness + Sc.thickness < 27 * u.nm
+    for layer in (Si, Sc):
+        assert 0.1 * u.nm < layer.interface.width < 3.9 * u.nm
