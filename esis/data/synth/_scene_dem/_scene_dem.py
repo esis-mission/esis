@@ -12,6 +12,7 @@ from esis._caching import versions
 
 __all__ = [
     "scene_dem",
+    "scene_emission_measure",
 ]
 
 abundance = "sun_coronal_1992_feldman_ext"
@@ -161,6 +162,141 @@ def scene_dem(
     emission_measure = utu.dem.emission_measure(dem, axis_temperature)
     emission_measure = np.where(chi2 >= 0, emission_measure, 0 * emission_measure)
 
+    result = scene_emission_measure(
+        emission_measure=emission_measure,
+        temperature=temperature,
+        position=filtergram.inputs.position[{axis_wavelength: 0}],
+        wavelength_min=wavelength_min,
+        wavelength_max=wavelength_max,
+        velocity=velocity,
+        abundance=abundance,
+        pressure=pressure,
+        shift=shift,
+        width_nonthermal=width_nonthermal,
+        fraction_min=fraction_min,
+        ions=ions,
+        axis_temperature=axis_temperature,
+        axis_line=axis_line,
+        axis_velocity=axis_velocity,
+    )
+
+    # The earliest image of each set. :class:`astropy.time.Time` has no
+    # minimum along a named axis, so it is found from the dates as numbers.
+    time = filtergram.inputs.time.explicit
+    mjd = na.ScalarArray(time.ndarray.mjd, axes=time.axes)
+    time = time[np.argmin(mjd, axis=axis_wavelength)]
+
+    return na.FunctionArray(
+        inputs=na.TemporalDopplerPositionalVectorArray(
+            time=time,
+            wavelength=result.inputs.wavelength,
+            wavelength_rest=result.inputs.wavelength_rest,
+            position=result.inputs.position,
+        ),
+        outputs=result.outputs,
+    )
+
+
+def scene_emission_measure(
+    emission_measure: na.AbstractScalar,
+    temperature: na.AbstractScalar,
+    position: na.AbstractCartesian2dVectorArray,
+    wavelength_min: u.Quantity,
+    wavelength_max: u.Quantity,
+    velocity: na.AbstractScalar,
+    abundance: str,
+    pressure: u.Quantity,
+    shift: u.Quantity | na.AbstractScalar = 0 * u.km / u.s,
+    width_nonthermal: u.Quantity | na.AbstractScalar = 0 * u.km / u.s,
+    fraction_min: float = 0.005,
+    ions: None | list[str] = None,
+    axis_temperature: str = "temperature",
+    axis_shift: None | str = None,
+    axis_line: str = "line",
+    axis_velocity: str = "velocity",
+) -> na.FunctionArray[na.DopplerPositionalVectorArray, na.ScalarArray]:
+    r"""
+    Create a synthetic solar scene from the emission measure of each pixel.
+
+    The spectrum of the plasma is computed from the CHIANTI atomic database,
+    through :func:`utu.spectrum.contribution_function`, for every line
+    between `wavelength_min` and `wavelength_max` bright enough to matter,
+    and each line is spread into a profile over bins of velocity with
+    :func:`utu.spectrum.synthesize`.
+
+    This is the second half of :func:`scene_dem`, for an emission measure
+    from anywhere, such as a simulation. With `axis_shift`, the emission
+    measure can be resolved in line-of-sight velocity as well as in
+    temperature, as in the velocity-resolved DEM :func:`scene_vdem` reads.
+
+    Parameters
+    ----------
+    emission_measure
+        The emission measure of each bin of temperature,
+        :math:`\int n_e n_H \, dh`, along `axis_temperature`, and of each
+        bin of line-of-sight velocity too, along `axis_shift`, if it is
+        given. A DEM per unit :math:`\log_{10} T` has to be multiplied by the
+        widths of its bins first. Every other axis is carried through to the
+        result, such as the two axes of the pixels.
+    temperature
+        The temperatures of the plasma, along `axis_temperature` only.
+    position
+        The vertices of the pixels, along the axes of the pixels of
+        `emission_measure`.
+    wavelength_min
+        The shortest wavelength of the lines to include.
+    wavelength_max
+        The longest wavelength of the lines to include.
+    velocity
+        The vertices of the bins of line-of-sight velocity each line is
+        spread over, along `axis_velocity`.
+    abundance
+        The abundances the lines are computed with, by their name in
+        :mod:`fiasco`. These should be the abundances the emission measure
+        was found or simulated with.
+    pressure
+        The constant pressure, :math:`n_e T`, the lines are computed at.
+    shift
+        The line-of-sight velocity of the plasma, see
+        :func:`utu.spectrum.synthesize`.
+    width_nonthermal
+        The standard deviation of the unresolved nonthermal velocities of the
+        plasma, see :func:`utu.spectrum.synthesize`.
+    fraction_min
+        The least fraction of the radiance of all the lines in the passband,
+        averaged over the scene, for a line to be included. The default
+        keeps the lines brighter than half a percent of the total.
+    ions
+        The ions to compute the lines of, named as :mod:`fiasco` names them.
+        If :obj:`None` (the default), every ion with a line between
+        `wavelength_min` and `wavelength_max`, found with
+        :func:`utu.spectrum.ions`.
+    axis_temperature
+        The name of the axis of `temperature`.
+    axis_shift
+        The name of the axis of `emission_measure` along which the plasma is
+        binned by line-of-sight velocity, see
+        :func:`utu.spectrum.synthesize`. If :obj:`None` (the default), the
+        emission measure is resolved in temperature alone.
+    axis_line
+        The name of the axis along the lines of the result.
+    axis_velocity
+        The name of the axis of `velocity`.
+
+    Returns
+    -------
+    :
+        The spectral radiance of the scene, along `axis_line`,
+        `axis_velocity`, and the axes of `emission_measure` other than
+        `axis_temperature` and `axis_shift`. The positions are `position`,
+        and the wavelengths are the vertices of the bins of velocity of each
+        line, beside its rest wavelength.
+
+    Notes
+    -----
+    The contribution functions take minutes to compute, so they are cached
+    with ``esis.memory``.
+    """
     contribution, mass = _lines(
         temperature=temperature.ndarray,
         wavelength_min=wavelength_min,
@@ -175,8 +311,11 @@ def scene_dem(
 
     # the brightness of each line from the average plasma in the scene, as a
     # fraction of all of them
-    axis_pixel = tuple(set(na.shape(emission_measure)) - {axis_temperature})
-    radiance = contribution.outputs * emission_measure.mean(axis_pixel)
+    em = emission_measure
+    if axis_shift is not None:
+        em = em.sum(axis_shift)
+    axis_pixel = tuple(set(na.shape(em)) - {axis_temperature})
+    radiance = contribution.outputs * em.mean(axis_pixel)
     radiance = radiance.sum(axis_temperature)
     fraction = radiance / radiance.sum(axis_line)
     where = fraction > fraction_min
@@ -190,22 +329,16 @@ def scene_dem(
         shift=shift,
         width_nonthermal=width_nonthermal,
         axis_temperature=axis_temperature,
+        axis_shift=axis_shift,
         axis_velocity=axis_velocity,
         axis=axis_line,
     )
 
-    # The earliest image of each set. :class:`astropy.time.Time` has no
-    # minimum along a named axis, so it is found from the dates as numbers.
-    time = filtergram.inputs.time.explicit
-    mjd = na.ScalarArray(time.ndarray.mjd, axes=time.axes)
-    time = time[np.argmin(mjd, axis=axis_wavelength)]
-
     return na.FunctionArray(
-        inputs=na.TemporalDopplerPositionalVectorArray(
-            time=time,
+        inputs=na.DopplerPositionalVectorArray(
             wavelength=result.inputs.wavelength,
             wavelength_rest=result.inputs.wavelength_rest,
-            position=filtergram.inputs.position[{axis_wavelength: 0}],
+            position=position,
         ),
         outputs=result.outputs,
     )

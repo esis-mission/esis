@@ -194,3 +194,82 @@ def test_lines_ions(monkeypatch: pytest.MonkeyPatch):
     assert np.all((rest > wavelength_min) & (rest < wavelength_max))
     assert na.shape(contribution.outputs) == dict(t=6, l=rest.size)
     assert np.all(mass == fiasco.Ion("Ne 7", 1e6 * u.K).mass)
+
+
+def test_scene_emission_measure_shift(monkeypatch: pytest.MonkeyPatch):
+    """
+    Check a velocity-resolved emission measure adds up its bins.
+
+    An emission measure resolved in line-of-sight velocity is the plasma in
+    each of its bins of velocity, each at its own shift and width, added up.
+
+    The contribution functions are made up, so that the test runs without
+    the CHIANTI database.
+    """
+    temperature = na.geomspace(1e5, 10**6.5, axis="t", num=6) * u.K
+    contribution = na.FunctionArray(
+        inputs=na.ScalarArray([465.221, 499.406] * u.AA, axes="l"),
+        outputs=na.ScalarArray(
+            ndarray=np.array([[1, 3, 2, 1, 0.5, 0.1], [0.1, 0.2, 1, 4, 3, 1]])
+            * 1e-24
+            * u.erg
+            * u.cm**3
+            / u.s,
+            axes=("l", "t"),
+        ),
+    )
+    mass = na.ScalarArray([20.18, 28.09] * u.u, axes="l")
+
+    def lines(**kwargs: Any) -> tuple[na.FunctionArray, na.ScalarArray]:
+        """Stand in for the contribution functions of the passband."""
+        return contribution, mass
+
+    monkeypatch.setattr(esis.data.synth._scene_dem._scene_dem, "_lines", lines)
+
+    em = na.ScalarArray(np.array([1, 2, 4, 2, 1, 0.5]) * 1e26 / u.cm**5, axes="t")
+    em = em * na.ScalarArray(np.array([0.2, 0.5, 0.3]), axes="s")
+    em = em * na.ScalarArray(np.array([1, 2]), axes="x")
+    shift = na.ScalarArray([-40, 0, 25] * u.km / u.s, axes="s")
+    width = na.ScalarArray([10, 5, 15] * u.km / u.s, axes="s")
+    position = na.Cartesian2dVectorArray(
+        x=na.ScalarArray([-1, 0, 1] * u.arcsec, axes="x"),
+        y=0 * u.arcsec,
+    )
+
+    kwargs = dict(
+        temperature=temperature,
+        position=position,
+        wavelength_min=460 * u.AA,
+        wavelength_max=530 * u.AA,
+        velocity=na.linspace(-300, 300, axis="v", num=61) * u.km / u.s,
+        abundance="sun_coronal_2021_chianti",
+        pressure=3e15 * u.K / u.cm**3,
+        axis_temperature="t",
+        axis_line="l",
+        axis_velocity="v",
+    )
+
+    result = esis.data.synth.scene_emission_measure(
+        emission_measure=em,
+        shift=shift,
+        width_nonthermal=width,
+        axis_shift="s",
+        **kwargs,
+    )
+
+    assert isinstance(result.inputs, na.DopplerPositionalVectorArray)
+    assert result.inputs.position is position
+    assert na.shape(result.outputs) == dict(l=2, v=60, x=2)
+
+    expected = 0
+    for i in range(3):
+        index = {"s": i}
+        part = esis.data.synth.scene_emission_measure(
+            emission_measure=em[index],
+            shift=shift[index],
+            width_nonthermal=width[index],
+            **kwargs,
+        )
+        expected = expected + part.outputs
+
+    assert np.allclose(result.outputs, expected, rtol=1e-12)
