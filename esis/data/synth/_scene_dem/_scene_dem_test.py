@@ -224,7 +224,9 @@ def test_scene_emission_measure_shift(monkeypatch: pytest.MonkeyPatch):
         """Stand in for the contribution functions of the passband."""
         return contribution, mass
 
-    monkeypatch.setattr(esis.data.synth._scene_dem._scene_dem, "_lines", lines)
+    module = esis.data.synth._scene_dem._scene_dem
+    monkeypatch.setattr(module, "_lines", lines)
+    monkeypatch.setattr(module, "_chianti_version", lambda: "none")
 
     em = na.ScalarArray(np.array([1, 2, 4, 2, 1, 0.5]) * 1e26 / u.cm**5, axes="t")
     em = em * na.ScalarArray(np.array([0.2, 0.5, 0.3]), axes="s")
