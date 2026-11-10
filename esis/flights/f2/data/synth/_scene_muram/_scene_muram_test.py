@@ -8,7 +8,35 @@ import esis
 from esis.flights.f2.data.synth._scene_muram import _scene_muram
 
 
-def test_plate_scale():
+def test_path_muram(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
+    """
+    Check the store is unpacked into the data directory of esis.
+
+    The archive is several gigabytes, so the download is replaced, and only
+    what is asked of it is checked.
+    """
+    calls = []
+
+    def retrieve(**kwargs: Any) -> pathlib.Path:
+        """Stand in for the download, recording its arguments."""
+        calls.append(kwargs)
+        return kwargs["path"] / kwargs["extract_dir"]
+
+    monkeypatch.setenv("ESIS_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(_scene_muram, "_retrieve", retrieve)
+
+    result = esis.flights.f2.data.synth.path_muram()
+
+    (call,) = calls
+    assert call["url"].endswith(f"/{_scene_muram._name}.tar")
+    assert call["known_hash"] == _scene_muram._hash
+    assert call["fname"] == f"{_scene_muram._name}.tar"
+    assert call["path"] == tmp_path
+    assert result == tmp_path / call["extract_dir"] / _scene_muram._name
+    assert result.suffix == ".zarr"
+
+
+def test_plate_scale() -> None:
     """
     Check the plate scale is about half an arcsecond, and positive.
 
@@ -31,7 +59,7 @@ def test_plate_scale():
 def test_scene_muram(
     monkeypatch: pytest.MonkeyPatch,
     velocity: None | na.AbstractScalar,
-):
+) -> None:
     """
     Check the DEM is passed on to :func:`esis.data.synth.scene_vdem`.
 

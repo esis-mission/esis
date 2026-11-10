@@ -72,7 +72,7 @@ def _scene(monkeypatch: pytest.MonkeyPatch, **kwargs: Any) -> dict[str, Any]:
     return call
 
 
-def test_scene_vdem(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path):
+def test_scene_vdem(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     """
     Check the DEM is read into an emission measure and bins of velocity.
 
@@ -122,7 +122,7 @@ def test_scene_vdem(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path):
 
 def test_scene_vdem_plate_scale(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-):
+) -> None:
     """A plate scale stretches each pixel to the angle it gives."""
     path = tmp_path / "vdem.zarr"
     _store(path)
@@ -134,7 +134,9 @@ def test_scene_vdem_plate_scale(
     assert np.allclose(position.y.ndarray, [-0.5, 0, 0.5] * u.arcsec)
 
 
-def test_scene_vdem_abundance(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path):
+def test_scene_vdem_abundance(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
     """Check abundances fiasco isn't known to have are an error, unless given."""
     path = tmp_path / "vdem.zarr"
     _store(path, abundance="Photospheric_Somebody")

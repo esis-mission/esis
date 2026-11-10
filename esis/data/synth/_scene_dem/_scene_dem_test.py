@@ -196,7 +196,7 @@ def test_lines_ions(monkeypatch: pytest.MonkeyPatch):
     assert np.all(mass == fiasco.Ion("Ne 7", 1e6 * u.K).mass)
 
 
-def test_scene_emission_measure_shift(monkeypatch: pytest.MonkeyPatch):
+def test_scene_emission_measure_shift(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Check a velocity-resolved emission measure adds up its bins.
 
