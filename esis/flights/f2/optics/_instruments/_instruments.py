@@ -17,9 +17,45 @@ __all__ = [
 angle_blaze = 2.1 * u.deg
 """The blaze angle of the ESIS-II diffraction gratings."""
 
+efficiency_groove = 0.6
+"""
+The groove efficiency of the ESIS-II diffraction gratings in first order,
+the fraction of the light their coating reflects which the grooves send
+into that order.
+
+This is the minimum the grating manufacturer quoted, relative to a gold
+mirror, until a simulation of the manufactured grooves or a measurement
+of a coated grating replaces it.
+"""
+
+
+def _rulings_quoted(grating: esis.optics.Grating) -> None:
+    """
+    Replace the inherited ruling model of the science gratings.
+
+    The new rulings send :data:`efficiency_groove` of the light into
+    first order at every wavelength.
+    """
+    rulings = grating.rulings
+    wavelength = na.ScalarArray(
+        ndarray=u.Quantity([wavelength_Ne_VII, wavelength_Si_XII]),
+        axes="wavelength",
+    )
+    grating.rulings = optika.rulings.MeasuredRulings(
+        spacing=rulings.spacing,
+        diffraction_order=rulings.diffraction_order,
+        efficiency_measured=na.FunctionArray(
+            inputs=na.SpectralDirectionalVectorArray(
+                wavelength=wavelength,
+                direction=0 * u.deg,
+            ),
+            outputs=na.broadcast_to(efficiency_groove, wavelength.shape),
+        ),
+    )
+
 
 def _blaze_rulings(grating: esis.optics.Grating) -> None:
-    """Replace the inherited lamellar ruling model with the blazed profile."""
+    """Model the alignment gratings as a sawtooth blazed at :data:`angle_blaze`."""
     rulings = grating.rulings
     grating.rulings = optika.rulings.SawtoothRulings(
         spacing=rulings.spacing,
@@ -140,7 +176,7 @@ def design_proposed(
     result.primary_mirror.material = materials.multilayer_SiSc()
     result.grating.material = materials.multilayer_SiSc()
 
-    _blaze_rulings(result.grating)
+    _rulings_quoted(result.grating)
 
     return result
 
@@ -438,7 +474,7 @@ def design_guess(
             axis="wavelength",
         )
 
-    _blaze_rulings(result.grating)
+    _rulings_quoted(result.grating)
 
     return result
 
@@ -531,9 +567,6 @@ def design_single(
     coefficients[1] = c1
     coefficients[2] = c2
     result.grating.sag.radius = radius_grating
-
-    # refresh the groove depth so the blaze angle tracks the new ruling spacing
-    _blaze_rulings(result.grating)
 
     return result
 
@@ -682,8 +715,7 @@ def design_visible(
     if grid is None or grid.wavelength is None:
         result.wavelength = wavelength_HeNe
 
-    # refresh the groove depth so the alignment gratings keep the same
-    # blaze angle as the science gratings
+    # blaze the alignment gratings at the same angle as the science gratings
     _blaze_rulings(result.grating)
 
     return result
