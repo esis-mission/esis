@@ -1,3 +1,4 @@
+import dataclasses
 import pytest
 import numpy as np
 import matplotlib.pyplot as plt
@@ -202,6 +203,50 @@ class AbstractTestAbstractInstrument(
         assert ax.has_data()
 
         plt.close(fig)
+
+    def test_schematic_primary_ax(
+        self,
+        a: esis.optics.abc.AbstractInstrument,
+    ) -> None:
+        """Everything is drawn on the axes given, even if they are not current."""
+        fig, axs = plt.subplots(ncols=2)
+
+        a.schematic_primary(ax=axs[0])
+
+        assert axs[0].has_data()
+        assert not axs[1].has_data()
+        assert not axs[1].texts
+
+        plt.close(fig)
+
+    def test_schematic_primary_roll(
+        self,
+        a: esis.optics.abc.AbstractInstrument,
+    ) -> None:
+        """
+        Rolling the instrument turns the footprint of the beam with the mirror.
+
+        The test points of a rolled instrument are where those of the same
+        instrument are when its schematic is turned by the roll instead.
+        They are not exactly the same, since the grid of field angles does not
+        roll with the instrument.
+        """
+        angle = 22.5 * u.deg
+
+        def test_points(
+            instrument: esis.optics.abc.AbstractInstrument,
+            transformation: None | na.transformations.AbstractTransformation = None,
+        ) -> np.ndarray:
+            fig, ax = plt.subplots()
+            instrument.schematic_primary(ax=ax, transformation=transformation)
+            result = np.concatenate([c.get_offsets() for c in ax.collections])
+            plt.close(fig)
+            return result
+
+        rolled = dataclasses.replace(a, roll=a.roll + angle)
+        turned = na.transformations.Cartesian3dRotationZ(angle)
+
+        assert np.allclose(test_points(rolled), test_points(a, turned), atol=1)
 
 
 @pytest.mark.parametrize(
