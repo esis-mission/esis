@@ -94,8 +94,10 @@ def scene_dem(
         plasma, see :func:`utu.spectrum.synthesize`.
     fraction_min
         The least fraction of the radiance of all the lines in the passband,
-        averaged over the scene, for a line to be included. The default
-        keeps the lines brighter than half a percent of the total.
+        averaged over the pixels of a set of images, for a line to be
+        included. A line is included if it carries that fraction in any one
+        set, see :func:`scene_emission_measure`. The default keeps the lines
+        brighter than half a percent of the total.
     ions
         The ions to compute the lines of, named as :mod:`fiasco` names them.
         If :obj:`None` (the default), every ion with a line between
@@ -176,6 +178,8 @@ def scene_dem(
         fraction_min=fraction_min,
         ions=ions,
         axis_temperature=axis_temperature,
+        axis_x=filtergram.axis_detector_x,
+        axis_y=filtergram.axis_detector_y,
         axis_line=axis_line,
         axis_velocity=axis_velocity,
     )
@@ -212,6 +216,8 @@ def scene_emission_measure(
     ions: None | list[str] = None,
     axis_temperature: str = "temperature",
     axis_shift: None | str = None,
+    axis_x: str = "x",
+    axis_y: str = "y",
     axis_line: str = "line",
     axis_velocity: str = "velocity",
 ) -> na.FunctionArray[na.DopplerPositionalVectorArray, na.ScalarArray]:
@@ -237,12 +243,12 @@ def scene_emission_measure(
         bin of line-of-sight velocity too, along `axis_shift`, if it is
         given. A DEM per unit :math:`\log_{10} T` has to be multiplied by the
         widths of its bins first. Every other axis is carried through to the
-        result, such as the two axes of the pixels.
+        result, such as `axis_x` and `axis_y`, the two axes of the pixels,
+        or an axis of time.
     temperature
         The temperatures of the plasma, along `axis_temperature` only.
     position
-        The vertices of the pixels, along the axes of the pixels of
-        `emission_measure`.
+        The vertices of the pixels, along `axis_x` and `axis_y`.
     wavelength_min
         The shortest wavelength of the lines to include.
     wavelength_max
@@ -264,8 +270,11 @@ def scene_emission_measure(
         plasma, see :func:`utu.spectrum.synthesize`.
     fraction_min
         The least fraction of the radiance of all the lines in the passband,
-        averaged over the scene, for a line to be included. The default
-        keeps the lines brighter than half a percent of the total.
+        averaged over the pixels, along `axis_x` and `axis_y`, for a line to
+        be included. A line is included if it carries that fraction anywhere
+        along the other axes of `emission_measure`, such as in any one frame
+        of a series in time. The default keeps the lines brighter than half
+        a percent of the total.
     ions
         The ions to compute the lines of, named as :mod:`fiasco` names them.
         If :obj:`None` (the default), every ion with a line between
@@ -278,6 +287,11 @@ def scene_emission_measure(
         binned by line-of-sight velocity, see
         :func:`utu.spectrum.synthesize`. If :obj:`None` (the default), the
         emission measure is resolved in temperature alone.
+    axis_x
+        The name of the axis of the pixels in :math:`x`. An emission measure
+        without it is the same all along it, as for a scene one pixel wide.
+    axis_y
+        The name of the axis of the pixels in :math:`y`, like `axis_x`.
     axis_line
         The name of the axis along the lines of the result.
     axis_velocity
@@ -309,16 +323,18 @@ def scene_emission_measure(
         axis_line=axis_line,
     )
 
-    # the brightness of each line from the average plasma in the scene, as a
-    # fraction of all of them
+    # The brightness of each line from the average plasma in the pixels of
+    # the scene, as a fraction of all of them. A line is kept if it is bright
+    # enough anywhere along the other axes, such as in one frame of a flare.
     em = emission_measure
     if axis_shift is not None:
         em = em.sum(axis_shift)
-    axis_pixel = tuple(set(na.shape(em)) - {axis_temperature})
+    axis_pixel = tuple(a for a in (axis_x, axis_y) if a in na.shape(em))
     radiance = contribution.outputs * em.mean(axis_pixel)
     radiance = radiance.sum(axis_temperature)
     fraction = radiance / radiance.sum(axis_line)
-    where = fraction > fraction_min
+    axis_other = tuple(a for a in na.shape(fraction) if a != axis_line)
+    where = (fraction > fraction_min).any(axis_other)
 
     result = utu.spectrum.synthesize(
         contribution=contribution[where],

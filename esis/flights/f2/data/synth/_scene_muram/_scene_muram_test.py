@@ -12,8 +12,8 @@ def test_path_muram(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> 
     """
     Check the store is unpacked into the data directory of esis.
 
-    The archive is several gigabytes, so the download is replaced, and only
-    what is asked of it is checked.
+    The archive is about 330 megabytes, so the download is replaced, and
+    only what is asked of it is checked.
     """
     calls = []
 
@@ -38,15 +38,40 @@ def test_path_muram(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> 
 
 def test_plate_scale() -> None:
     """
-    Check the plate scale is about half an arcsecond, and positive.
+    Check the plate scale is that of the detector across the dispersion.
 
-    It is the angle a 15-micron pixel spans at the effective focal length of
-    ESIS-II, and positive though the focal length of the primary mirror is
-    negative.
+    It is the angle a 15-micron pixel spans across the dispersion at the
+    effective focal length of ESIS-II, about half an arcsecond, and positive
+    though the focal length of the primary mirror is negative.
+
+    A raytrace of a point stepped across the field finds the same angle
+    across the dispersion, along the y axis of the sensor, and a smaller one
+    along it, the x axis, where the image is stretched further.
     """
-    result = esis.flights.f2.data.synth._scene_muram.plate_scale()
-    assert isinstance(result, u.Quantity)
-    assert 0.45 * u.arcsec < result < 0.5 * u.arcsec
+    instrument = esis.flights.f2.optics.design_single(num_distribution=0)
+    result = _scene_muram._plate_scale(instrument)
+    assert na.shape(result) == dict()
+    assert 0.45 * u.arcsec < result.ndarray < 0.5 * u.arcsec
+
+    step = 10 * u.arcsec
+    field = na.Cartesian2dVectorArray(
+        x=step * na.ScalarArray(np.array([0, 1, 0]), axes="_field"),
+        y=step * na.ScalarArray(np.array([0, 0, 1]), axes="_field"),
+    )
+    rays = instrument.system.rayfunction(
+        wavelength=(instrument.wavelength_min + instrument.wavelength_max) / 2,
+        field=field,
+        pupil=na.Cartesian2dVectorArray(0, 0),
+        normalized_field=False,
+    )
+    position = rays.outputs.position
+    shift = position[{"_field": slice(1, None)}] - position[{"_field": 0}]
+    pixels = shift.length / instrument.camera.sensor.width_pixel
+    angle = step / pixels
+    along = angle[{"_field": 0}]
+    across = angle[{"_field": 1}]
+    assert np.allclose(across, result, rtol=1e-3)
+    assert along < 0.99 * result
 
 
 @pytest.mark.parametrize(
@@ -64,7 +89,7 @@ def test_scene_muram(
     Check the DEM is passed on to :func:`esis.data.synth.scene_vdem`.
 
     It is passed on with the passband of ESIS-II, stretched to one pixel of
-    the detector.
+    the detector across the dispersion.
 
     The download and the synthesis are replaced, so that the test needs
     neither the DEM nor the CHIANTI database.
@@ -82,6 +107,7 @@ def test_scene_muram(
 
     esis.flights.f2.data.synth.scene_muram(
         velocity=velocity,
+        width_nonthermal=12 * u.km / u.s,
         fraction_min=0.01,
         ions=["Ne 7"],
         axis_x="sx",
@@ -96,7 +122,8 @@ def test_scene_muram(
     assert call["wavelength_min"] == instrument.wavelength_min
     assert call["wavelength_max"] == instrument.wavelength_max
     assert call["pressure"] == _scene_muram.pressure
-    assert call["plate_scale"] == _scene_muram.plate_scale()
+    assert np.all(call["plate_scale"] == _scene_muram._plate_scale(instrument))
+    assert call["width_nonthermal"] == 12 * u.km / u.s
     assert call["fraction_min"] == 0.01
     assert call["ions"] == ["Ne 7"]
     assert call["axis_x"] == "sx"

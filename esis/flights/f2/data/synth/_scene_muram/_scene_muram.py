@@ -7,8 +7,6 @@ from esis.flights.f1.data._fits._fits import _path_cache, _retrieve
 
 __all__ = [
     "path_muram",
-    "plate_scale",
-    "pressure",
     "scene_muram",
 ]
 
@@ -26,7 +24,8 @@ _hash = "sha256:03517fff80e486cbc3e6a8a05a7db20fd2f5cf19b882a4d967cb3cafe1a05d69
 
 pressure = 3e15 * u.K / u.cm**3
 """
-The constant pressure, :math:`n_e T`, the lines are computed at.
+The constant pressure, :math:`n_e T`, the lines of :func:`scene_muram` are
+computed at.
 
 The pressure of the active region DEM of CHIANTI. The velocity-resolved DEM
 does not record the density of the plasma.
@@ -52,26 +51,36 @@ def path_muram() -> pathlib.Path:
     return _path_cache() / "muram" / _name
 
 
-def plate_scale() -> u.Quantity:
+def _plate_scale(instrument: esis.optics.Instrument) -> na.AbstractScalar:
     """
-    Return the angle each pixel of the detector of ESIS-II spans on the sky.
+    Return the angle one pixel of the detector spans across the dispersion.
 
     The width of a pixel over the effective focal length of the instrument,
-    the focal length of the primary mirror times the magnification of the
-    grating, of :func:`esis.flights.f2.optics.design_single`.
+    the focal length of the primary mirror times
+    :attr:`~esis.optics.Instrument.magnification`, the magnification of the
+    grating across the dispersion.
+
+    Along the dispersion, the anamorphic magnification of the grating and the
+    tilt of the detector stretch the image further, so a pixel spans a
+    smaller angle along it. The channels of ESIS-II disperse at different
+    azimuths, so no one angle on the sky is one pixel of the detector along
+    the dispersion in all of them.
+
+    Parameters
+    ----------
+    instrument
+        A single channel of ESIS-II, such as
+        :func:`esis.flights.f2.optics.design_single`.
     """
-    instrument = esis.flights.f2.optics.design_single(num_distribution=0)
     focal_length = instrument.primary_mirror.sag.focal_length
     focal_length = focal_length * instrument.magnification
     result = instrument.camera.sensor.width_pixel / np.abs(focal_length)
-    result = result.to(u.arcsec, equivalencies=u.dimensionless_angles())
-    if isinstance(result, na.AbstractArray):
-        result = result.ndarray
-    return result
+    return result.to(u.arcsec, equivalencies=u.dimensionless_angles())
 
 
 def scene_muram(
     velocity: None | na.AbstractScalar = None,
+    width_nonthermal: u.Quantity | na.AbstractScalar = 0 * u.km / u.s,
     fraction_min: float = 0.005,
     ions: None | list[str] = None,
     axis_x: str = "x",
@@ -91,10 +100,19 @@ def scene_muram(
     into :func:`esis.data.synth.scene_vdem`, with the DEM downloaded from
     the High Altitude Observatory.
 
-    Each pixel of the simulation is stretched to span one pixel of the
-    detector of ESIS-II, :func:`plate_scale`, so that the simulation fills
-    the field of view. That is about 1.8 times its true size, and the scene
-    is :math:`492''` across.
+    Each pixel of the simulation is stretched, along both axes, to the angle
+    on the sky one pixel of the detector of ESIS-II spans across the
+    dispersion: the width of a pixel over the effective focal length of the
+    instrument, the focal length of the primary mirror times
+    :attr:`~esis.optics.Instrument.magnification`. That is about
+    :math:`0.48''`, 1.8 times the angle a pixel of the simulation spans from
+    one astronomical unit away, so the scene is :math:`491''` across and
+    fills the field of view. Along the dispersion, the anamorphic
+    magnification of the grating and the tilt of the detector stretch the
+    image a few percent further, so there a pixel of the simulation spans a
+    little more than one pixel of the detector. The six channels disperse at
+    different azimuths, so no one angle could make it one pixel along the
+    dispersion in all of them.
 
     Parameters
     ----------
@@ -104,6 +122,10 @@ def scene_muram(
         :math:`10\,\text{km}\,\text{s}^{-1}` wide from :math:`-400` to
         :math:`300\,\text{km}\,\text{s}^{-1}`, which hold every bin of the
         DEM and the thermal width of the hottest lines beyond them.
+    width_nonthermal
+        The standard deviation of the unresolved nonthermal velocities of the
+        plasma in each bin of the DEM, beyond its spread across the bin, see
+        :func:`esis.data.synth.scene_vdem`.
     fraction_min
         The least fraction of the radiance of the passband a line must carry
         to be included, see :func:`esis.data.synth.scene_emission_measure`.
@@ -123,12 +145,15 @@ def scene_muram(
     -----
     The lines are computed with the abundances of the simulation, the
     coronal abundances of CHIANTI, ``"sun_coronal_2021_chianti"`` in
-    :mod:`fiasco`, at the constant pressure :data:`pressure`.
+    :mod:`fiasco`, at the constant pressure of the active region DEM of
+    CHIANTI, :math:`n_e T = 3 \times 10^{15} \, \mathrm{K \, cm^{-3}}`. The
+    DEM does not record the density of the plasma.
 
-    The DEM is 330 megabytes, and takes 3.1 gigabytes of memory, in single
-    precision. The scene takes 8 bytes for each line in each bin of velocity
-    in each of the million pixels, so it can be computed for a few bins of
-    velocity at a time, by passing their vertices as `velocity`.
+    The DEM is a 330 megabyte download, and takes 3.3 gigabytes of memory in
+    single precision, which it is summed in without a copy. The scene takes
+    4 bytes for each line in each bin of velocity in each of the million
+    pixels, so it can be computed for a few bins of velocity at a time, by
+    passing their vertices as `velocity`.
     """
     if velocity is None:
         velocity = na.linspace(-400, 300, axis=axis_velocity, num=71) * u.km / u.s
@@ -141,7 +166,8 @@ def scene_muram(
         wavelength_max=instrument.wavelength_max,
         velocity=velocity,
         pressure=pressure,
-        plate_scale=plate_scale(),
+        plate_scale=_plate_scale(instrument),
+        width_nonthermal=width_nonthermal,
         fraction_min=fraction_min,
         ions=ions,
         axis_x=axis_x,

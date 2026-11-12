@@ -275,3 +275,75 @@ def test_scene_emission_measure_shift(monkeypatch: pytest.MonkeyPatch) -> None:
         expected = expected + part.outputs
 
     assert np.allclose(result.outputs, expected, rtol=1e-12)
+
+
+def test_scene_emission_measure_fraction_min(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Check a line bright enough in any one frame is kept.
+
+    The radiance of each line is averaged over the pixels alone, not over
+    the frames, so a line bright only in the frame of a flare is kept,
+    though averaged over both frames it is too faint. A line too faint in
+    every frame is left out.
+
+    The contribution functions are made up, so that the test runs without
+    the CHIANTI database.
+    """
+    temperature = na.geomspace(1e5, 1e7, axis="t", num=3) * u.K
+    contribution = na.FunctionArray(
+        inputs=na.ScalarArray([465.221, 499.406, 520.666] * u.AA, axes="l"),
+        outputs=na.ScalarArray(
+            ndarray=np.array([[1, 0.1, 0.001], [0.001, 0.1, 1], [1e-5, 1e-5, 1e-5]])
+            * 1e-24
+            * u.erg
+            * u.cm**3
+            / u.s,
+            axes=("l", "t"),
+        ),
+    )
+    mass = na.ScalarArray([20.18, 28.09, 28.09] * u.u, axes="l")
+
+    def lines(**kwargs: Any) -> tuple[na.FunctionArray, na.ScalarArray]:
+        """Stand in for the contribution functions of the passband."""
+        return contribution, mass
+
+    module = esis.data.synth._scene_dem._scene_dem
+    monkeypatch.setattr(module, "_lines", lines)
+    monkeypatch.setattr(module, "_chianti_version", lambda: "none")
+
+    # cool plasma in the first frame, and a little hot plasma in the second
+    em = na.ScalarArray(
+        ndarray=np.array([[1e30, 0, 0], [0, 0, 1e26]]) / u.cm**5,
+        axes=("time", "t"),
+    )
+    em = em * na.ScalarArray(np.array([1, 2, 3]), axes="sx")
+    em = em * na.ScalarArray(np.array([1, 0.5]), axes="sy")
+    position = na.Cartesian2dVectorArray(
+        x=na.linspace(-1.5, 1.5, axis="sx", num=4) * u.arcsec,
+        y=na.linspace(-1, 1, axis="sy", num=3) * u.arcsec,
+    )
+
+    result = esis.data.synth.scene_emission_measure(
+        emission_measure=em,
+        temperature=temperature,
+        position=position,
+        wavelength_min=460 * u.AA,
+        wavelength_max=530 * u.AA,
+        velocity=na.linspace(-300, 300, axis="v", num=61) * u.km / u.s,
+        abundance="sun_coronal_2021_chianti",
+        pressure=3e15 * u.K / u.cm**3,
+        axis_temperature="t",
+        axis_x="sx",
+        axis_y="sy",
+        axis_line="l",
+        axis_velocity="v",
+    )
+
+    rest = result.inputs.wavelength_rest
+    assert np.all(rest == contribution.inputs[{"l": slice(0, 2)}])
+    assert na.shape(result.outputs) == dict(l=2, v=60, time=2, sx=3, sy=2)
+
+    # averaged over both frames, the line of the flare would be too faint
+    radiance = (contribution.outputs * em.mean(("time", "sx", "sy"))).sum("t")
+    fraction = radiance / radiance.sum("l")
+    assert fraction[{"l": 1}] < 0.005
