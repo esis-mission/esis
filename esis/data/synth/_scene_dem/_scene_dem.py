@@ -55,9 +55,10 @@ def scene_dem(
     an atomic database.
 
     The DEM of each pixel is inverted from the six optically-thin EUV channels
-    of AIA with :func:`utu.dem.plowman`, against the temperature response of
-    :func:`sdo.aia.temperature_response`. The spectrum of the plasma it
-    describes is then computed from the CHIANTI atomic database, through
+    of AIA with :func:`sdo.aia.dem`, by the method of Plowman & Caspi (2020),
+    against the temperature response of AIA normalized to SDO/EVE. The
+    spectrum of the plasma it describes is then computed from the CHIANTI
+    atomic database, through
     :func:`utu.spectrum.contribution_function`, for every line between
     `wavelength_min` and `wavelength_max` bright enough to matter, and each
     line is spread into a profile over bins of velocity with
@@ -103,7 +104,7 @@ def scene_dem(
         matter saves most of the time the contribution functions take.
     emissivity
         The emissivity of the temperature response the DEM is inverted
-        against, see :func:`sdo.aia.temperature_response`. The default is
+        against, see :func:`sdo.aia.dem`. The default is
         computed from the same version of CHIANTI as the lines, if
         :mod:`fiasco` reads that version.
     temperature_min
@@ -147,32 +148,11 @@ def scene_dem(
     axis_wavelength = filtergram.axis_wavelength
     axis_temperature = "_temperature"
 
-    counts = filtergram.outputs
-    intensity = counts / filtergram.timedelta / u.pix
-    uncertainty = sdo.aia.uncertainty(
-        counts=counts,
-        wavelength=filtergram.inputs.wavelength,
-    )
-    uncertainty = uncertainty / filtergram.timedelta / u.pix
-
-    time = filtergram.inputs.time
-
-    response = sdo.aia.temperature_response(
-        wavelength=filtergram.inputs.wavelength,
-        time=time.ndarray.min(),
-        eve=True,
-        axis_wavelength=axis_wavelength,
-        axis_temperature=axis_temperature,
+    dem, chi2 = sdo.aia.dem(
+        filtergram=filtergram,
+        temperature_min=temperature_min,
+        temperature_max=temperature_max,
         emissivity=emissivity,
-    )
-    t = response.inputs
-    response = response[(t >= temperature_min) & (t <= temperature_max)]
-
-    dem, chi2 = utu.dem.plowman(
-        intensity=intensity,
-        uncertainty=uncertainty,
-        response=response,
-        axis_channel=axis_wavelength,
         axis_temperature=axis_temperature,
     )
 
@@ -216,7 +196,7 @@ def scene_dem(
 
     # The earliest image of each set. :class:`astropy.time.Time` has no
     # minimum along a named axis, so it is found from the dates as numbers.
-    time = time.explicit
+    time = filtergram.inputs.time.explicit
     mjd = na.ScalarArray(time.ndarray.mjd, axes=time.axes)
     time = time[np.argmin(mjd, axis=axis_wavelength)]
 
