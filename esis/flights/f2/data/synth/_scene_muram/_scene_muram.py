@@ -1,7 +1,6 @@
 import pathlib
 import astropy.units as u
 import named_arrays as na
-import numpy as np
 import esis
 from esis.flights.f1.data._fits._fits import _path_cache, _retrieve
 
@@ -55,10 +54,10 @@ def _plate_scale(instrument: esis.optics.Instrument) -> na.AbstractScalar:
     """
     Return the angle one pixel of the detector spans across the dispersion.
 
-    The width of a pixel over the effective focal length of the instrument,
-    the focal length of the primary mirror times
-    :attr:`~esis.optics.Instrument.magnification`, the magnification of the
-    grating across the dispersion.
+    The component across the dispersion, along the y axis of the sensor, of
+    :meth:`optika.systems.SequentialSystem.plate_scale`, which is measured
+    from a raytrace, in the middle of the passband of the instrument. It
+    varies by a third of a percent across the passband.
 
     Along the dispersion, the anamorphic magnification of the grating and the
     tilt of the detector stretch the image further, so a pixel spans a
@@ -72,10 +71,9 @@ def _plate_scale(instrument: esis.optics.Instrument) -> na.AbstractScalar:
         A single channel of ESIS-II, such as
         :func:`esis.flights.f2.optics.design_single`.
     """
-    focal_length = instrument.primary_mirror.sag.focal_length
-    focal_length = focal_length * instrument.magnification
-    result = instrument.camera.sensor.width_pixel / np.abs(focal_length)
-    return result.to(u.arcsec, equivalencies=u.dimensionless_angles())
+    wavelength = (instrument.wavelength_min + instrument.wavelength_max) / 2
+    result = instrument.system.plate_scale(wavelength).y * u.pix
+    return result.to(u.arcsec)
 
 
 def scene_muram(
