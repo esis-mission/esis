@@ -40,11 +40,10 @@ def test_plate_scale() -> None:
     """
     Check the plate scale is that of the detector across the dispersion.
 
-    It is the angle a 15-micron pixel spans across the dispersion at the
-    effective focal length of ESIS-II, about half an arcsecond, and positive
-    though the focal length of the primary mirror is negative.
+    It is the plate scale of the optical system across the dispersion in the
+    middle of the passband, about half an arcsecond, and a plain angle.
 
-    A raytrace of a point stepped across the field finds the same angle
+    A raytrace of a point stepped from the center of the field finds the same angle
     across the dispersion, along the y axis of the sensor, and a smaller one
     along it, the x axis, where the image is stretched further.
     """
