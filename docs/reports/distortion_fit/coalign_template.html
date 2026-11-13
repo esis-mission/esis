@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESIS-I Channel Coalignment</title>
+<style>
+  :root {
+    --bg: #f3f2ee; --ink: #1d1c1a; --muted: #6b675f; --panel: #ffffff;
+    --accent: #b8541f; --rule: #d9d5cc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17181a; --ink: #ebe8e1; --muted: #a09b90; --panel: #202226;
+      --accent: #e08a55; --rule: #34373d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181a; --ink: #ebe8e1; --muted: #a09b90; --panel: #202226;
+    --accent: #e08a55; --rule: #34373d;
+  }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 "IBM Plex Sans", system-ui, sans-serif; }
+  main { max-width: 1400px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; letter-spacing: -0.01em; }
+  p.lead { margin: 0 0 16px; color: var(--muted); max-width: 70ch; }
+  .bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center;
+    padding: 10px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .bar label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .bar button { font: inherit; padding: 4px 10px; border: 1px solid var(--rule); background: var(--panel);
+    color: var(--ink); border-radius: 4px; cursor: pointer; }
+  .bar button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  .bar input[type=range] { width: 180px; }
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 900px) { .panes { grid-template-columns: 1fr; } }
+  .stage { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px; }
+  .stage canvas { display: block; width: 100%; height: auto; }
+  .scale { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; margin-top: 8px;
+    font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+  .scale canvas { width: 100%; height: 12px; border-radius: 2px; border: 1px solid var(--rule); }
+  .scale .mid { grid-column: 2; text-align: center; margin-top: -4px; }
+  .status { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .status b { color: var(--ink); font-weight: 600; }
+  .which { font-size: 18px; font-weight: 600; color: var(--accent); }
+  table.shifts { border-collapse: collapse; margin-top: 16px; font-variant-numeric: tabular-nums; font-size: 14px; }
+  table.shifts th, table.shifts td { padding: 4px 12px; text-align: right; border-bottom: 1px solid var(--rule); }
+  table.shifts th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 12px; letter-spacing: 0.06em; }
+  kbd { font: 12px/1 ui-monospace, monospace; border: 1px solid var(--rule); border-bottom-width: 2px;
+    border-radius: 3px; padding: 1px 5px; background: var(--panel); }
+  .help { color: var(--muted); font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ESIS-I channels on the sky, through the fit</h1>
+  <p class="lead">Each channel's Level-1 frame read onto one sky grid through its fitted distortion at the chosen line,
+    with the frame's pointing and window drift applied, block-averaged to a few arcseconds. Every image is scaled to a mean of one
+    over the pixels all four channels cover, so intensities and differences are in units of the mean. The high-pass version
+    subtracts a copy blurred with a 21″ Gaussian, removing the vignetting and effective-area gradients while keeping
+    every structure smaller than a supergranule; it is zero-mean by construction.
+    Left: blink between channels A and B. Right: A − B, blue where A is darker and red where brighter, saturating at the
+    chosen fraction of the mean. The arrow in each image points along that channel's dispersion on the sky: a redshifted
+    feature is displaced along it, so in A − B a Doppler shift appears as a paired deficit and excess along the two arrows
+    while stationary structure cancels.</p>
+  <div class="bar">
+    <label>A</label><span id="chA"></span>
+    <label>B</label><span id="chB"></span>
+    <label>Line</label><span id="lines"></span>
+    <label>Version</label>
+    <button id="hp" aria-pressed="false">High-pass</button>
+    <span id="frameControl"><label for="frame">Frame</label>
+    <input id="frame" type="range" min="0" max="29" value="15">
+    <span id="frameLabel" style="font-variant-numeric: tabular-nums;">15</span></span>
+    <button id="auto" aria-pressed="true">Auto blink</button>
+    <button id="loop" aria-pressed="false">Loop flight</button>
+    <label>Difference</label>
+    <button id="grey" aria-pressed="false">Grey scale</button>
+    <label for="limit" title="A − B in units of the mean intensity; the colour saturates at this value">Difference range</label>
+    <input id="limit" type="range" min="0.05" max="1.5" step="0.05" value="0.3">
+    <span id="limitLabel" style="font-variant-numeric: tabular-nums;">±0.30 × mean</span>
+  </div>
+  <div class="panes">
+    <div class="stage">
+      <canvas id="blink"></canvas>
+      <div class="scale"><span id="greyLo"></span><canvas id="greyBar" width="256" height="1"></canvas><span id="greyHi"></span>
+        <span class="mid" id="greyMid"></span></div>
+      <div class="status"><span class="which" id="which">channel A</span><span><b id="time"></b></span><span id="pointing"></span></div>
+    </div>
+    <div class="stage">
+      <canvas id="diff"></canvas>
+      <div class="scale"><span id="diffLo"></span><canvas id="diffBar" width="256" height="1"></canvas><span id="diffHi"></span>
+        <span class="mid" id="diffMid"></span></div>
+      <div class="status"><span class="which">A − B</span>
+        <span>rms <b id="rms"></b> · median tile shift A vs B <b id="shift"></b> px</span></div>
+    </div>
+  </div>
+  <table class="shifts"><thead><tr><th>line</th><th>pair</th><th>dx [px]</th><th>dy [px]</th></tr></thead><tbody id="shiftRows"></tbody></table>
+  <p class="help"><kbd>space</kbd> toggle A / B · <kbd>1</kbd>–<kbd>4</kbd> channel A · <kbd>shift</kbd>+<kbd>1</kbd>–<kbd>4</kbd> channel B ·
+    <kbd>l</kbd> line · <kbd>h</kbd> high-pass · <kbd>g</kbd> grey difference · <kbd>←</kbd> <kbd>→</kbd> frame · <kbd>a</kbd> auto blink · <kbd>p</kbd> loop the flight</p>
+</main>
+<script>
+const FRAMES = /*FRAMES*/;
+const keys = Object.keys(FRAMES).map(Number).sort((a, b) => a - b);
+const first = FRAMES[keys[0]];
+const numChannel = first.images[0].length, lines = first.lines;
+let frame = keys.includes(15) ? 15 : keys[0], a = 0, b = first.anchor, line = 0, hp = false, showA = true, auto = true, limit = 0.3;
+let greyDiff = false, loop = false;
+function limits() { const l = FRAMES[frame].limits; return hp ? l.highpass : l.images; }  // the range shown
+const blink = document.getElementById("blink"), diff = document.getElementById("diff");
+const which = document.getElementById("which"), rms = document.getElementById("rms"), shiftOut = document.getElementById("shift");
+const slider = document.getElementById("frame"), frameLabel = document.getElementById("frameLabel");
+const limitSlider = document.getElementById("limit"), limitLabel = document.getElementById("limitLabel");
+const pointing = document.getElementById("pointing"), autoButton = document.getElementById("auto"), hpButton = document.getElementById("hp");
+const greyButton = document.getElementById("grey"), loopButton = document.getElementById("loop");
+slider.min = keys[0]; slider.max = keys[keys.length - 1]; slider.value = frame;
+// one rendered frame leaves nothing to slide through
+document.getElementById("frameControl").hidden = keys.length < 2;
+const decoded = new Map();  // src -> {width, height, data: Float32Array, valid: Uint8Array}
+function buttons(container, count, get, set, prefix) {
+  for (let c = 0; c < count; c++) {
+    const el = document.createElement("button"); el.textContent = prefix + c;
+    el.addEventListener("click", () => { set(c); draw(); });
+    container.appendChild(el);
+  }
+  return () => [...container.children].forEach((el, c) => el.setAttribute("aria-pressed", c === get()));
+}
+const markA = buttons(document.getElementById("chA"), numChannel, () => a, (c) => { a = c; }, "ch");
+const markB = buttons(document.getElementById("chB"), numChannel, () => b, (c) => { b = c; }, "ch");
+const markLine = buttons(document.getElementById("lines"), lines.length, () => line, (k) => { line = k; }, "");
+[...document.getElementById("lines").children].forEach((el, k) => el.textContent = lines[k]);
+function src(c) { return "data:image/png;base64," + FRAMES[frame].images[line][c]; }
+function blur(values, weights, width, height, sigma) {
+  // a separable Gaussian, normalized by the blurred weights so the edge of the window does not bleed in
+  const r = Math.ceil(3 * sigma), k = new Float32Array(2 * r + 1);
+  for (let i = -r; i <= r; i++) k[i + r] = Math.exp(-0.5 * (i / sigma) ** 2);
+  const pass = (src, w, h, along) => {
+    const out = new Float32Array(src.length);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let i = -r; i <= r; i++) {
+        const xx = along ? x + i : x, yy = along ? y : y + i;
+        if (xx < 0 || xx >= w || yy < 0 || yy >= h) continue;
+        s += k[i + r] * src[yy * w + xx];
+      }
+      out[y * w + x] = s;
+    }
+    return out;
+  };
+  const v = pass(pass(values, width, height, true), width, height, false);
+  const m = pass(pass(weights, width, height, true), width, height, false);
+  const out = new Float32Array(values.length);
+  for (let i = 0; i < out.length; i++) out[i] = m[i] > 1e-6 ? v[i] / m[i] : 0;
+  return out;
+}
+const filtered = new Map();
+function highpassOf(im, key) {
+  // the image minus its smooth part, in the same units of the mean
+  if (filtered.has(key)) return filtered.get(key);
+  const f = FRAMES[frame], sigma = (f.highpass_sigma || 40) / f.block;
+  const weights = Float32Array.from(im.valid), values = new Float32Array(im.data.length);
+  for (let i = 0; i < values.length; i++) values[i] = im.valid[i] ? im.data[i] : 0;
+  const smooth = blur(values, weights, im.width, im.height, sigma);
+  const data = new Float32Array(im.data.length);
+  for (let i = 0; i < data.length; i++) data[i] = im.valid[i] ? im.data[i] - smooth[i] : 0;
+  const out = { width: im.width, height: im.height, data, valid: im.valid };
+  filtered.set(key, out); return out;
+}
+function maskSrc(c) { return "data:image/png;base64," + FRAMES[frame].masks[line][c]; }
+function pixels(s) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const cv = document.createElement("canvas"); cv.width = img.width; cv.height = img.height;
+      const ctx = cv.getContext("2d"); ctx.drawImage(img, 0, 0);
+      resolve({ width: img.width, height: img.height, px: ctx.getImageData(0, 0, img.width, img.height).data });
+    };
+    img.src = s;
+  });
+}
+async function decode(s, m) {
+  const key = s + "|" + m;
+  if (decoded.has(key)) return decoded.get(key);
+  const [lo, hi] = FRAMES[frame].limits.images;  // the range the PNGs encode
+  const [im, mk] = await Promise.all([pixels(s), pixels(m)]);
+  const data = new Float32Array(im.width * im.height), valid = new Uint8Array(im.width * im.height);
+  for (let i = 0; i < data.length; i++) { data[i] = lo + (im.px[4 * i] / 255) * (hi - lo); valid[i] = mk.px[4 * i] > 127 ? 1 : 0; }
+  const out = { width: im.width, height: im.height, data, valid };
+  decoded.set(key, out); return out;
+}
+function paintGrey(canvas, im) {
+  canvas.width = im.width; canvas.height = im.height;
+  const [lo, hi] = limits();
+  const ctx = canvas.getContext("2d"), out = ctx.createImageData(im.width, im.height);
+  for (let i = 0; i < im.data.length; i++) {
+    const g = im.valid[i] ? Math.max(0, Math.min(255, Math.round((im.data[i] - lo) / (hi - lo) * 255))) : 128;
+    out.data[4 * i] = g; out.data[4 * i + 1] = g; out.data[4 * i + 2] = g; out.data[4 * i + 3] = 255;
+  }
+  ctx.putImageData(out, 0, 0);
+}
+function arrow(canvas, c, color, slot) {
+  // the direction on the sky along which channel c disperses, drawn in a corner; sky x is right, sky y is up
+  const d = (FRAMES[frame].dispersion || {})[lines[line]];
+  if (!d) return;
+  const ctx = canvas.getContext("2d"), L = Math.min(canvas.width, canvas.height) * 0.12;
+  const x0 = 0.1 * canvas.width + slot * 1.6 * L, y0 = canvas.height - 0.1 * canvas.height;
+  const x1 = x0 + L * d[c][0], y1 = y0 - L * d[c][1];
+  ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = Math.max(2, L / 20);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  const ang = Math.atan2(y1 - y0, x1 - x0), h = L / 5;
+  ctx.beginPath(); ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - h * Math.cos(ang - 0.4), y1 - h * Math.sin(ang - 0.4));
+  ctx.lineTo(x1 - h * Math.cos(ang + 0.4), y1 - h * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill();
+  ctx.font = `${Math.max(12, L / 3)}px system-ui, sans-serif`; ctx.textAlign = "center";
+  ctx.fillText(`+λ ch${c}`, x0, y0 + L / 2.2);
+  ctx.restore();
+}
+function diverging(t) {
+  // blue (A darker) through the ground to red (A brighter), saturating at |t| = 1; or a plain grey ramp
+  t = Math.max(-1, Math.min(1, t));
+  if (greyDiff) { const g = Math.round(127.5 * (1 + t)); return [g, g, g]; }
+  if (t < 0) return [Math.round(245 + 10 * t), Math.round(245 + 130 * t), Math.round(245 - 5 * t)];
+  return [Math.round(245 - 10 * t), Math.round(245 - 160 * t), Math.round(245 - 200 * t)];
+}
+function paintBars() {
+  const grey = document.getElementById("greyBar").getContext("2d");
+  const div = document.getElementById("diffBar").getContext("2d");
+  for (let i = 0; i < 256; i++) {
+    grey.fillStyle = `rgb(${i},${i},${i})`; grey.fillRect(i, 0, 1, 1);
+    const [r, g, bl] = diverging(2 * i / 255 - 1);
+    div.fillStyle = `rgb(${r},${g},${bl})`; div.fillRect(i, 0, 1, 1);
+  }
+  const [lo, hi] = limits();
+  document.getElementById("greyLo").textContent = `${lo.toFixed(1)}`;
+  document.getElementById("greyHi").textContent = `${hi.toFixed(1)}`;
+  document.getElementById("greyMid").textContent = hp ? "high-passed intensity, in units of the channel mean" : "intensity in units of the channel mean (1 = mean)";
+  document.getElementById("diffLo").textContent = `−${limit.toFixed(2)}`;
+  document.getElementById("diffHi").textContent = `+${limit.toFixed(2)}`;
+  document.getElementById("diffMid").textContent = greyDiff
+    ? "A − B in units of the mean · dark: A darker · light: A brighter · mid grey: equal"
+    : "A − B in units of the mean · blue: A darker · red: A brighter";
+}
+function paintDiff(canvas, A, B) {
+  canvas.width = A.width; canvas.height = A.height;
+  const ctx = canvas.getContext("2d"), out = ctx.createImageData(A.width, A.height);
+  let sum = 0, n = 0;
+  for (let i = 0; i < A.data.length; i++) {
+    const ok = A.valid[i] && B.valid[i];
+    const d = ok ? A.data[i] - B.data[i] : 0;
+    if (ok) { sum += d * d; n++; }
+    const [r, g, bl] = ok ? diverging(d / limit) : (greyDiff ? [60, 60, 60] : [128, 128, 128]);
+    out.data[4 * i] = r; out.data[4 * i + 1] = g; out.data[4 * i + 2] = bl; out.data[4 * i + 3] = 255;
+  }
+  ctx.putImageData(out, 0, 0);
+  return n ? Math.sqrt(sum / n) : NaN;
+}
+function shiftOf(f, x, y) {
+  const table = f.shifts[lines[line]] || {};
+  const key = `${x}-${y}`, rev = `${y}-${x}`;
+  if (table[key]) return table[key];
+  if (table[rev]) return [-table[rev][0], -table[rev][1]];
+  return null;
+}
+async function draw() {
+  const f = FRAMES[frame];
+  let [A, B] = await Promise.all([decode(src(a), maskSrc(a)), decode(src(b), maskSrc(b))]);
+  if (hp) { A = highpassOf(A, src(a)); B = highpassOf(B, src(b)); }
+  paintGrey(blink, showA ? A : B);
+  arrow(blink, showA ? a : b, "#e08a55", 0);
+  which.textContent = showA ? `channel ${a}` : `channel ${b}`;
+  const r = paintDiff(diff, A, B);
+  arrow(diff, a, "#b8541f", 0); arrow(diff, b, "#2f5fa8", 1);
+  rms.textContent = isFinite(r) ? r.toFixed(3) + " × mean" : "–";
+  const s = shiftOf(f, a, b);
+  shiftOut.textContent = (a === b) ? "0.00, 0.00" : (s ? `${s[0].toFixed(2)}, ${s[1].toFixed(2)}` : "–");
+  frameLabel.textContent = frame;
+  limitLabel.textContent = `±${limit.toFixed(2)} × mean`;
+  paintBars();
+  pointing.textContent = f.pointing ? `pointing pitch ${f.pointing[0].toFixed(2)}″, yaw ${f.pointing[1].toFixed(2)}″, roll ${(f.pointing[2] * 3600).toFixed(1)}″` : "";
+  document.getElementById("time").textContent = f.time ? `frame ${frame}: ${f.time.start.replace("T", " ").slice(0, 19)} UTC, ${f.time.exposure.toFixed(1)} s` : "";
+  markA(); markB(); markLine();
+  autoButton.setAttribute("aria-pressed", auto); hpButton.setAttribute("aria-pressed", hp);
+  greyButton.setAttribute("aria-pressed", greyDiff); loopButton.setAttribute("aria-pressed", loop);
+  const rows = document.getElementById("shiftRows"); rows.innerHTML = "";
+  for (const name of lines) {
+    const table = f.shifts[name] || {};
+    for (const key of Object.keys(table).sort()) {
+      const [x, y] = key.split("-");
+      if (Number(y) !== f.anchor) continue;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${name}</td><td>ch${x} − ch${y}</td><td>${table[key][0].toFixed(2)}</td><td>${table[key][1].toFixed(2)}</td>`;
+      rows.appendChild(tr);
+    }
+  }
+}
+function nearest(t) { return keys.reduce((p, k) => Math.abs(k - t) < Math.abs(p - t) ? k : p, keys[0]); }
+slider.addEventListener("input", () => { frame = nearest(Number(slider.value)); draw(); });
+limitSlider.addEventListener("input", () => { limit = Number(limitSlider.value); draw(); });
+autoButton.addEventListener("click", () => { auto = !auto; draw(); });
+hpButton.addEventListener("click", () => { hp = !hp; draw(); });
+greyButton.addEventListener("click", () => { greyDiff = !greyDiff; draw(); });
+loopButton.addEventListener("click", () => { loop = !loop; draw(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === " ") { e.preventDefault(); showA = !showA; auto = false; draw(); }
+  else if (e.key === "ArrowRight") { frame = keys[Math.min(keys.indexOf(frame) + 1, keys.length - 1)]; slider.value = frame; draw(); }
+  else if (e.key === "ArrowLeft") { frame = keys[Math.max(keys.indexOf(frame) - 1, 0)]; slider.value = frame; draw(); }
+  else if (e.key === "l") { line = (line + 1) % lines.length; draw(); }
+  else if (e.key === "h") { hp = !hp; draw(); }
+  else if (e.key === "g") { greyDiff = !greyDiff; draw(); }
+  else if (e.key === "p") { loop = !loop; draw(); }
+  else if (e.key === "a") { auto = !auto; draw(); }
+  else if ("!@#$".includes(e.key) && e.key !== "") { b = "!@#$".indexOf(e.key); if (b < numChannel) draw(); }
+  else if (e.key >= "1" && e.key <= String(numChannel)) { a = Number(e.key) - 1; draw(); }
+});
+setInterval(() => { if (auto) { showA = !showA; draw(); } }, 700);
+setInterval(() => {
+  if (!loop) return;
+  frame = keys[(keys.indexOf(frame) + 1) % keys.length]; slider.value = frame; draw();
+}, 600);
+draw();
+</script>
+</body>
+</html>
