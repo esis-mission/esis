@@ -24,7 +24,9 @@ dependencies = [
     "pooch",
     "h5py",
     "named-arrays~=2.8",
-    "optika~=3.9",
+    # temporary, to build the MART tutorial with `chunk_size` from
+    # sun-data/optika#282; go back to "optika~=3.9" before merging
+    "optika @ git+https://github.com/sun-data/optika.git@feature/chunked-image",
     "msfc-ccd~=1.2",
     "solar-dynamics-observatory~=1.4",
     "interface-region-imaging-spectrograph~=1.0,>=1.0.1",
