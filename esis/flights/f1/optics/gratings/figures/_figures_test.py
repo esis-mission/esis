@@ -1,10 +1,14 @@
+import pathlib
+import shutil
 import pytest
 import numpy as np
 import scipy.ndimage
 import astropy.units as u
+import h5py
 import named_arrays as na
 import optika
 import esis
+from ... import _metrology
 from . import _figures
 
 
@@ -122,6 +126,18 @@ def test_figure_measurement_aperture() -> None:
         )
 
 
+def test_height_masked(tmp_path: pathlib.Path) -> None:
+    """A reference with a masked pixel cannot be subtracted from a map."""
+    source = _metrology._path_directory() / "gratings/EUV_014_Confocal_1.h5"
+    path = tmp_path / source.name
+    shutil.copyfile(source, path)
+    with h5py.File(path, "r+") as file:
+        reference = file["measurement0/analyzed/opts/refdata/data"]
+        reference[0, 0] = np.finfo(np.float32).max
+    with pytest.raises(ValueError, match="is masked"):
+        _figures._height(path, width_reference=1)
+
+
 def test_distance() -> None:
     """The distance outside a square, negative inside it."""
     corners = np.array([[-1, -1], [1, -1], [1, 1], [-1, 1]], dtype=float)
@@ -131,23 +147,24 @@ def test_distance() -> None:
     assert np.allclose(result, [-1, -0.5, 0, 0.5, 0.25, 2], rtol=0, atol=1e-15)
 
 
-@pytest.mark.parametrize(
-    argnames="params",
-    argvalues=[
-        (500.0, 480.0, 0.0),
-        (463.25, 517.75, np.deg2rad(2.3)),
-        (540.5, 455.5, np.deg2rad(-1.4)),
-    ],
-)
-def test_register(params: tuple[float, float, float]) -> None:
-    """
-    The clear aperture is found in a synthetic interferogram.
+_spacing = 0.0376
+"""The size of the pixels of the synthetic interferograms, in millimeters."""
 
-    There it is a bright trapezoid on a speckled background, and it is found
-    to within a tenth of a pixel and a hundredth of a degree.
+
+def _interferogram(params: tuple[float, float, float]) -> np.ndarray:
+    """
+    Return a synthetic interferogram.
+
+    The clear aperture is a bright trapezoid on a speckled background.
+
+    Parameters
+    ----------
+    params
+        The column and the row of the origin of the grating, and the angle,
+        in radians, by which the grating is turned.
     """
     corners = _corners()
-    spacing = 0.0376
+    spacing = _spacing
     shape = (1004, 999)
     row, column = np.indices(shape)
 
@@ -163,8 +180,31 @@ def test_register(params: tuple[float, float, float]) -> None:
     rng = np.random.default_rng(42)
     face = 0.5 * (1 - np.tanh(distance / (2 * spacing)))
     intensity = 250 + 700 * face + 50 * rng.standard_normal(shape)
-    intensity = scipy.ndimage.gaussian_filter(intensity, 1)
+    return scipy.ndimage.gaussian_filter(intensity, 1)
 
-    result = _figures._register(intensity, corners, spacing)
+
+@pytest.mark.parametrize(
+    argnames="params",
+    argvalues=[
+        (500.0, 480.0, 0.0),
+        (463.25, 517.75, np.deg2rad(2.3)),
+        (540.5, 455.5, np.deg2rad(-1.4)),
+    ],
+)
+def test_register(params: tuple[float, float, float]) -> None:
+    """
+    The clear aperture is found in a synthetic interferogram.
+
+    It is found to within a tenth of a pixel and a hundredth of a degree.
+    """
+    result = _figures._register(_interferogram(params), _corners(), _spacing)
     assert np.allclose(result[:2], params[:2], rtol=0, atol=0.1)
     assert np.isclose(result[2], params[2], rtol=0, atol=np.deg2rad(0.01))
+
+
+def test_register_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fit which runs out of iterations has not found the clear aperture."""
+    monkeypatch.setattr(_figures, "_iterations_max", 1)
+    intensity = _interferogram((500.0, 480.0, 0.0))
+    with pytest.raises(RuntimeError, match="not found"):
+        _figures._register(intensity, _corners(), _spacing)

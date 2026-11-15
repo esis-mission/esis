@@ -63,6 +63,9 @@ The clear aperture is found in the widest, and then fitted to each of the
 others in turn.
 """
 
+_iterations_max = 4000
+"""The most iterations each fit of the clear aperture may take."""
+
 
 def figure_measurement(
     manufacturing_number: na.AbstractScalar,
@@ -94,8 +97,9 @@ def figure_measurement(
         interferogram saved with each map, and the grating moved and turned a
         little between its measurements.
         ``aperture`` is fitted to the edges of the trapezoid, with the size of
-        the pixels which the software saved, and the map is interpolated
-        onto a grid in the coordinates of the grating with the same spacing.
+        the pixels which the software saved with the map, and the map is
+        interpolated onto a grid in the coordinates of the grating, spaced
+        like the pixels of the first of the three maps.
     #.  The map is cut to ``aperture``, less a border :data:`_width_edge`
         wide, where the ruled area of the grating meets the border of its
         blank.
@@ -261,8 +265,7 @@ def _figure_measurement(
     Raises
     ------
     ValueError
-        If there is no measurement of the grating, or if the pixels of its
-        maps are not all the same size.
+        If there is no measurement of the grating.
     """
     directory = _metrology._path_directory() / "gratings"
     corners = np.array(corners)
@@ -283,13 +286,8 @@ def _figure_measurement(
     maps = []
     for path in paths:
         height, intensity, spacing_path = _height(path, width_reference)
-        if spacing_path != spacing:
-            raise ValueError(
-                f"the pixels of {path.name} are {spacing_path} mm apart, "
-                f"but those of {paths[0].name} are {spacing} mm apart."
-            )
-        params = _register(intensity, corners, spacing)
-        column, row = _pixel(params, spacing, x_grid, y_grid)
+        params = _register(intensity, corners, spacing_path)
+        column, row = _pixel(params, spacing_path, x_grid, y_grid)
         sampled = scipy.ndimage.map_coordinates(
             input=height,
             coordinates=[row, column],
@@ -583,7 +581,7 @@ def _register(
                 "initial_simplex": np.vstack([params, params + np.diag(step)]),
                 "xatol": 1e-4,
                 "fatol": 1e-9,
-                "maxiter": 4000,
+                "maxiter": _iterations_max,
             },
         )
         if not fit.success:
