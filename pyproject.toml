@@ -23,7 +23,7 @@ dependencies = [
     "joblib",
     "pooch",
     "h5py",
-    "named-arrays~=2.8",
+    "named-arrays~=2.14",
     "optika~=3.9",
     "msfc-ccd~=1.2",
     "solar-dynamics-observatory~=1.4",
