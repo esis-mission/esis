@@ -1,37 +1,12 @@
-import pathlib
 import numpy as np
 import astropy.units as u
 import h5py
 import named_arrays as na
-from esis.flights.f1.data._fits._fits import _path_cache, _retrieve
+from ... import _metrology
 
 __all__ = [
     "figure_measurement",
 ]
-
-_url = (
-    "https://github.com/esis-mission/esis-data-2019/releases/download"
-    "/metrology-v1.0/esis-2019-metrology.tar"
-)
-_hash = "sha256:0b28d90c5cbbcb27e27dd6455a54d5801ea5af4ca2b83892bf8e4506a7db7195"
-
-
-def _path_directory() -> pathlib.Path:
-    """
-    Return the directory containing our measurements of the optics.
-
-    They are downloaded and unpacked into
-    :func:`esis.flights.f1.data._fits._fits._path_cache` the first time they
-    are needed.
-    """
-    _retrieve(
-        url=_url,
-        known_hash=_hash,
-        fname="esis-2019-metrology.tar",
-        path=_path_cache(),
-        extract_dir="metrology",
-    )
-    return _path_cache() / "metrology"
 
 
 def figure_measurement(
@@ -50,7 +25,7 @@ def figure_measurement(
     shows at its center of curvature were removed from it.
 
     The map is downloaded from the
-    `esis-data-2019 <https://github.com/esis-mission/esis-data-2019/releases/tag/metrology-v1.0>`_
+    `esis-data-2019 <https://github.com/esis-mission/esis-data-2019/releases/tag/metrology-v1.1>`_
     repository the first time it is needed, as the file which the software
     of the interferometer saved.
 
@@ -98,7 +73,7 @@ def figure_measurement(
         ax.set_ylabel("$y$ (mm)")
         fig.colorbar(mappable.ndarray.item(), ax=ax, label="height (nm)")
     """
-    path = _path_directory() / "primary/PM_001_Figure_Promoted.h5"
+    path = _metrology._path_directory() / "primary/PM_001_Figure_Promoted.h5"
     with h5py.File(path, "r") as file:
         group = file["measurement0/genraw"]
         data = group["data"][...]
