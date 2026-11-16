@@ -458,7 +458,8 @@ def test_as_built_radius_grating(num_distribution: int):
         num_distribution=num_distribution,
     )
 
-    radius = result.grating.sag.radius
+    # the measured figure of each grating sits on top of its spherical sag
+    radius = result.grating.sag.base.radius
 
     # a concave surface has a negative radius of curvature in the sag
     # convention, and a grating stored with a positive one is convex, which
@@ -562,6 +563,66 @@ def test_as_built_figure_primary_rays() -> None:
     rays_without = without.system.raytrace().outputs
     assert np.all(rays.position == rays_without.position)
     assert np.all(rays.direction == rays_without.direction)
+    assert np.all(rays.intensity == rays_without.intensity)
+
+
+@pytest.mark.parametrize("num_distribution", [0, 11])
+def test_as_built_figure_grating(num_distribution: int) -> None:
+    """
+    Each grating as built carries our measurement of its figure.
+
+    The map of each grating sits on top of its spherical sag profile, with
+    its measured radius, NaN where it was not measured, and the slope error
+    of each grating is worked out from its map over its clear aperture.
+    """
+    design = esis.flights.f1.optics.design(num_distribution=num_distribution)
+    result = esis.flights.f1.optics.as_built_unfocused(
+        num_distribution=num_distribution,
+    )
+    grating = result.grating
+    figure = esis.flights.f1.optics.gratings.figures.figure_measurement(
+        manufacturing_number=grating.manufacturing_number,
+        aperture=design.grating.surface.aperture,
+    )
+
+    sag = grating.sag
+    sag_design = design.grating.sag
+    assert isinstance(sag, optika.sags.FigureErrorSag)
+    assert isinstance(sag.base, optika.sags.SphericalSag)
+    assert sag.axis_ == ("grating_x", "grating_y")
+    assert np.all(sag.figure_error.inputs == figure.inputs)
+    measured = np.isfinite(figure.outputs)
+    assert np.all(np.isfinite(sag.figure_error.outputs) == measured)
+    assert np.all(np.where(measured, sag.figure_error.outputs == figure.outputs, True))
+    assert sag.parameters_slope_error is sag.base.parameters_slope_error
+    assert sag.parameters_roughness is sag.base.parameters_roughness
+    assert sag.parameters_microroughness is sag.base.parameters_microroughness
+
+    slope_error = optika.metrology.slope_error(
+        figure_error=figure,
+        parameters=sag_design.parameters_slope_error,
+        axis=("grating_x", "grating_y"),
+    )
+    # the sag works it out from the same map, to within the last few bits
+    assert np.all(np.isclose(grating.slope_error, slope_error, rtol=1e-12, atol=0))
+    assert grating.slope_error.shape == grating.manufacturing_number.shape
+
+
+def test_as_built_figure_grating_rays() -> None:
+    """
+    The measured figure of the gratings moves the rays by no more than its height.
+
+    The maps do not tilt the surfaces, but the gratings are the stop, and the
+    rays start from their surfaces.
+    """
+    instrument = esis.flights.f1.optics.as_built(num_distribution=0)
+    without = copy.deepcopy(instrument)
+    without.grating.sag = without.grating.sag.base
+
+    rays = instrument.system.raytrace().outputs
+    rays_without = without.system.raytrace().outputs
+    height = np.nanmax(np.abs(instrument.grating.sag.figure_error.outputs))
+    assert np.all((rays.position - rays_without.position).length <= height)
     assert np.all(rays.intensity == rays_without.intensity)
 
 

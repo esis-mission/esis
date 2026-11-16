@@ -417,7 +417,8 @@ def _lines(
 
     # the ratio of protons to electrons depends on nothing but the
     # temperature, and computing it walks the whole database, so it is
-    # computed once for every ion
+    # computed once and given to every ion as the ion is built, which
+    # otherwise computes it again
     ratio = fiasco.proton_electron_ratio(temperature)
 
     contributions = []
@@ -432,13 +433,17 @@ def _lines(
 
     for name in ions:
         try:
-            ion = fiasco.Ion(name, temperature, abundance=abundance)
+            ion = fiasco.Ion(
+                name,
+                temperature,
+                abundance=abundance,
+                proton_electron_ratio=ratio,
+            )
             g = utu.spectrum.contribution_function(
                 ion=ion,
                 density=pressure / t,
                 axis_temperature=axis_temperature,
                 axis=axis_line,
-                proton_electron_ratio=ratio,
             )
         except Exception:  # pragma: nocover
             # an ion whose atomic model the database cannot complete, as in
