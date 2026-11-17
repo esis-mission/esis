@@ -54,6 +54,26 @@ class AbstractTestAbstractFieldStop(
         assert na.unit_normalized(result).is_equivalent(u.mm)
         assert np.all(result >= 0)
 
+    def test_vertices(
+        self,
+        a: esis.optics.abc.AbstractFieldStop,
+    ):
+        result = a.vertices
+        if result is not None:
+            assert isinstance(result, na.AbstractCartesian2dVectorArray)
+            assert "vertex" in result.shape
+            assert na.unit_normalized(result).is_equivalent(u.mm)
+
+    def test_aperture(
+        self,
+        a: esis.optics.abc.AbstractFieldStop,
+    ):
+        result = a.aperture
+        assert isinstance(result, optika.apertures.AbstractPolygonalAperture)
+        if a.vertices is not None:
+            num = a.vertices.shape["vertex"]
+            assert result.vertices.shape["vertex"] == num
+
     def test_surface(
         self,
         a: esis.optics.abc.AbstractFieldStop,
@@ -74,6 +94,19 @@ class AbstractTestAbstractFieldStop(
             radius_clear=5 * u.mm,
             radius_mechanical=10 * u.mm,
             translation=na.Cartesian3dVectorArray(z=200) * u.mm,
+        ),
+        esis.optics.FieldStop(
+            num_folds=8,
+            radius_clear=5 * u.mm,
+            radius_mechanical=10 * u.mm,
+            vertices=na.Cartesian2dVectorArray(
+                x=na.ScalarArray(
+                    5 * np.cos(np.arange(8) * np.pi / 4) * u.mm, axes="vertex"
+                ),
+                y=na.ScalarArray(
+                    4.9 * np.sin(np.arange(8) * np.pi / 4) * u.mm, axes="vertex"
+                ),
+            ),
         ),
     ],
 )

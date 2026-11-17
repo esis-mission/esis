@@ -9,6 +9,7 @@ import datetime
 import importlib
 import importlib.metadata
 import multiprocessing
+import os
 import pathlib
 import numpy as np
 import astropy.units as u
@@ -228,6 +229,16 @@ def _base(instrument: None | esis.optics.Instrument) -> esis.optics.Instrument:
     if instrument is None:
         instrument = _idealized(esis.flights.f1.optics.as_built(num_distribution=0))
         instrument.wavelength = _wavelength_lines()
+        # PROTOTYPE (wip/edge-robust): a measured field stop, read from a table
+        # of vertices in the field stop's local frame; to become part of
+        # as_built() once the measurement is settled
+        path = os.environ.get("ESIS_FIELD_STOP_VERTICES")
+        if path:
+            table = astropy.table.QTable.read(path, format="ascii.ecsv")
+            instrument.field_stop.vertices = na.Cartesian2dVectorArray(
+                x=na.ScalarArray(np.asarray(table["x"], float) * u.mm, axes="vertex"),
+                y=na.ScalarArray(np.asarray(table["y"], float) * u.mm, axes="vertex"),
+            )
     return instrument
 
 
