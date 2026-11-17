@@ -69,6 +69,7 @@ DRIFT_DEGREE = int(DRIFT_DEGREE) if DRIFT_DEGREE else None
 COREGISTRATION_DEGREE = int(os.environ.get("ESIS_COREGISTRATION_DEGREE", "2"))
 DEFOCUS_DEGREE = int(os.environ.get("ESIS_DEFOCUS_DEGREE", "2"))
 COREGISTERED = os.environ.get("ESIS_COREGISTERED", "") not in ("", "0", "false", "no")
+FREE_ROLL = os.environ.get("ESIS_FREE_ROLL", "") not in ("", "0", "false", "no")
 SUFFIX = "_coregistered" if COREGISTERED else ""
 
 
@@ -258,6 +259,7 @@ def pointing(t: int, directory: pathlib.Path) -> None:
         drift_degree=DRIFT_DEGREE,
         defocus=path_defocus if path_defocus.exists() else None,
         relative=False,
+        free_roll=FREE_ROLL,
         path=directory / f"pointing_{t:02d}.ecsv",
         directory=directory,
         seed=SEED,
