@@ -764,9 +764,18 @@ def measure_window_edges(
     frames is what the outline stage fits.  Each side of each window is fit
     in each frame as one blurred straight edge, see
     :func:`esis.optics.measure_edges`, and the median of the width of its
-    blur over the frames is kept with it.  The per-frame departures from
-    that median are kept too, as the drift of the windows through the
-    flight.
+    blur over the frames is kept with it.
+
+    The drift of the windows through the flight is read from a different
+    fit: a step fit to every row and column on its own, see
+    :func:`esis.optics.measure_edge_steps`, each against its own median over
+    the flight, and the median of those departures over a side's rows per
+    frame.  The straight edges place a side better, but structure crossing
+    a side as the pointing drifts moves its straight edge by a few tenths
+    of a pixel from frame to frame, more than the median of the rows'
+    changes; on the flight the two sides of one window move apart by
+    0.25--0.35 px rms with the straight edges and 0.13--0.19 px with the
+    steps.
 
     Parameters
     ----------
@@ -818,6 +827,7 @@ def measure_window_edges(
     log(f"frames kept: {', '.join(str(t) for t in frames)}")
     scene, observation = _frame(15, num_scene)
     tables = []
+    tables_steps = []
     for c in range(num_channel):
         channel = instrument[dict(channel=c)]
         merit = esis.optics.LinearMerit(
@@ -835,7 +845,14 @@ def measure_window_edges(
             edges["frame"] = t
             edges["channel"] = c
             tables.append(edges)
-            log(f"frame {t} channel {c}: {len(edges)} crossings")
+            steps = esis.optics.measure_edge_steps(data[t, c], footprints)
+            steps = steps[np.isin(steps["line"], lines)]
+            steps["frame"] = t
+            steps["channel"] = c
+            tables_steps.append(steps)
+            log(
+                f"frame {t} channel {c}: {len(edges)} crossings, " f"{len(steps)} steps"
+            )
     every = astropy.table.vstack(tables)
     every = every[every["error"] < error_max]
     keys = np.stack(
@@ -864,6 +881,22 @@ def measure_window_edges(
     )
     for name in ("position", "error", "width"):
         median_edges[name].unit = u.pix
+    # the drift from the steps of every row, each against its own median
+    every = astropy.table.vstack(tables_steps)
+    every = every[every["error"] < error_max]
+    keys = np.stack(
+        [np.asarray(every[k]) for k in ("channel", "line", "side", "index")],
+        axis=1,
+    )
+    _, inverse = np.unique(keys, axis=0, return_inverse=True)
+    inverse = inverse.ravel()
+    position = np.asarray(every["position"].to_value(u.pix))
+    center = np.empty(len(every))
+    order = np.argsort(inverse, kind="stable")
+    bounds = np.searchsorted(inverse[order], np.arange(inverse.max() + 2))
+    for g in range(inverse.max() + 1):
+        members = order[bounds[g] : bounds[g + 1]]
+        center[members] = np.median(position[members])
     departure = position - center
     drift_rows = []
     for c in range(num_channel):
@@ -899,7 +932,8 @@ def measure_window_edges(
     median_edges.meta.update(meta)
     drift.meta.update(meta)
     drift.meta["description"] = (
-        "The departure of each window's edges from their flight median, per frame."
+        "The departure of each window's edges from their flight median, per "
+        "frame, from the steps fit to every row and column."
     )
     if path is not None:
         median_edges.write(path, format="ascii.ecsv", overwrite=True)

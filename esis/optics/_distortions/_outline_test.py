@@ -238,3 +238,28 @@ def test_fit_side_guards():
     assert not fit.kept[::8].any()
     num = fit.kept.sum()
     assert _outline._fit_side(bright, index, guess, side=2, minimum=num + 1) is None
+
+
+def test_measure_edge_steps():
+    footprint = _octagon(300, 200, 120)
+    steps = _outline.measure_edge_steps(_frame(footprint), [footprint])
+    assert set(np.asarray(steps["side"])) == {0, 1, 2, 3}
+    model = _outline.predict_edges([footprint], steps)
+    residual = model - steps["position"].to_value(u.pix)
+    # the median filter over three rows blurs the diagonal of each step
+    assert np.median(np.abs(residual)) < 0.1
+    # a window moved by a pixel and a half moves every step with it, the
+    # outline searched near the old place
+    moved = _outline.measure_edge_steps(_frame(_octagon(301.5, 200, 120)), [footprint])
+    left_right = moved[np.asarray(moved["side"]) < 2]
+    model = _outline.predict_edges([footprint], left_right)
+    shift = left_right["position"].to_value(u.pix) - model
+    assert abs(np.median(shift) - 1.5) < 0.1
+    # a profile with a hole in it, or nothing to fit, gives no step
+    profile = np.where(np.arange(400) < 200, 10.0, 110.0)
+    assert np.isfinite(_outline._fit_step(profile, 195, 30)[0])
+    assert np.isnan(_outline._fit_step(np.full(400, 50.0), 195, 30)[0])
+    holed = profile.copy()
+    holed[190] = np.nan
+    assert np.isnan(_outline._fit_step(holed, 195, 30)[0])
+    assert np.isnan(_outline._fit_step(profile, 10, 30)[0])

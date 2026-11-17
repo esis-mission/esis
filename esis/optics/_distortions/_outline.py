@@ -12,6 +12,7 @@ difference.
 
 from __future__ import annotations
 import dataclasses
+import warnings
 import numpy as np
 import scipy.optimize
 import scipy.special
@@ -25,6 +26,7 @@ from . import _fit
 __all__ = [
     "SIDES",
     "measure_edges",
+    "measure_edge_steps",
     "predict_edges",
     "outline_residual",
     "width_residual",
@@ -453,6 +455,140 @@ def measure_edges(
     for name in ("position", "error", "width"):
         result[name].unit = u.pix
     result.meta["axis_field"] = list(axis_field)
+    return result
+
+
+def _erf_step(
+    x: np.ndarray,
+    a: float,
+    b: float,
+    x0: float,
+    sigma: float,
+) -> np.ndarray:
+    """Evaluate an error-function step of level `a`, half-height `b`, at `x0`."""
+    return a + b * scipy.special.erf((x - x0) / (np.sqrt(2) * sigma))
+
+
+def _fit_step(
+    profile: np.ndarray,
+    guess: float,
+    half: int,
+) -> tuple[float, float]:
+    """
+    Fit an error-function step to a profile near a guessed position.
+
+    Parameters
+    ----------
+    profile
+        The intensity along a row or column of the frame.
+    guess
+        The index along the profile where the edge is expected.
+    half
+        Half the length of the profile fit, in pixels.
+
+    Returns
+    -------
+    The position of the step, in the coordinates of :func:`predict_edges`,
+    and its formal error, both :obj:`numpy.nan` if the fit fails or is not
+    a step.
+    """
+    lo, hi = int(guess - half), int(guess + half)
+    if lo < 2 or hi > profile.size - 2:
+        return np.nan, np.nan
+    x = np.arange(lo, hi)
+    y = profile[lo:hi]
+    if not np.all(np.isfinite(y)):
+        return np.nan, np.nan
+    b0 = (y[-8:].mean() - y[:8].mean()) / 2
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            p, cov = scipy.optimize.curve_fit(
+                _erf_step,
+                x,
+                y,
+                p0=[y.mean(), b0, guess, 2.0],
+                maxfev=4000,
+            )
+    except (RuntimeError, ValueError, np.linalg.LinAlgError):  # pragma: nocover
+        return np.nan, np.nan
+    if abs(p[3]) > 12 or abs(p[2] - guess) > half / 2 or abs(p[1]) < 0.2 * abs(p[0]):
+        return np.nan, np.nan
+    error = np.sqrt(cov[2, 2]) if np.all(np.isfinite(cov)) else np.nan
+    # the sample of index i sits at i + 1/2
+    return float(p[2] + 1 / 2), float(error)
+
+
+def measure_edge_steps(
+    frame: np.ndarray,
+    footprints: list[na.AbstractCartesian2dVectorArray],
+    fraction: float = 0.35,
+    skip: int = 25,
+    stride: int = 2,
+    half: int = 30,
+    margin: int = 40,
+) -> astropy.table.QTable:
+    """
+    Fit an error-function step to every row and column crossing an outline.
+
+    This is how far a side moves between frames, not where it is.  A step
+    fit to one row locks on to bright structure next to the edge, so its
+    position is biased inward by up to a few pixels, see
+    :func:`measure_edges`; but each row's bias is its own and the median
+    over the rows of each row's change from frame to frame is not pulled by
+    it.  A straight edge fit to the whole side by least squares is: the
+    structure that crosses it as the pointing drifts moves it by a few
+    tenths of a pixel, more on the left and right sides, where the
+    neighbouring lines' windows overlap.
+    :func:`esis.flights.f1.optics.measure_window_edges` reads the drift of
+    the windows from these steps and their place from :func:`measure_edges`.
+
+    The rows and columns are those of :func:`measure_edges`.  The frame is
+    first median-filtered over three rows.
+
+    Parameters
+    ----------
+    frame
+        The frame, indexed ``[y, x]`` in pixels.
+    footprints
+        The predicted outline of each window, one per spectral line, in
+        pixels.
+    fraction
+        See :func:`measure_edges`.
+    skip
+        See :func:`measure_edges`.
+    stride
+        See :func:`measure_edges`.
+    half
+        Half the length of every profile fit, in pixels.
+    margin
+        See :func:`measure_edges`.
+
+    Returns
+    -------
+    A table with a row per crossing: ``line``, ``side``, ``index``,
+    ``position`` and ``error``, in pixels.
+    """
+    frame = scipy.ndimage.median_filter(np.asarray(frame, dtype=float), size=(3, 1))
+    rows = []
+    for line, footprint in enumerate(footprints):
+        px, py = _polygon(footprint)
+        if not np.all(np.isfinite(px)):  # pragma: nocover
+            continue
+        sides = _side_crossings(px, py, frame.shape, fraction, skip, stride, margin)
+        for side, (index, guess) in sides.items():
+            image = frame if side < 2 else frame.T
+            for i, g in zip(index, guess):
+                position, error = _fit_step(image[i], g, half)
+                if np.isfinite(position) and np.isfinite(error):
+                    rows.append((line, side, i, position, error))
+    result = astropy.table.QTable(
+        rows=rows or None,
+        names=("line", "side", "index", "position", "error"),
+        dtype=(int, int, int, float, float),
+    )
+    result["position"].unit = u.pix
+    result["error"].unit = u.pix
     return result
 
 

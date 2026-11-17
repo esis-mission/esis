@@ -27,6 +27,7 @@ from ._alignment import (
 from ._outline import (
     SIDES,
     measure_edges,
+    measure_edge_steps,
     predict_edges,
     outline_residual,
     width_residual,
@@ -51,6 +52,7 @@ __all__ = [
     "shift_modes",
     "SIDES",
     "measure_edges",
+    "measure_edge_steps",
     "predict_edges",
     "outline_residual",
     "width_residual",
