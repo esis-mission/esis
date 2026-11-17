@@ -39,7 +39,8 @@ ESIS_COREGISTRATION_DEGREE (the
 same for ``coregister``, default 2), ESIS_COREGISTERED=1 to score the
 co-registered copy of the pointing table, and to depart from the committed
 configuration, ESIS_MERIT (``correlation`` or ``least_squares``),
-ESIS_FREE_ABSOLUTE and ESIS_FREE_SHARED (colon-separated field names).
+ESIS_FREE_ABSOLUTE, ESIS_FREE_SHARED, ESIS_WINDOW and ESIS_SKY (colon-separated
+field names).
 """
 
 import logging
@@ -89,6 +90,8 @@ def _names(variable: str, default: tuple[str, ...]) -> tuple[str, ...]:
 
 FREE_ABSOLUTE = _names("ESIS_FREE_ABSOLUTE", _fits._FREE_ABSOLUTE)
 FREE_SHARED = _names("ESIS_FREE_SHARED", _fits._FREE_SHARED)
+WINDOW = _names("ESIS_WINDOW", _fits._WINDOW)
+SKY = _names("ESIS_SKY", _fits._SKY)
 
 
 def _channels(directory: pathlib.Path) -> list[esis.optics.DistortionParameters]:
@@ -171,6 +174,8 @@ def combine(directory: pathlib.Path) -> None:
         free_absolute=FREE_ABSOLUTE,
         free_shared=FREE_SHARED,
         edges=path_edges if path_edges.exists() else None,
+        window=WINDOW,
+        sky=SKY,
         primary=PRIMARY,
         path=directory / "distortion_reference.ecsv",
         directory=directory,
