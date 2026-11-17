@@ -52,7 +52,7 @@ doc = [
     "sphinx-favicon",
     # only the MART tutorial inverts images, so the inversion package is
     # needed to build the docs but not to use esis
-    "ctis~=0.5",
+    "ctis~=0.6",
 ]
 
 [project.urls]
