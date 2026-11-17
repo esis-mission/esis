@@ -43,11 +43,11 @@ that the ray trace gives, and imaging a proxy scene through it: AIA's
 emission and its 193 Å image for Mg X.  The merit of a parameter set is the
 correlation of that image with the Level-1 frame.
 
-One frame does not determine the parameters.  The singular values of the
-mapping's Jacobian fall off a cliff after eight, so eight combinations of
-the fifteen terms are measurable from a single image and the rest are
-null directions: instrument pointing against grating tilt, sensor position
-against grating angle, primary displacement against sensor distance.  Two
+One frame does not determine every placement of the optics.  Some move
+the image the same way as others: instrument pointing against grating tilt,
+sensor position against grating angle, primary displacement against sensor
+distance.  The fit frees nine terms, one for each distinct motion of the
+image, and holds the rest at their as-built values.  Two
 physical facts break the degeneracies.  The window edges are the image of
 the field stop, so they do not move when the instrument's pointing moves
 the Sun inside them, while a grating tilt moves edges and Sun together: the
@@ -286,9 +286,7 @@ offsets leave.  It shows the time-dependent motions the
 model carries and that the channels stay registered to the threshold
 through the flight.  (``figures.py flight``)
 
-A third figure is worth considering if space allows: the degeneracy
-diagram, the singular-value spectrum of one frame's Jacobian beside a
-sketch of which motion moves the edges, the sky, or both.  The interactive
+The interactive
 blink and channel-difference pages made by ``blink.py`` and ``coalign.py``
 are the companion for the website; they cannot go in print.  Both are
 made from the committed tables: the `blink

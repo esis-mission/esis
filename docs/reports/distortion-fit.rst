@@ -7,21 +7,21 @@ the fit committed to the package.
 What the data determine
 -----------------------
 
-One Level-1 frame determines eight combinations of the parameters of a
-channel: two translations, the dispersion, two scales, a rotation, a shear
-and one more.  That is the result of a singular-value decomposition of the
-Jacobian of the sky-to-sensor mapping with respect to the fifteen optical
-parameters, sampled over the field at the three bright lines: eight singular
-values above forty pixels per half-box, then a cliff to below three.  The
-null directions are what one would guess.  The roll of the field stop moves
-only the edges of the windows.  The displacement of the primary trades
+The terms fit are chosen by what each does to the image on the sensor.  In
+each channel the yaw and pitch of the grating translate the spectrum, and
+with it every line's window; the ruling spacing sets the dispersion; the
+pitch and yaw of the pointing translate the Sun within the windows; the
+sensor's distance along the beam sets the plate scale; and its three angles
+rotate the image and tilt it in the two keystone senses.  The other
+placements repeat one of these motions or leave the image unchanged to first
+order, and are held at their as-built values.  The roll of the field stop
+moves only the edges of the windows.  The displacement of the primary trades
 against the focus-preserving distance of the sensor.  The in-plane position
 of the sensor trades against the grating's yaw and pitch, and both trade
 against the pointing: the mapping cannot tell a moved sky from a moved
-grating.  A global search over a set that contains null directions lands
-somewhere along them at random, and two seeds disagree by tens of pixels;
-over the nine terms that span the eight combinations without a null
-direction, two seeds agree to two hundredths in merit.
+grating.  A global search over a set that contains such a null direction
+lands somewhere along it at random, and two seeds disagree by tens of
+pixels; over the nine terms, two seeds agree to two hundredths in merit.
 
 Two things break the degeneracies the frame leaves.  The edges of the
 windows are the image of the field stop through the optics, and do not move
