@@ -626,9 +626,20 @@ def test_as_built_figure_grating_rays() -> None:
     assert np.all(rays.intensity == rays_without.intensity)
 
 
+def test_field_stop_vertices() -> None:
+    result = esis.flights.f1.optics.field_stop_vertices()
+    assert na.shape(result) == dict(vertex=8)
+    design = esis.flights.f1.optics.as_built().field_stop.aperture.vertices
+    radius_design = np.sqrt(na.nominal(design.x) ** 2 + na.nominal(design.y) ** 2)
+    radius = np.sqrt(result.x**2 + result.y**2)
+    # an octagon of the design's size, moved by microns rather than millimeters
+    assert np.all(np.abs(radius - radius_design.mean()) < 20 * u.um)
+
+
 def test_distortion_fit() -> None:
     result = esis.flights.f1.optics.distortion_fit()
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+    assert result.field_stop.vertices is not None
     # the fitted model is exact: no Monte Carlo sample of the as-built
     # tolerances survives into where the light lands
     position = result.system.rayfunction_default.outputs.position

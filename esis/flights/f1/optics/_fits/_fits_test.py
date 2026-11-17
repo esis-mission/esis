@@ -105,8 +105,16 @@ def test_base():
     instrument = _fits._base(None)
     assert isinstance(instrument, esis.optics.Instrument)
     assert na.shape(instrument.wavelength) == dict(wavelength=3)
+    # the field stop is the measured polygon
+    assert instrument.field_stop.vertices is not None
     # a given instrument is passed through untouched
     assert _fits._base(instrument) is instrument
+
+
+def test_base_regular(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(_fits, "path_field_stop", None)
+    instrument = _fits._base(None)
+    assert instrument.field_stop.vertices is None
 
 
 def test_logger(tmp_path: pathlib.Path):

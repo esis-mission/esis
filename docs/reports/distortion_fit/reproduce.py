@@ -40,7 +40,9 @@ same for ``coregister``, default 2), ESIS_COREGISTERED=1 to score the
 co-registered copy of the pointing table, and to depart from the committed
 configuration, ESIS_MERIT (``correlation`` or ``least_squares``),
 ESIS_FREE_ABSOLUTE, ESIS_FREE_SHARED, ESIS_WINDOW and ESIS_SKY (colon-separated
-field names).
+field names), and ESIS_FIELD_STOP, a table of vertices of the field stop in
+place of the committed measurement (such as a ``field_stop.ecsv`` written by
+``fieldstop``, to iterate it), or ``regular`` for the octagon of the design.
 """
 
 import logging
@@ -72,6 +74,9 @@ DEFOCUS_DEGREE = int(os.environ.get("ESIS_DEFOCUS_DEGREE", "2"))
 COREGISTERED = os.environ.get("ESIS_COREGISTERED", "") not in ("", "0", "false", "no")
 FREE_ROLL = os.environ.get("ESIS_FREE_ROLL", "") not in ("", "0", "false", "no")
 SUFFIX = "_coregistered" if COREGISTERED else ""
+FIELD_STOP = os.environ.get("ESIS_FIELD_STOP", "")
+if FIELD_STOP:
+    _fits.path_field_stop = None if FIELD_STOP == "regular" else FIELD_STOP
 
 
 def _pointing(directory: pathlib.Path) -> pathlib.Path:

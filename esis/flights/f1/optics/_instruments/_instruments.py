@@ -19,6 +19,7 @@ __all__ = [
     "design_single",
     "as_built_unfocused",
     "as_built",
+    "field_stop_vertices",
     "distortion_fit",
 ]
 
@@ -869,6 +870,41 @@ def as_built(
     return _moved_sensor(result, z)
 
 
+def field_stop_vertices(
+    path: None | str | pathlib.Path = None,
+    axis: str = "vertex",
+) -> na.Cartesian2dVectorArray:
+    """
+    Load the measured vertices of the ESIS-I field stop.
+
+    The field stop is a regular octagon by design, but its image in the four
+    channels is not: its sides tilt by up to a degree and move by a few
+    microns, and the four channels, each through its own grating and sensor,
+    agree on that shape to a few hundredths of a degree and half a micron.
+    The vertices are measured from the median edges of the O V window over
+    the flight by :func:`esis.flights.f1.optics.measure_field_stop`, carried
+    back to the plane of the stop through the distortion fit, with each
+    channel's own rotation, shift and scale removed and the stop's rotation
+    left to the ``roll_field_stop`` of the fit.
+
+    Parameters
+    ----------
+    path
+        The table of vertices, in the local frame of the field stop.
+        If :obj:`None`, ``_data/field_stop.ecsv``, the measurement that the
+        committed distortion fit was made with.
+    axis
+        The name of the logical axis along the vertices.
+    """
+    if path is None:
+        path = _directory_data / "field_stop.ecsv"
+    table = astropy.table.QTable.read(path, format="ascii.ecsv")
+    return na.Cartesian2dVectorArray(
+        x=na.ScalarArray(np.asarray(table["x"], dtype=float) * u.mm, axes=axis),
+        y=na.ScalarArray(np.asarray(table["y"], dtype=float) * u.mm, axes=axis),
+    )
+
+
 def distortion_fit(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
@@ -877,6 +913,9 @@ def distortion_fit(
 ) -> esis.optics.Instrument:
     """
     Apply the best-fit distortion parameters to the ESIS-I :func:`as_built`.
+
+    The field stop is the measured polygon of :func:`field_stop_vertices`,
+    with which the fit was made.
 
     The per-channel parameters are loaded from
     ``_data/distortion_reference.ecsv``, the best distortion fit of the
@@ -996,6 +1035,7 @@ def distortion_fit(
         axis_channel=axis_channel,
         num_distribution=0,
     )
+    model.field_stop.vertices = field_stop_vertices()
 
     model.wavelength = na.ScalarArray(
         u.Quantity(

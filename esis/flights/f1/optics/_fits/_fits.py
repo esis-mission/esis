@@ -9,7 +9,6 @@ import datetime
 import importlib
 import importlib.metadata
 import multiprocessing
-import os
 import pathlib
 import numpy as np
 import astropy.units as u
@@ -76,12 +75,15 @@ adds directions the frame cannot see, and the capture lands elsewhere from
 every seed.
 """
 
-_WINDOW = ("yaw_grating", "pitch_grating", "roll_sensor")
+_WINDOW = ("yaw_grating", "pitch_grating", "roll_field_stop")
 """
 The terms the outline stage fits to the window edges.
 
-They move the image of the field stop on the sensor without moving the sky
-within it, which the merit cannot see and the edges can.
+The grating's yaw and pitch move the image of the field stop on the sensor
+with the sky; the merit sees that only as a trade with the pointing, the
+edges see it directly.  The roll of the field stop turns the outline without
+moving the sky at all, which only the edges can see.  The roll of the sensor,
+which turns both, is left to the merit.
 """
 
 _SKY = ("spacing_rulings", "pitch", "yaw", "z_sensor", "yaw_sensor", "pitch_sensor")
@@ -226,19 +228,26 @@ def _frame_times() -> list[dict[str, str | float]]:
     ]
 
 
+path_field_stop: None | str | pathlib.Path = (
+    pathlib.Path(__file__).parent.parent / "_instruments" / "_data" / "field_stop.ecsv"
+)
+"""
+The table of vertices of the field stop the fit starts from.
+
+By default the measured polygon (:func:`esis.flights.f1.optics.field_stop_vertices`);
+:obj:`None` for the regular octagon of the design, and another table, such as
+the output of :func:`measure_field_stop`, to iterate the measurement.
+"""
+
+
 def _base(instrument: None | esis.optics.Instrument) -> esis.optics.Instrument:
     if instrument is None:
         instrument = _idealized(esis.flights.f1.optics.as_built(num_distribution=0))
         instrument.wavelength = _wavelength_lines()
-        # PROTOTYPE (wip/edge-robust): a measured field stop, read from a table
-        # of vertices in the field stop's local frame; to become part of
-        # as_built() once the measurement is settled
-        path = os.environ.get("ESIS_FIELD_STOP_VERTICES")
-        if path:
-            table = astropy.table.QTable.read(path, format="ascii.ecsv")
-            instrument.field_stop.vertices = na.Cartesian2dVectorArray(
-                x=na.ScalarArray(np.asarray(table["x"], float) * u.mm, axes="vertex"),
-                y=na.ScalarArray(np.asarray(table["y"], float) * u.mm, axes="vertex"),
+        # the measured polygon, or the regular octagon of the design
+        if path_field_stop is not None:
+            instrument.field_stop.vertices = esis.flights.f1.optics.field_stop_vertices(
+                path_field_stop
             )
     return instrument
 
