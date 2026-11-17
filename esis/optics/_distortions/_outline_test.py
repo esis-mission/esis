@@ -263,3 +263,30 @@ def test_measure_edge_steps():
     holed[190] = np.nan
     assert np.isnan(_outline._fit_step(holed, 195, 30)[0])
     assert np.isnan(_outline._fit_step(profile, 10, 30)[0])
+
+
+def test_measure_polygon_edges():
+    # the true window is rotated by a degree from the predicted one, so every
+    # side, the diagonals too, is found tilted by that degree
+    angle = np.deg2rad(1)
+    true = _octagon(300, 200, 120)
+    px, py = _outline._polygon(true)
+    c, s = np.cos(angle), np.sin(angle)
+    rotated = na.Cartesian2dVectorArray(
+        x=na.ScalarArray(300 + c * (px - 300) - s * (py - 200), axes="wire") * u.pix,
+        y=na.ScalarArray(200 + s * (px - 300) + c * (py - 200), axes="wire") * u.pix,
+    )
+    rx, ry = _outline._polygon(rotated)
+    edges = _outline.measure_polygon_edges(_frame(rotated), np.stack([px, py], 1))
+    assert set(np.asarray(edges["side"])) == set(range(8))
+    for k in range(8):
+        e = edges[np.asarray(edges["side"]) == k]
+        x, y = e["x"].to_value(u.pix), e["y"].to_value(u.pix)
+        x0, y0, x1, y1 = rx[k], ry[k], rx[(k + 1) % 8], ry[(k + 1) % 8]
+        distance = ((x1 - x0) * (y0 - y) - (x0 - x) * (y1 - y0)) / np.hypot(
+            x1 - x0, y1 - y0
+        )
+        assert np.median(np.abs(distance)) < 0.1
+    # a polygon off the frame gives no edges
+    far = _outline.measure_polygon_edges(_frame(true), np.stack([px, py], 1) + 1000)
+    assert len(far) == 0

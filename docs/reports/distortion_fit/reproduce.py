@@ -288,6 +288,23 @@ def gather(directory: pathlib.Path) -> None:
     print(f"{len(table)} frames -> {directory / 'distortion_pointing.ecsv'}")
 
 
+def fieldstop(directory: pathlib.Path) -> None:
+    """Measure the shape of the field stop from every channel's O V window."""
+    _fits.measure_field_stop(
+        reference=esis.optics.DistortionParameters.from_file(
+            directory / "distortion_reference.ecsv"
+        ),
+        pointing=astropy.table.QTable.read(
+            directory / "distortion_pointing.ecsv", format="ascii.ecsv"
+        ),
+        num_scene=NUM_SCENE,
+        directory=directory,
+        path=directory / "field_stop.ecsv",
+        path_sides=directory / "field_stop_sides.ecsv",
+        seed=SEED,
+    )
+
+
 def coregister(directory: pathlib.Path) -> None:
     """Measure the channel offsets the sector focus leaves; the chain is untouched."""
     pointing = astropy.table.QTable.read(
@@ -349,6 +366,8 @@ if __name__ == "__main__":
         pointing(int(sys.argv[2]), pathlib.Path(sys.argv[3]))
     elif command == "gather":
         gather(pathlib.Path(sys.argv[2]))
+    elif command == "fieldstop":
+        fieldstop(pathlib.Path(sys.argv[2]))
     elif command == "coregister":
         coregister(pathlib.Path(sys.argv[2]))
     elif command == "accept":

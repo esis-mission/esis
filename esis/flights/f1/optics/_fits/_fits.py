@@ -23,6 +23,7 @@ from esis.optics._distortions import _alignment
 
 __all__ = [
     "measure_window_edges",
+    "measure_field_stop",
     "fit_distortion_reference",
     "realign_distortion_reference",
     "fit_defocus_history",
@@ -952,6 +953,373 @@ def measure_window_edges(
         drift.write(path_drift, format="ascii.ecsv", overwrite=True)
     log(f"{len(median_edges)} median edges, {len(drift)} drift rows")
     return median_edges, drift
+
+
+class _Polynomial2d:
+    """A cubic polynomial map of the plane, fit by least squares."""
+
+    def __init__(self, x: np.ndarray, y: np.ndarray, u_: np.ndarray, v: np.ndarray):
+        self.center = np.array([x.mean(), y.mean()])
+        self.scale = max(np.ptp(x), np.ptp(y)) / 2
+        a = self._design(x, y)
+        self.cu = np.linalg.lstsq(a, u_, rcond=None)[0]
+        self.cv = np.linalg.lstsq(a, v, rcond=None)[0]
+        self.error = float(np.max(np.hypot(a @ self.cu - u_, a @ self.cv - v)))
+
+    def _design(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        x = (np.asarray(x, dtype=float) - self.center[0]) / self.scale
+        y = (np.asarray(y, dtype=float) - self.center[1]) / self.scale
+        return np.stack([x**i * y**j for i in range(4) for j in range(4 - i)], axis=-1)
+
+    def __call__(self, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        a = self._design(x, y)
+        return a @ self.cu, a @ self.cv
+
+
+def _field_stop_maps(
+    model: esis.optics.Instrument,
+    linear: optika.systems.AbstractLinearSystem,
+    wavelength: u.Quantity,
+    extent: u.Quantity = 520 * u.arcsec,
+    num: int = 41,
+) -> tuple[_Polynomial2d, _Polynomial2d]:
+    """
+    Map the sensor to the field stop and back at one wavelength.
+
+    A grid on the sky is traced through the channel by its chief rays to the
+    field stop, in the stop's own frame, and mapped to the sensor by the
+    linearized distortion, the mapping every other stage uses; cubic
+    polynomials fit between the two carry the sensor to the field stop and
+    the field stop to the sensor without the sky in between.
+
+    Parameters
+    ----------
+    model
+        One channel's instrument at the parameters of the frame.
+    linear
+        Its linearization, see :meth:`esis.optics.LinearMerit.linearize`.
+    wavelength
+        The wavelength of the line.
+    extent
+        The half-width of the grid on the sky.
+    num
+        The number of points along each axis of the grid.
+
+    Returns
+    -------
+    The map from the sensor (pixels) to the field stop (mm), and back.
+    """
+    grid = np.linspace(-1, 1, num) * extent.to_value(u.arcsec)
+    gx, gy = np.meshgrid(grid, grid)
+    sky = na.Cartesian2dVectorArray(
+        x=na.ScalarArray(gx.ravel() * u.arcsec, axes="sky"),
+        y=na.ScalarArray(gy.ravel() * u.arcsec, axes="sky"),
+    )
+    system = model.system
+    sx, sy = _alignment.sensor_coordinates(
+        linear.distortion, sky, wavelength, ("sky", "sky")
+    )
+    rays = system.raytrace(
+        wavelength=wavelength,
+        field=sky,
+        pupil=na.Cartesian2dVectorArray(0, 0),
+        normalized_field=False,
+        efficiency=False,
+    )
+    stop = system.field_stop
+    position = rays.outputs.position[{system.axis_surface: system.index_field_stop}]
+    position = stop.transformation.inverse(position)
+    fx = np.asarray(na.value(na.as_named_array(position.x).to(u.mm)).ndarray).ravel()
+    fy = np.asarray(na.value(na.as_named_array(position.y).to(u.mm)).ndarray).ravel()
+    sx, sy = np.ravel(sx), np.ravel(sy)
+    radius = 1.3 * float(np.max(np.hypot(*_aperture_vertices(model).T)))
+    ok = np.isfinite(sx) & np.isfinite(sy) & np.isfinite(fx) & np.isfinite(fy)
+    ok &= np.hypot(fx, fy) < radius
+    return (
+        _Polynomial2d(sx[ok], sy[ok], fx[ok], fy[ok]),
+        _Polynomial2d(fx[ok], fy[ok], sx[ok], sy[ok]),
+    )
+
+
+def _aperture_vertices(model: esis.optics.Instrument) -> np.ndarray:
+    """Read the vertices of a channel's field stop in its own frame, in mm."""
+    vertices = model.field_stop.aperture.vertices
+    return np.stack(
+        [
+            np.asarray(na.value(na.as_named_array(c).to(u.mm)).ndarray, float).ravel()
+            for c in (vertices.x, vertices.y)
+        ],
+        axis=1,
+    )
+
+
+def measure_field_stop(
+    reference: esis.optics.DistortionParameters,
+    pointing: astropy.table.QTable,
+    instrument: None | esis.optics.Instrument = None,
+    num_scene: int = 401,
+    frames: None | tuple[int, ...] = None,
+    threshold: float = 0.5,
+    line: int = 2,
+    trim: float = 0.12,
+    directory: None | str | pathlib.Path = None,
+    path: None | str | pathlib.Path = None,
+    path_sides: None | str | pathlib.Path = None,
+    seed: int = 0,
+) -> tuple[astropy.table.QTable, astropy.table.QTable]:  # pragma: nocover
+    """
+    Measure the shape of the field stop from its image in every channel.
+
+    Each channel images the same field stop, so each measures its shape
+    through its own grating and sensor.  In each channel, at the frame the
+    pointing table is referenced to:
+
+    1.  The current outline of the stop is mapped to the sensor at one
+        line, and every side of the window, the diagonals too, is measured
+        in every frame by :func:`esis.optics.measure_polygon_edges`, moved
+        back by the frame's drift of the windows, and the median taken over
+        the flight at each point along the side.
+    2.  The points are carried to the plane of the field stop, in its own
+        frame, by :func:`_field_stop_maps`, and a straight line fit to each
+        side gives its offset along the outward normal of the current side
+        and its tilt against it.
+    3.  What the channel's own placement can do to its image of the stop is
+        taken out: a rotation, the mean tilt of the sides it measured, and a
+        translation and a scale, fit to their offsets.
+
+    What is left is each channel's measurement of the stop's shape.  The
+    shape is their mean, the scale the mean of the channels' scales, and
+    the vertices of the new stop are where its sides, so placed, meet.  The
+    rotation is left to the roll of the field stop, which the outline stage
+    fits.  The spread of the channels about the mean, kept in the metadata,
+    is what says whether they agree.
+
+    Parameters
+    ----------
+    reference
+        The reference parameters of every channel.
+    pointing
+        The pointing table, whose ``drift_x`` and ``drift_y`` move the
+        windows of each frame back to the reference frame.
+    instrument
+        The instrument model, see :func:`fit_distortion_reference`.  Its
+        field stop is the one measured against.
+    num_scene
+        The number of samples along each axis of the resampled scene, which
+        sets the grid the channel is linearized on.
+    frames
+        The frames to measure.  If :obj:`None`, every frame whose mean
+        signal exceeds `threshold` times the median over the flight.
+    threshold
+        The fraction of the flight's median signal below which a frame is
+        left out.
+    line
+        The index of the line whose windows are measured: O V, the
+        brightest, whose window lies whole on the sensor in every channel.
+    trim
+        The fraction of each side left out at either end, see
+        :func:`esis.optics.measure_polygon_edges`.
+    directory
+        The directory the log is written to.
+    path
+        Where to save the vertices, if anywhere.
+    path_sides
+        Where to save every channel's offsets and tilts, if anywhere.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
+
+    Returns
+    -------
+    The vertices of the measured stop, in mm in its own frame, and the
+    offset and tilt of every side as each channel measured it, before and
+    after its rotation, translation and scale are taken out.
+    """
+    instrument = _base(instrument)
+    num_channel = instrument.camera.channel.shape["channel"]
+    log = _logger(directory, "field_stop")
+    level_1 = esis.flights.f1.data.level_1()
+    axes = ("time", "channel", "detector_y", "detector_x")
+    data = np.asarray(na.value(level_1.outputs).ndarray_aligned(axes), dtype=float)
+    signal = data.mean(axis=(2, 3))
+    if frames is None:
+        kept = np.all(signal > threshold * np.median(signal, axis=0), axis=1)
+        frames = tuple(int(t) for t in np.where(kept)[0])
+    time = int(pointing.meta.get("reference_frame", 15))
+    log(f"frames kept: {', '.join(str(t) for t in frames)}; reference frame {time}")
+    scene, observation = _frame(time, num_scene)
+    frame_column = np.asarray(pointing["frame"])
+    rows = []
+    vertices = None
+    for c in range(num_channel):
+        channel = instrument[dict(channel=c)]
+        parameters = frame_parameters(reference, pointing, time, c)
+        model = parameters.to_instrument(channel)
+        merit = esis.optics.LinearMerit(
+            instrument=channel,
+            parameters=parameters,
+            scene=scene,
+            observation=observation[dict(channel=c)],
+            seed=seed,
+        )
+        linear = merit.linearize(model)
+        wavelength = channel.wavelength[dict(wavelength=line)]
+        to_stop, to_sensor = _field_stop_maps(model, linear, wavelength)
+        vertices = _aperture_vertices(model)
+        num_vertex = len(vertices)
+        polygon = np.stack(to_sensor(vertices[:, 0], vertices[:, 1]), axis=1)
+        log(
+            f"channel {c}: field stop to sensor to {to_sensor.error:.3f} px, "
+            f"sensor to field stop to {to_stop.error * 1e3:.3f} um"
+        )
+        tables = []
+        for t in frames:
+            edges = esis.optics.measure_polygon_edges(data[t, c], polygon, trim=trim)
+            row = pointing[frame_column == t]
+            if len(row):
+                edges["x"] -= row["drift_x"][0][c].to(u.pix)
+                edges["y"] -= row["drift_y"][0][c].to(u.pix)
+            edges["frame"] = t
+            tables.append(edges)
+        every = astropy.table.vstack(tables)
+        for k in range(num_vertex):
+            e = every[np.asarray(every["side"]) == k]
+            if len(e) < 30:
+                continue
+            along = np.asarray(e["along"].to_value(u.pix))
+            values = np.unique(along)
+            points = np.array(
+                [
+                    [
+                        np.median(e["x"].to_value(u.pix)[along == a]),
+                        np.median(e["y"].to_value(u.pix)[along == a]),
+                    ]
+                    for a in values
+                ]
+            )
+            fx, fy = to_stop(points[:, 0], points[:, 1])
+            start, end = vertices[k], vertices[(k + 1) % num_vertex]
+            tangent = (end - start) / np.hypot(*(end - start))
+            normal = np.array([tangent[1], -tangent[0]])
+            if np.dot((start + end) / 2, normal) < 0:
+                normal = -normal
+            tangent = np.array([-normal[1], normal[0]])
+            relative = np.stack([fx, fy], axis=1) - (start + end) / 2
+            slope, offset = np.polyfit(relative @ tangent, relative @ normal, 1)
+            azimuth = np.degrees(np.arctan2(normal[1], normal[0])) % 360
+            num_frame = len(np.unique(np.asarray(e["frame"])))
+            rows.append(
+                (c, k, azimuth, offset, np.arctan(slope), num_frame, len(values))
+            )
+        log(f"channel {c}: {sum(r[0] == c for r in rows)} sides measured")
+    sides = astropy.table.QTable(
+        rows=rows,
+        names=("channel", "side", "azimuth", "offset", "tilt", "num_frame", "num"),
+        dtype=(int, int, float, float, float, int, int),
+    )
+    sides["azimuth"].unit = u.deg
+    sides["offset"].unit = u.mm
+    sides["tilt"].unit = u.rad
+
+    # take out what each channel's placement can do to its image of the stop
+    edge = np.roll(vertices, -1, axis=0) - vertices
+    apothem = float(
+        np.mean(
+            np.abs(edge[:, 0] * vertices[:, 1] - edge[:, 1] * vertices[:, 0])
+            / np.hypot(edge[:, 0], edge[:, 1])
+        )
+    )
+    shape_offset = np.full((num_channel, num_vertex), np.nan)
+    shape_tilt = np.full((num_channel, num_vertex), np.nan)
+    rotation, scale, shift = [], [], []
+    for c in range(num_channel):
+        s = sides[np.asarray(sides["channel"]) == c]
+        k = np.asarray(s["side"])
+        azimuth = np.radians(np.asarray(s["azimuth"].to_value(u.deg)))
+        offset = np.asarray(s["offset"].to_value(u.mm))
+        tilt = np.asarray(s["tilt"].to_value(u.rad))
+        design = np.stack(
+            [np.cos(azimuth), np.sin(azimuth), np.full_like(azimuth, apothem)], axis=1
+        )
+        coefficients = np.linalg.lstsq(design, offset, rcond=None)[0]
+        shape_offset[c, k] = offset - design @ coefficients
+        shape_tilt[c, k] = tilt - tilt.mean()
+        rotation.append(float(np.degrees(tilt.mean())))
+        shift.append([float(v) for v in coefficients[:2] * 1e3])
+        scale.append(float(coefficients[2]))
+    tilt = np.nanmean(shape_tilt, axis=0)
+    tilt -= tilt.mean()
+    offset = np.nanmean(shape_offset, axis=0)
+    azimuth_all = np.radians(
+        [
+            np.median(sides["azimuth"].to_value(u.deg)[np.asarray(sides["side"]) == k])
+            for k in range(num_vertex)
+        ]
+    )
+    design = np.stack(
+        [np.cos(azimuth_all), np.sin(azimuth_all), np.full(num_vertex, apothem)], axis=1
+    )
+    offset -= design @ np.linalg.lstsq(design, offset, rcond=None)[0]
+    common_scale = float(np.mean(scale))
+    spread_tilt = np.sqrt(np.nanmean((shape_tilt - tilt) ** 2))
+    spread_offset = np.sqrt(np.nanmean((shape_offset - offset) ** 2))
+    log(
+        "rotation of each channel's image of the stop [deg]: "
+        + ", ".join(f"{r:+.3f}" for r in rotation)
+    )
+    log("scale [ppm]: " + ", ".join(f"{s * 1e6:+.0f}" for s in scale))
+    log(
+        f"shape: tilt {np.degrees(np.sqrt(np.mean(tilt**2))):.3f} deg rms, "
+        f"offset {np.sqrt(np.mean(offset**2)) * 1e3:.2f} um rms; "
+        f"channels about it: tilt {np.degrees(spread_tilt):.3f} deg rms, "
+        f"offset {spread_offset * 1e3:.2f} um rms"
+    )
+
+    # the sides of the new stop, and where they meet
+    lines = []
+    for k in range(num_vertex):
+        start, end = vertices[k], vertices[(k + 1) % num_vertex]
+        tangent = (end - start) / np.hypot(*(end - start))
+        normal = np.array([tangent[1], -tangent[0]])
+        if np.dot((start + end) / 2, normal) < 0:
+            normal = -normal
+        tangent = np.array([-normal[1], normal[0]])
+        middle = (start + end) / 2 + (offset[k] + common_scale * apothem) * normal
+        direction = tangent + np.tan(tilt[k]) * normal
+        lines.append((middle, direction / np.hypot(*direction)))
+    new = []
+    for k in range(num_vertex):
+        (m0, d0), (m1, d1) = lines[(k - 1) % num_vertex], lines[k]
+        s = np.linalg.solve(np.stack([d0, -d1], axis=1), m1 - m0)
+        new.append(m0 + s[0] * d0)
+    new = np.array(new)
+    result = astropy.table.QTable(
+        dict(x=new[:, 0] * u.mm, y=new[:, 1] * u.mm),
+    )
+    meta = dict(
+        description=(
+            "The vertices of the field stop of ESIS-I in its own frame, measured "
+            "from its image in every channel, without its rotation."
+        ),
+        frames=list(frames),
+        line=int(line),
+        reference_frame=time,
+        rotation=rotation,
+        scale=scale,
+        shift_um=shift,
+        tilt_deg=[float(v) for v in np.degrees(tilt)],
+        offset_um=[float(v) for v in offset * 1e3],
+        spread_tilt_deg=float(np.degrees(spread_tilt)),
+        spread_offset_um=float(spread_offset * 1e3),
+        **_stamp(seed),
+    )
+    result.meta.update(meta)
+    sides.meta.update(meta)
+    if path is not None:
+        result.write(path, format="ascii.ecsv", overwrite=True)
+    if path_sides is not None:
+        sides.write(path_sides, format="ascii.ecsv", overwrite=True)
+    return result, sides
 
 
 def fit_distortion_reference(

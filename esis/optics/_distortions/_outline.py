@@ -27,6 +27,7 @@ __all__ = [
     "SIDES",
     "measure_edges",
     "measure_edge_steps",
+    "measure_polygon_edges",
     "predict_edges",
     "outline_residual",
     "width_residual",
@@ -455,6 +456,110 @@ def measure_edges(
     for name in ("position", "error", "width"):
         result[name].unit = u.pix
     result.meta["axis_field"] = list(axis_field)
+    return result
+
+
+def measure_polygon_edges(
+    frame: np.ndarray,
+    vertices: np.ndarray,
+    half: int = 30,
+    band: int = 6,
+    trim: float = 0.12,
+    clip: float = 3.0,
+    margin: int = 40,
+) -> astropy.table.QTable:
+    """
+    Measure every side of a polygon's image in a frame, whatever its angle.
+
+    :func:`measure_edges` reads a side along the rows or columns it
+    crosses, which leaves out the sides that run at 45 degrees to them, the
+    diagonals of the octagon.  Here each side, from vertex ``k`` to vertex
+    ``k + 1``, is resampled first: the frame is interpolated bilinearly on
+    a grid of points one pixel apart along the side and across it, outward
+    positive, so that the side runs down the rows of the resampled image,
+    and fit there as one blurred straight edge by :func:`_fit_side`, the
+    fit :func:`measure_edges` makes.  All the sides are measured alike.
+
+    Parameters
+    ----------
+    frame
+        The frame, indexed ``[y, x]`` in pixels.
+    vertices
+        The predicted vertices of the polygon, an array of shape ``(N, 2)``
+        of ``x, y`` in pixels, where pixel ``i`` spans ``[i, i + 1)``, in
+        order around it.
+    half
+        How far from the predicted side the edge is searched for, in pixels.
+    band
+        Half the length of the profile fit across the edge, in pixels.
+    trim
+        The fraction of each side left out at either end, where the corners
+        of the polygon round it off.
+    clip
+        Samples whose residual is more than this multiple of the side's
+        median are left out.
+    margin
+        Samples closer than this to the edge of the frame are left out.
+
+    Returns
+    -------
+    A table with a row per sample kept: ``side`` (the side from vertex
+    ``side`` to the next), ``along`` (the distance from that vertex along
+    the predicted side), ``x`` and ``y``, where the fitted edge crosses the
+    sample's normal, ``error``, the formal error of that crossing along
+    the normal, and ``width``, the standard deviation of the side's blur,
+    all in pixels.
+    """
+    frame = np.asarray(frame, dtype=float)
+    vertices = np.asarray(vertices, dtype=float)
+    centre = vertices.mean(axis=0)
+    num_y, num_x = frame.shape
+    rows = []
+    for side in range(len(vertices)):
+        start = vertices[side]
+        end = vertices[(side + 1) % len(vertices)]
+        length = np.hypot(*(end - start))
+        tangent = (end - start) / length
+        normal = np.array([tangent[1], -tangent[0]])
+        if np.dot((start + end) / 2 - centre, normal) < 0:
+            normal = -normal
+        along = np.arange(np.ceil(trim * length), np.floor((1 - trim) * length))
+        across = np.arange(-half, half + 1)
+        x = start[0] + along[:, np.newaxis] * tangent[0] + across * normal[0]
+        y = start[1] + along[:, np.newaxis] * tangent[1] + across * normal[1]
+        inside = (
+            (x >= margin) & (x < num_x - margin) & (y >= margin) & (y < num_y - margin)
+        )
+        image = scipy.ndimage.map_coordinates(
+            frame, [y - 1 / 2, x - 1 / 2], order=1, mode="constant", cval=np.nan
+        )
+        image[~inside] = np.nan
+        whole = np.all(np.isfinite(image), axis=1)
+        image, along = image[whole], along[whole]
+        # the resampled side runs down the rows with the outside toward
+        # larger columns, as the right side of a window does in a frame
+        fit = _fit_side(
+            image,
+            np.arange(len(along)),
+            np.full(len(along), half + 1 / 2),
+            1,
+            half=half - 1,
+            band=band,
+            clip=clip,
+        )
+        if fit is None:
+            continue
+        distance = fit.position - 1 / 2 - half
+        for k in np.flatnonzero(fit.kept):
+            point = start + along[k] * tangent + distance[k] * normal
+            rows.append((side, along[k], point[0], point[1], fit.error[k], fit.width))
+    result = astropy.table.QTable(
+        rows=rows or None,
+        names=("side", "along", "x", "y", "error", "width"),
+        dtype=(int, float, float, float, float, float),
+    )
+    for name in ("along", "x", "y", "error", "width"):
+        result[name].unit = u.pix
     return result
 
 

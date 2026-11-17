@@ -23,6 +23,7 @@
 #   sbatch --job-name=dist-polish reproduce.sbatch polish <dir>    # from start_reference.ecsv
 #   sbatch --job-name=dist-align reproduce.sbatch align <dir>      # alignment only, in place
 #   sbatch --job-name=dist-coregister reproduce.sbatch coregister <dir>
+#   sbatch --job-name=dist-fieldstop reproduce.sbatch fieldstop <dir>  # the shape of the field stop
 #
 # The environment is the released libraries with `torch` and a numba that can
 # see the CUDA driver (see the report).  Loading the Level-1 frames peaks
@@ -42,7 +43,7 @@ mkdir -p "$DIRECTORY"
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
 case "$COMMAND" in
   channel|pointing) python reproduce.py "$COMMAND" "${SLURM_ARRAY_TASK_ID:-0}" "$DIRECTORY" ;;
-  edges|combine|polish|align|defocus|gather|coregister|accept) python reproduce.py "$COMMAND" "$DIRECTORY" ;;
+  edges|combine|polish|align|defocus|gather|fieldstop|coregister|accept) python reproduce.py "$COMMAND" "$DIRECTORY" ;;
   blink)            python blink.py render "$DIRECTORY" "$ESIS_DEVICE" ;;
   coalign)          python coalign.py render "$DIRECTORY" ${ESIS_FRAMES:-15} ;;
   *) echo "unknown command $COMMAND"; exit 1 ;;
