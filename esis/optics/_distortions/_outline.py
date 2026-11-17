@@ -466,7 +466,7 @@ def measure_polygon_edges(
     band: int = 6,
     trim: float = 0.12,
     clip: float = 3.0,
-    margin: int = 40,
+    margin: int = 4,
 ) -> astropy.table.QTable:
     """
     Measure every side of a polygon's image in a frame, whatever its angle.
@@ -499,7 +499,8 @@ def measure_polygon_edges(
         Samples whose residual is more than this multiple of the side's
         median are left out.
     margin
-        Samples closer than this to the edge of the frame are left out.
+        Profiles with a point closer than this to the edge of the frame are
+        left out.
 
     Returns
     -------

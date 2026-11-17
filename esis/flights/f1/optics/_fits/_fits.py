@@ -1083,15 +1083,17 @@ def measure_field_stop(
         frame, by :func:`_field_stop_maps`, and a straight line fit to each
         side gives its offset along the outward normal of the current side
         and its tilt against it.
-    3.  What the channel's own placement can do to its image of the stop is
-        taken out: a rotation, the mean tilt of the sides it measured, and a
-        translation and a scale, fit to their offsets.
+    3.  What each channel's own placement can do to its image of the stop
+        is taken out: a rotation, fit to the tilts of its sides, and a
+        translation and a scale, fit to their offsets.  These are fit
+        together with one shape for every channel, the tilt and offset of
+        each side that no rotation, translation or scale can make, so that
+        a side a channel did not measure does not bias what is taken out.
 
-    What is left is each channel's measurement of the stop's shape.  The
-    shape is their mean, the scale the mean of the channels' scales, and
-    the vertices of the new stop are where its sides, so placed, meet.  The
+    The vertices of the new stop are where the sides of that shape meet,
+    grown by the mean of the channels' scales.  The
     rotation is left to the roll of the field stop, which the outline stage
-    fits.  The spread of the channels about the mean, kept in the metadata,
+    fits.  The spread of the channels about the shape, kept in the metadata,
     is what says whether they agree.
 
     Parameters
@@ -1229,40 +1231,43 @@ def measure_field_stop(
             / np.hypot(edge[:, 0], edge[:, 1])
         )
     )
-    shape_offset = np.full((num_channel, num_vertex), np.nan)
-    shape_tilt = np.full((num_channel, num_vertex), np.nan)
-    rotation, scale, shift = [], [], []
-    for c in range(num_channel):
-        s = sides[np.asarray(sides["channel"]) == c]
-        k = np.asarray(s["side"])
-        azimuth = np.radians(np.asarray(s["azimuth"].to_value(u.deg)))
-        offset = np.asarray(s["offset"].to_value(u.mm))
-        tilt = np.asarray(s["tilt"].to_value(u.rad))
-        design = np.stack(
-            [np.cos(azimuth), np.sin(azimuth), np.full_like(azimuth, apothem)], axis=1
-        )
-        coefficients = np.linalg.lstsq(design, offset, rcond=None)[0]
-        shape_offset[c, k] = offset - design @ coefficients
-        shape_tilt[c, k] = tilt - tilt.mean()
-        rotation.append(float(np.degrees(tilt.mean())))
-        shift.append([float(v) for v in coefficients[:2] * 1e3])
-        scale.append(float(coefficients[2]))
-    tilt = np.nanmean(shape_tilt, axis=0)
-    tilt -= tilt.mean()
-    offset = np.nanmean(shape_offset, axis=0)
-    azimuth_all = np.radians(
-        [
-            np.median(sides["azimuth"].to_value(u.deg)[np.asarray(sides["side"]) == k])
-            for k in range(num_vertex)
-        ]
+    # one shape for every channel, fit with every channel's rotation (to the
+    # tilts) and translation and scale (to the offsets) at once, so that a side
+    # a channel did not measure does not bias what is taken out of it; the
+    # shape carries no rotation, translation or scale of its own
+    channel = np.asarray(sides["channel"])
+    k = np.asarray(sides["side"])
+    azimuth = np.radians(
+        [np.median(sides["azimuth"].to_value(u.deg)[k == i]) for i in range(num_vertex)]
     )
-    design = np.stack(
-        [np.cos(azimuth_all), np.sin(azimuth_all), np.full(num_vertex, apothem)], axis=1
-    )
-    offset -= design @ np.linalg.lstsq(design, offset, rcond=None)[0]
+    weight = 1e3
+    a = np.zeros((len(sides) + 1, num_channel + num_vertex))
+    a[np.arange(len(sides)), channel] = 1
+    a[np.arange(len(sides)), num_channel + k] = 1
+    a[-1, num_channel:] = weight
+    b = np.append(sides["tilt"].to_value(u.rad), 0)
+    solution = np.linalg.lstsq(a, b, rcond=None)[0]
+    rotation = [float(np.degrees(v)) for v in solution[:num_channel]]
+    tilt = solution[num_channel:]
+    spread_tilt = np.sqrt(np.mean((b - a @ solution)[:-1] ** 2))
+    gauge = np.stack([np.cos(azimuth), np.sin(azimuth), np.ones(num_vertex)])
+    a = np.zeros((len(sides) + 3, 3 * num_channel + num_vertex))
+    rows = np.arange(len(sides))
+    a[rows, 3 * channel] = np.cos(azimuth[k])
+    a[rows, 3 * channel + 1] = np.sin(azimuth[k])
+    a[rows, 3 * channel + 2] = apothem
+    a[rows, 3 * num_channel + k] = 1
+    a[len(sides) :, 3 * num_channel :] = weight * gauge
+    b = np.append(sides["offset"].to_value(u.mm), np.zeros(3))
+    solution = np.linalg.lstsq(a, b, rcond=None)[0]
+    shift = [
+        [float(v * 1e3) for v in solution[3 * c : 3 * c + 2]]
+        for c in range(num_channel)
+    ]
+    scale = [float(solution[3 * c + 2]) for c in range(num_channel)]
+    offset = solution[3 * num_channel :]
+    spread_offset = np.sqrt(np.mean((b - a @ solution)[: len(sides)] ** 2))
     common_scale = float(np.mean(scale))
-    spread_tilt = np.sqrt(np.nanmean((shape_tilt - tilt) ** 2))
-    spread_offset = np.sqrt(np.nanmean((shape_offset - offset) ** 2))
     log(
         "rotation of each channel's image of the stop [deg]: "
         + ", ".join(f"{r:+.3f}" for r in rotation)
