@@ -43,10 +43,10 @@
 #     python: 3.12.14
 # - {seed: 0}
 # - straight_edge_drift:
-#     acceptance_rms_px: {He I: 0.1265, O V: 0.1312}
-#     description: 'The registration of the channels when the drift is taken from the straight-edge fits instead of the per-row steps
-#       (run deploy9, seed 0): the rms of the median tile shift against the anchor channel over the exposures whose edges are measured,
-#       per line, as in acceptance.ecsv.'
+#     acceptance_rms_px: {He I: 0.12654597991683278, O V: 0.13121197091134845}
+#     description: 'The registration of the channels when the drift is read from the crossings of the straight edges instead of the steps
+#       of every row and column, the same fit otherwise: the rms of the median tile shift against the anchor channel over the frames whose
+#       edges are measured, per line.'
 # - __serialized_columns__:
 #     shift:
 #       __class__: astropy.units.quantity.Quantity

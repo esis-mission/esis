@@ -52,74 +52,86 @@
 #     python: 3.12.14
 # - {seed: 0}
 # - history:
-#     description: 'Each measurement of the stop through a distortion fit made with the stop the previous one gave: shape_tilt_deg and
-#       shape_offset_um are the rms change of its sides against the stop it was measured through (the regular octagon of the design for
-#       the first), spread_tilt_deg and spread_offset_um the rms of the channels about the common shape, rotation_deg and scale each channel''s
-#       image of the stop against the stop the fit carried. The second is the polygon in this table; the third, through the fit made with
-#       it, checks that the measurement has converged.'
-#     measurements:
-#     - fit: X3, regular octagon
-#       rotation_deg: [0.158, 0.167, 0.175, 0.163]
-#       scale: [-0.00323, -0.003033, -0.003247, -0.003904]
-#       shape_offset_um: 1.15
-#       shape_tilt_deg: 0.481
-#       spread_offset_um: 0.43
-#       spread_tilt_deg: 0.027
-#     - fit: X4, the polygon of the first measurement
-#       rotation_deg: [-0.064, -0.054, -0.038, -0.053]
-#       scale: [-0.000703, -0.000483, -0.000828, -0.001507]
-#       shape_offset_um: 0.5
-#       shape_tilt_deg: 0.021
-#       spread_offset_um: 0.46
-#       spread_tilt_deg: 0.029
-#     - fit: X5, this polygon (the committed fit)
-#       rotation_deg: [-0.024, -0.002, -0.007, -0.008]
-#       scale: [0.000357, 0.000517, 0.000304, -0.000481]
-#       shape_offset_um: 0.08
-#       shape_tilt_deg: 0.007
-#       spread_offset_um: 0.45
-#       spread_tilt_deg: 0.028
-# - outline_regular:
-#     description: The rms distance of the measured window edges from the model's outline after the outline stage, per channel, in a fit
-#       with the regular octagon of the design and its roll fit the same way (run X2); the committed fit's own are the outline edges in
-#       the metadata of distortion_reference.ecsv.
-#     edges_px: [2.27, 2.1, 1.02, 1.5]
+#     description: 'The passes of the iteration that measured the stop, in order.  field_stop is what each pass was fit with: the regular
+#       octagon of the design, or the stop the named pass measured.  outline_edges_px is the rms distance of the measured window edges
+#       from the model''s outline after that pass''s outline stage, per channel.  shape_tilt_deg and shape_offset_um are the rms change
+#       of the sides of the stop the pass measured against the stop it was fit with, spread_tilt_deg and spread_offset_um the rms of the
+#       channels about the common shape, rotation_deg and scale each channel''s image of the stop against the stop it was fit with.  The
+#       iteration ends at the first pass whose measurement is within the tolerance; that pass is the fit, and this table is the stop it
+#       was fit with.'
+#     passes:
+#     - converged: false
+#       directory: pass_0
+#       field_stop: regular
+#       outline_edges_px: [2.2739521449383333, 2.1041125450627556, 1.0198175440608743, 1.495605106172777]
+#       rotation_deg: [0.1579418001779978, 0.16684794432875868, 0.17538290611780977, 0.16262000706557309]
+#       scale: [-0.0032296076271265614, -0.003033352686922644, -0.0032467217008788365, -0.0039043157471812077]
+#       shape_offset_um: 1.1541086860509318
+#       shape_tilt_deg: 0.481066850690577
+#       spread_offset_um: 0.4276251025679562
+#       spread_tilt_deg: 0.026983847258516852
+#     - converged: false
+#       directory: pass_1
+#       field_stop: pass_0
+#       outline_edges_px: [1.195096741453724, 0.7455758946711589, 0.7072813752056478, 1.0205091443706504]
+#       rotation_deg: [-0.06427708927605251, -0.054064236089150224, -0.03823265613624194, -0.05307215798362024]
+#       scale: [-0.0007025352974304837, -0.0004832444239373724, -0.0008281057142219449, -0.0015066460370995948]
+#       shape_offset_um: 0.4965289013928452
+#       shape_tilt_deg: 0.02061871665523058
+#       spread_offset_um: 0.461737353472328
+#       spread_tilt_deg: 0.029361772479514776
+#     - converged: true
+#       directory: pass_2
+#       field_stop: pass_1
+#       outline_edges_px: [0.24032463262932494, 0.4790202781678969, 0.8212760644931849, 0.36169003575361114]
+#       rotation_deg: [-0.02437170628385564, -0.0024087866283539114, -0.0066154621038028195, -0.007736795261680598]
+#       scale: [0.0003567938225226358, 0.0005168934510060594, 0.0003038916117815991, -0.000481409216965861]
+#       shape_offset_um: 0.0750972042992187
+#       shape_tilt_deg: 0.006533807368206357
+#       spread_offset_um: 0.451363756277375
+#       spread_tilt_deg: 0.027603044127057427
+#     tolerance: {offset_um: 0.25, scale: 0.001, tilt_deg: 0.01}
 # - clocking:
 #     corners_deg:
-#     - [-0.49, -0.625, -0.061, -0.255, -0.525, -0.855, -0.196, -0.013]
-#     - [-0.488, -0.565, -0.064, -0.321, -0.53, -0.794, -0.192, -0.069]
-#     - [-0.575, -0.561, 0.03, -0.326, -0.631, -0.803, -0.099, -0.063]
-#     - [-0.57, -0.617, 0.033, -0.265, -0.633, -0.868, -0.102, -0.003]
-#     description: The orientation of the stop on the sky through the committed fit, frame 15, O V, from a chief-ray trace of a grid on
-#       the sky to the stop, inverted by a cubic. Angles are position angles from solar north, positive counterclockwise (north through
-#       east); the sky frame is that of the AIA images with their own roll applied. north_deg is the position angle of the corner nearest
-#       north about the centre of the stop, per channel; corners_deg is each corner's departure from its nominal multiple of 45 degrees
-#       about the centroid of the corners, by nominal azimuth 0, 45, ..., 315, per channel; rotation_deg is the mean of those, the roll
-#       of the stop. level3_rotation_deg is the rotation of each camera's image against the AIA pixel grid in the Level-3 co-alignment
-#       of Parker et al. (2022), the median over its sequences of the affine rot_angle in ov_Level3_transform.pickle less its nominal
-#       -22.5 - 45 k degrees; it includes the camera's roll on its detector.
+#     - [-0.4904620959338777, -0.6252376883203681, -0.060984186226932025, -0.25530871291366, -0.5251028143738097, -0.854822667712142,
+#       -0.1960134605050996, -0.013276318640414786]
+#     - [-0.48848393511844773, -0.5645597710355688, -0.0639410801802427, -0.3209360526525984, -0.5296896999170713, -0.7942815011261359,
+#       -0.19240319101943726, -0.0691207495056787]
+#     - [-0.5747651071615834, -0.5606657091367993, 0.029937575107496173, -0.32570725455789784, -0.6314415317882833, -0.8027104033921546,
+#       -0.09856167688251105, -0.0631574171035112]
+#     - [-0.5704210267840237, -0.616518115193756, 0.033131655353130895, -0.2650959506192123, -0.6332768685219037, -0.8681900205086777,
+#       -0.10202689435924128, -0.002591449427164605]
+#     description: The orientation of the stop on the sky through the fit, from a chief-ray trace of a grid on the sky to the stop, inverted
+#       by a cubic.  Angles are position angles from solar north, positive counterclockwise (north through east); the sky frame is that
+#       of the AIA images with their own roll applied.  north_deg is the position angle of the corner nearest north about the centre of
+#       the stop, per channel; corners_deg is each corner's departure from its nominal multiple of 45 degrees about the centroid of the
+#       corners, by nominal azimuth 0, 45, ..., 315, per channel; rotation_deg is the mean of those, the roll of the stop.
 #     frame: 15
-#     hand_picked:
-#       corners_deg: [-0.706, -0.253, -0.19, -1.133, -0.938, -0.657, -0.348, -0.498]
-#       corners_grid_deg: [-0.575, -0.122, -0.058, -1.001, -0.807, -0.525, -0.217, -0.366]
-#       crota2_deg: -0.1315
-#       description: The eight corners picked by hand on the Level-3 O V image for the pointing figure of Parker et al. (2022), (x, y)
-#         in Level-3 pixels; that image is on the pixel grid of AIA 304, offset by 300 pixels in each axis, and its coordinates leave
-#         out AIA's roll, crota2_deg. corners_deg is as above, on the sky with that roll and, in corners_grid_deg, on the AIA pixel grid
-#         without it.
-#       pixels:
-#       - [629, 11]
-#       - [1077, 185]
-#       - [1267, 630]
-#       - [1081, 1070]
-#       - [644, 1255]
-#       - [197, 1075]
-#       - [17, 633]
-#       - [190, 200]
-#     level3_rotation_deg: [0.869, 0.354, 0.371, 1.046]
 #     line: 2
-#     north_deg: [-0.403, -0.409, -0.513, -0.517]
-#     rotation_deg: -0.378
+#     north_deg: [-0.4028194419097203, -0.4084754721492564, -0.5132625392971982, -0.516684646789661]
+#     rotation_deg: -0.3780213787549243
+# - parker2022:
+#     corners_deg: [-0.706, -0.253, -0.19, -1.133, -0.938, -0.657, -0.348, -0.498]
+#     corners_grid_deg: [-0.575, -0.122, -0.058, -1.001, -0.807, -0.525, -0.217, -0.366]
+#     crota2_deg: -0.1315
+#     description: The orientation of the field stop as the pointing figure of Parker et al. (2022) gives it, for comparison.  pixels
+#       are the eight corners picked by hand on its Level-3 O V image, (x, y) in Level-3 pixels; that image is on the pixel grid of AIA
+#       304 offset by 300 pixels in each axis, and its coordinates leave out AIA's own roll, crota2_deg (the CROTA2 of the AIA 304 images
+#       of the flight).  corners_deg is each corner's departure from its nominal multiple of 45 degrees about their centroid, by nominal
+#       azimuth 0, 45, ..., 315, on the sky with that roll, and corners_grid_deg the same on the AIA pixel grid without it, computed with
+#       the full WCS of the AIA 304 image at 2019-09-30T18:08:43Z.  level3_rotation_deg is the rotation of each camera's image against
+#       the AIA pixel grid in that paper's Level-3 co-alignment, the median over its sequences of the affine rot_angle in ov_Level3_transform.pickle
+#       less its nominal -22.5 - 45 k degrees; it includes the camera's roll on its detector.
+#     level3_rotation_deg: [0.869, 0.354, 0.371, 1.046]
+#     pixels:
+#     - [629, 11]
+#     - [1077, 185]
+#     - [1267, 630]
+#     - [1081, 1070]
+#     - [644, 1255]
+#     - [197, 1075]
+#     - [17, 633]
+#     - [190, 200]
 # - __serialized_columns__:
 #     x:
 #       __class__: astropy.units.quantity.Quantity
