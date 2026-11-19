@@ -14,6 +14,19 @@ chain, in order::
     python reproduce.py gather <directory>        # pointing rows -> ECSV
     python reproduce.py accept <directory>        # score the fit on held-out frames
 
+The field stop is iterated with the fit, from the regular octagon of the
+design to the polygon the channels measure, see ``chain.sh``, which runs the
+whole procedure; these commands measure it, decide whether it has stopped
+moving, and write the committed tables from the passes::
+
+    python reproduce.py fieldstop <directory>     # measure the field stop
+    python reproduce.py converged <directory>     # exit 0 if it stayed, 3 if it moved
+    python reproduce.py record <out> <pass>...    # committed tables from the passes
+
+``record`` takes ``--straight <directory>``, the same fit with the drift
+read from the straight edges (ESIS_DRIFT=edges), whose registration it keeps
+to compare against.
+
 Three more commands work on a finished reference::
 
     python reproduce.py polish <directory>      # shared + alignment, saved start
@@ -35,7 +48,8 @@ channel is linearized on, in every command, default 0), ESIS_PRIMARY=1 to
 scan the primary, held at nominal otherwise, ESIS_DRIFT_DEGREE (polynomial
 that smooths the window drift, default 3; empty for none),
 ESIS_DEFOCUS_DEGREE (polynomial through each sector's focus, default 2),
-ESIS_COREGISTRATION_DEGREE (the
+ESIS_DRIFT (``steps``, the default, or ``edges``: what ``edges`` reads the
+drift from), ESIS_COREGISTRATION_DEGREE (the
 same for ``coregister``, default 2), ESIS_COREGISTERED=1 to score the
 co-registered copy of the pointing table, and to depart from the committed
 configuration, ESIS_MERIT (``correlation`` or ``least_squares``),
@@ -53,7 +67,7 @@ import sys
 
 import astropy.table
 import esis
-from esis.flights.f1.optics._fits import _fits
+from esis.flights.f1.optics._fits import _fits, _record
 
 # a dependency configures the root logger at INFO, which lets numba report
 # every device allocation
@@ -74,6 +88,7 @@ DEFOCUS_DEGREE = int(os.environ.get("ESIS_DEFOCUS_DEGREE", "2"))
 COREGISTERED = os.environ.get("ESIS_COREGISTERED", "") not in ("", "0", "false", "no")
 FREE_ROLL = os.environ.get("ESIS_FREE_ROLL", "") not in ("", "0", "false", "no")
 SUFFIX = "_coregistered" if COREGISTERED else ""
+DRIFT = os.environ.get("ESIS_DRIFT", "steps") or "steps"
 FIELD_STOP = os.environ.get("ESIS_FIELD_STOP", "")
 if FIELD_STOP:
     _fits.path_field_stop = None if FIELD_STOP == "regular" else FIELD_STOP
@@ -163,6 +178,7 @@ def edges(directory: pathlib.Path) -> None:
         path=directory / "window_edges.ecsv",
         path_drift=directory / "window_drift.ecsv",
         seed=SEED,
+        drift=DRIFT,
     )
 
 
@@ -310,6 +326,35 @@ def fieldstop(directory: pathlib.Path) -> None:
     )
 
 
+def converged(directory: pathlib.Path) -> int:
+    """Decide whether the directory's measurement of the field stop moved it."""
+    table = astropy.table.QTable.read(
+        directory / "field_stop.ecsv", format="ascii.ecsv"
+    )
+    change = _record.field_stop_change(table)
+    result = _record.field_stop_converged(table)
+    print(
+        f"{directory}: the field stop moved by {change['shape_tilt_deg']:.4f} deg "
+        f"and {change['shape_offset_um']:.3f} um rms, scale "
+        f"{sum(change['scale']) / len(change['scale']):+.2e}; "
+        + ("converged" if result else "not converged")
+        + f" (tolerance {_record.TOLERANCE})"
+    )
+    return 0 if result else 3
+
+
+def record(arguments: list[str]) -> None:
+    """Write the committed tables from the passes of the iteration."""
+    straight = None
+    if "--straight" in arguments:
+        i = arguments.index("--straight")
+        straight = pathlib.Path(arguments[i + 1])
+        arguments = arguments[:i] + arguments[i + 2 :]
+    directory, *passes = (pathlib.Path(a) for a in arguments)
+    _record.record_distortion_fit(passes=passes, directory=directory, straight=straight)
+    print(f"{len(passes)} passes -> {directory}")
+
+
 def coregister(directory: pathlib.Path) -> None:
     """Measure the channel offsets the sector focus leaves; the chain is untouched."""
     pointing = astropy.table.QTable.read(
@@ -373,6 +418,10 @@ if __name__ == "__main__":
         gather(pathlib.Path(sys.argv[2]))
     elif command == "fieldstop":
         fieldstop(pathlib.Path(sys.argv[2]))
+    elif command == "converged":
+        raise SystemExit(converged(pathlib.Path(sys.argv[2])))
+    elif command == "record":
+        record(sys.argv[2:])
     elif command == "coregister":
         coregister(pathlib.Path(sys.argv[2]))
     elif command == "accept":

@@ -10,6 +10,11 @@ from ._fits import (
     apply_coregistration,
     acceptance,
 )
+from ._record import (
+    field_stop_converged,
+    measure_clocking,
+    record_distortion_fit,
+)
 from ._plots import (
     distortion_fit_table,
     plot_distortion_flight,
@@ -27,6 +32,9 @@ __all__ = [
     "fit_coregistration",
     "apply_coregistration",
     "acceptance",
+    "field_stop_converged",
+    "measure_clocking",
+    "record_distortion_fit",
     "distortion_fit_table",
     "plot_distortion_flight",
     "plot_coalignment_tiles",

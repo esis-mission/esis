@@ -775,6 +775,7 @@ def measure_window_edges(
     path: None | str | pathlib.Path = None,
     path_drift: None | str | pathlib.Path = None,
     seed: int = 0,
+    drift: str = "steps",
 ) -> tuple[astropy.table.QTable, astropy.table.QTable]:  # pragma: nocover
     """
     Measure the edges of every window in every frame of the flight.
@@ -828,13 +829,24 @@ def measure_window_edges(
     seed
         The seed of the samples every channel is linearized on, see
         :class:`esis.optics.LinearMerit`.
+    drift
+        What the drift is read from: ``steps``, the step fit to every row
+        and column, or ``edges``, the crossings of the straight edges, which
+        the drift was read from before and which is kept to compare against.
 
     Returns
     -------
     The median edges, one row per channel, line, side and row or column,
     with the median width of the side, and the drift, one row per channel,
     frame and side.
+
+    Raises
+    ------
+    ValueError
+        If `drift` is neither ``steps`` nor ``edges``.
     """
+    if drift not in ("steps", "edges"):
+        raise ValueError(f"drift must be 'steps' or 'edges', not {drift!r}")
     instrument = _base(instrument)
     num_channel = instrument.camera.channel.shape["channel"]
     log = _logger(directory, "edges")
@@ -902,8 +914,9 @@ def measure_window_edges(
     )
     for name in ("position", "error", "width"):
         median_edges[name].unit = u.pix
-    # the drift from the steps of every row, each against its own median
-    every = astropy.table.vstack(tables_steps)
+    # the drift from the steps of every row, each against its own median, or
+    # from the crossings of the straight edges
+    every = astropy.table.vstack(tables_steps if drift == "steps" else tables)
     every = every[every["error"] < error_max]
     keys = np.stack(
         [np.asarray(every[k]) for k in ("channel", "line", "side", "index")],
@@ -932,6 +945,7 @@ def measure_window_edges(
                     drift_rows.append(
                         (c, t, side, float(np.median(departure[sel])), int(sel.sum()))
                     )
+    source = drift
     drift = astropy.table.QTable(
         rows=drift_rows,
         names=("channel", "frame", "side", "shift", "num"),
@@ -954,8 +968,14 @@ def measure_window_edges(
     drift.meta.update(meta)
     drift.meta["description"] = (
         "The departure of each window's edges from their flight median, per "
-        "frame, from the steps fit to every row and column."
+        "frame, from the "
+        + (
+            "steps fit to every row and column."
+            if source == "steps"
+            else "crossings of the straight edge fit to each side."
+        )
     )
+    drift.meta["drift"] = source
     if path is not None:
         median_edges.write(path, format="ascii.ecsv", overwrite=True)
     if path_drift is not None:
