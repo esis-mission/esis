@@ -51,6 +51,75 @@
 #     platform: Linux-6.12.0-211.53.1.el10_2.x86_64-x86_64-with-glibc2.39
 #     python: 3.12.14
 # - {seed: 0}
+# - history:
+#     description: 'Each measurement of the stop through a distortion fit made with the stop the previous one gave: shape_tilt_deg and
+#       shape_offset_um are the rms change of its sides against the stop it was measured through (the regular octagon of the design for
+#       the first), spread_tilt_deg and spread_offset_um the rms of the channels about the common shape, rotation_deg and scale each channel''s
+#       image of the stop against the stop the fit carried. The second is the polygon in this table; the third, through the fit made with
+#       it, checks that the measurement has converged.'
+#     measurements:
+#     - fit: X3, regular octagon
+#       rotation_deg: [0.158, 0.167, 0.175, 0.163]
+#       scale: [-0.00323, -0.003033, -0.003247, -0.003904]
+#       shape_offset_um: 1.15
+#       shape_tilt_deg: 0.481
+#       spread_offset_um: 0.43
+#       spread_tilt_deg: 0.027
+#     - fit: X4, the polygon of the first measurement
+#       rotation_deg: [-0.064, -0.054, -0.038, -0.053]
+#       scale: [-0.000703, -0.000483, -0.000828, -0.001507]
+#       shape_offset_um: 0.5
+#       shape_tilt_deg: 0.021
+#       spread_offset_um: 0.46
+#       spread_tilt_deg: 0.029
+#     - fit: X5, this polygon (the committed fit)
+#       rotation_deg: [-0.024, -0.002, -0.007, -0.008]
+#       scale: [0.000357, 0.000517, 0.000304, -0.000481]
+#       shape_offset_um: 0.08
+#       shape_tilt_deg: 0.007
+#       spread_offset_um: 0.45
+#       spread_tilt_deg: 0.028
+# - outline_regular:
+#     description: The rms distance of the measured window edges from the model's outline after the outline stage, per channel, in a fit
+#       with the regular octagon of the design and its roll fit the same way (run X2); the committed fit's own are the outline edges in
+#       the metadata of distortion_reference.ecsv.
+#     edges_px: [2.27, 2.1, 1.02, 1.5]
+# - clocking:
+#     corners_deg:
+#     - [-0.49, -0.625, -0.061, -0.255, -0.525, -0.855, -0.196, -0.013]
+#     - [-0.488, -0.565, -0.064, -0.321, -0.53, -0.794, -0.192, -0.069]
+#     - [-0.575, -0.561, 0.03, -0.326, -0.631, -0.803, -0.099, -0.063]
+#     - [-0.57, -0.617, 0.033, -0.265, -0.633, -0.868, -0.102, -0.003]
+#     description: The orientation of the stop on the sky through the committed fit, frame 15, O V, from a chief-ray trace of a grid on
+#       the sky to the stop, inverted by a cubic. Angles are position angles from solar north, positive counterclockwise (north through
+#       east); the sky frame is that of the AIA images with their own roll applied. north_deg is the position angle of the corner nearest
+#       north about the centre of the stop, per channel; corners_deg is each corner's departure from its nominal multiple of 45 degrees
+#       about the centroid of the corners, by nominal azimuth 0, 45, ..., 315, per channel; rotation_deg is the mean of those, the roll
+#       of the stop. level3_rotation_deg is the rotation of each camera's image against the AIA pixel grid in the Level-3 co-alignment
+#       of Parker et al. (2022), the median over its sequences of the affine rot_angle in ov_Level3_transform.pickle less its nominal
+#       -22.5 - 45 k degrees; it includes the camera's roll on its detector.
+#     frame: 15
+#     hand_picked:
+#       corners_deg: [-0.706, -0.253, -0.19, -1.133, -0.938, -0.657, -0.348, -0.498]
+#       corners_grid_deg: [-0.575, -0.122, -0.058, -1.001, -0.807, -0.525, -0.217, -0.366]
+#       crota2_deg: -0.1315
+#       description: The eight corners picked by hand on the Level-3 O V image for the pointing figure of Parker et al. (2022), (x, y)
+#         in Level-3 pixels; that image is on the pixel grid of AIA 304, offset by 300 pixels in each axis, and its coordinates leave
+#         out AIA's roll, crota2_deg. corners_deg is as above, on the sky with that roll and, in corners_grid_deg, on the AIA pixel grid
+#         without it.
+#       pixels:
+#       - [629, 11]
+#       - [1077, 185]
+#       - [1267, 630]
+#       - [1081, 1070]
+#       - [644, 1255]
+#       - [197, 1075]
+#       - [17, 633]
+#       - [190, 200]
+#     level3_rotation_deg: [0.869, 0.354, 0.371, 1.046]
+#     line: 2
+#     north_deg: [-0.403, -0.409, -0.513, -0.517]
+#     rotation_deg: -0.378
 # - __serialized_columns__:
 #     x:
 #       __class__: astropy.units.quantity.Quantity

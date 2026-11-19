@@ -25,6 +25,7 @@ _tables = dict(
     window_drift="window_drift.ecsv",
     defocus="defocus.ecsv",
     coregistration="coregistration.ecsv",
+    field_stop="field_stop.ecsv",
 )
 """The tables the distortion fit committed, by the name this module reads them under."""
 
@@ -49,9 +50,11 @@ def distortion_fit_table(
         ``acceptance_tiles`` (the decomposition of the tile shifts and the
         tiles themselves), ``window_edges`` and ``window_drift`` (the
         measured edges and their motion), ``defocus`` (the focus of each
-        sector of the primary through the flight) or ``coregistration`` (the
+        sector of the primary through the flight), ``coregistration`` (the
         optional empirical offset of each channel's pointing, what the
-        sector focus leaves).
+        sector focus leaves) or ``field_stop`` (the measured vertices of
+        the field stop, with the history of the measurement, the outline
+        residuals of the regular octagon and the clocking on the sky).
     directory
         The directory to read from.  If :obj:`None`, the committed tables.
 

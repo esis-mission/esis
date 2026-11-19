@@ -42,6 +42,11 @@
 #     platform: Linux-6.12.0-211.53.1.el10_2.x86_64-x86_64-with-glibc2.39
 #     python: 3.12.14
 # - {seed: 0}
+# - straight_edge_drift:
+#     acceptance_rms_px: {He I: 0.1265, O V: 0.1312}
+#     description: 'The registration of the channels when the drift is taken from the straight-edge fits instead of the per-row steps
+#       (run deploy9, seed 0): the rms of the median tile shift against the anchor channel over the exposures whose edges are measured,
+#       per line, as in acceptance.ecsv.'
 # - __serialized_columns__:
 #     shift:
 #       __class__: astropy.units.quantity.Quantity
