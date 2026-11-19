@@ -182,8 +182,26 @@ writes.
 Reproducing the committed fit
 -----------------------------
 
-The scripts under ``docs/reports/distortion_fit`` run the stages on a
-Slurm cluster, in this order::
+The scripts under ``docs/reports/distortion_fit`` run the whole fit on a
+Slurm cluster as one command::
+
+    bash chain.sh <dir>
+
+The field stop is iterated with the fit.  Pass 0 fits every channel from
+scratch with the regular octagon of the design and measures the field stop
+through that fit (``fieldstop``, :func:`esis.flights.f1.optics.measure_field_stop`);
+each later pass refits from the window edges on with the stop the pass
+before it measured, reusing pass 0's absolute fits, and measures it again.
+The iteration ends at the first pass whose measurement no longer moves the
+stop (``converged``, :func:`esis.flights.f1.optics.field_stop_converged`).
+That pass is the fit: it is scored and co-registered, refit with the drift
+read from the straight edges to compare against, and ``record``
+(:func:`esis.flights.f1.optics.record_distortion_fit`) writes the tables
+the package commits into ``<dir>/committed``, the field stop with the
+history of the iteration and its clocking on the sky
+(:func:`esis.flights.f1.optics.measure_clocking`) in its metadata.  Each
+pass submits the next when it ends, so nothing else need be run; each stage
+can also be submitted on its own, as ``reproduce.sbatch`` lists::
 
     sbatch --job-name=dist-channel --array=0-3 reproduce.sbatch channel <dir>
     sbatch --job-name=dist-edges reproduce.sbatch edges <dir>
@@ -191,9 +209,14 @@ Slurm cluster, in this order::
     sbatch --job-name=dist-defocus reproduce.sbatch defocus <dir>
     sbatch --job-name=dist-pointing --array=0-29 reproduce.sbatch pointing <dir>
     sbatch --job-name=dist-gather reproduce.sbatch gather <dir>
+    sbatch --job-name=dist-fieldstop reproduce.sbatch fieldstop <dir>
     sbatch --job-name=dist-accept reproduce.sbatch accept <dir>
     sbatch --job-name=dist-blink reproduce.sbatch blink <dir>
     sbatch --job-name=dist-coalign reproduce.sbatch coalign <dir>
+
+A run repeats the committed fit to within the scatter between seeds, not
+exactly: on the cluster's GPUs a seed repeats the fit only to about 0.0005
+in correlation.
 
 The first produces one ECSV per channel; ``edges`` the median edges and
 the drift; ``combine`` runs the outline, primary, shared and internal
