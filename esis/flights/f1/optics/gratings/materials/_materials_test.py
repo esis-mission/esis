@@ -1,4 +1,5 @@
 import pathlib
+import pytest
 import numpy as np
 import astropy.units as u
 import named_arrays as na
@@ -61,3 +62,34 @@ def test_multilayer_witness_fit():
 def test_multilayer_fit():
     r = esis.flights.f1.optics.gratings.materials.multilayer_fit()
     assert isinstance(r, optika.materials.MultilayerMirror)
+
+
+def test_multilayer_fit_time() -> None:
+    """
+    Oxide grown since the measurement tops the coating and lowers its reflectivity.
+
+    When the witnesses were measured, the coating is the witness fit on glass.
+    """
+    materials = esis.flights.f1.optics.gratings.materials
+    witness = materials.multilayer_witness_fit()
+    measured = materials.multilayer_fit(time=materials.time_measurement)
+    flight = materials.multilayer_fit()
+
+    assert len(measured.layers) == len(witness.layers)
+    assert len(flight.layers) == len(witness.layers) + 1
+    assert 0 * u.nm < flight.layers[0].thickness < 1 * u.nm
+
+    angle = 4 * u.deg
+    rays = optika.rays.RayVectorArray(
+        wavelength=esis.flights.f1.spectrum.O_V.wavelength,
+        direction=na.Cartesian3dVectorArray(np.sin(angle), 0, np.cos(angle)),
+    )
+    normal = na.Cartesian3dVectorArray(0, 0, -1)
+    assert flight.efficiency(rays, normal) < measured.efficiency(rays, normal)
+
+
+def test_multilayer_fit_before_measurement() -> None:
+    """The oxide the witnesses were measured with cannot be taken off the fit."""
+    materials = esis.flights.f1.optics.gratings.materials
+    with pytest.raises(ValueError):
+        materials.multilayer_fit(time=materials.time_measurement - 1 * u.day)
