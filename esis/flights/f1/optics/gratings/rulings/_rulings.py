@@ -131,10 +131,12 @@ def ruling_measurement(
 
     The total efficiency of the gratings is given by
     :func:`~esis.flights.f1.optics.gratings.efficiencies.efficiency_vs_wavelength()`,
-    and the efficiency of the multilayer coating is given by
-    :func:`~esis.flights.f1.optics.gratings.materials.multilayer_fit()`.
+    and the efficiency of the multilayer coating when it was measured is given by
+    :func:`~esis.flights.f1.optics.gratings.materials.multilayer_fit()` at
+    :data:`~esis.flights.f1.optics.gratings.efficiencies.time_measurement`.
     This function takes the ratio of those two functions to estimate the
-    efficiency of the rulings.
+    efficiency of the rulings, which, unlike the coating, did not change
+    before the flight.
 
     The coating is evaluated on the effective rays of the rulings, given by
     :meth:`~optika.rulings.AbstractRulings.incident_effective`, as a raytrace
@@ -265,7 +267,9 @@ def ruling_measurement(
         normal=normal,
     )
 
-    coating = gratings.materials.multilayer_fit()
+    coating = gratings.materials.multilayer_fit(
+        time=gratings.efficiencies.time_measurement,
+    )
 
     efficiency_coating = coating.efficiency(
         rays=rays,
