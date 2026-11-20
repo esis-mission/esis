@@ -55,6 +55,16 @@ export CUDA_HOME=${CUDA_HOME:-$HOME/linfit/cuda}
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$CUDA_HOME/nvvm/lib64:$LD_LIBRARY_PATH
 mkdir -p "$DIRECTORY"
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
+# the fit must run the code of this checkout: refuse a venv whose esis is
+# installed from somewhere else, and log the commit
+ROOT=$(realpath "$(git rev-parse --show-toplevel)")
+FOUND=$(python -c "import pathlib, esis; print(pathlib.Path(esis.__file__).resolve().parents[1])")
+if [ "$FOUND" != "$ROOT" ]; then
+  echo "esis imports from $FOUND, not from this checkout $ROOT;" \
+    "set ESIS_VENV to a venv with this checkout installed (pip install -e)" >&2
+  exit 2
+fi
+echo "esis $(git rev-parse HEAD)$(git diff --quiet HEAD -- "$ROOT" || echo ' (modified)') from $ROOT"
 case "$COMMAND" in
   channel|pointing) python reproduce.py "$COMMAND" "${SLURM_ARRAY_TASK_ID:-0}" "$DIRECTORY" ;;
   edges|combine|polish|align|defocus|gather|fieldstop|coregister|accept|converged) python reproduce.py "$COMMAND" "$DIRECTORY" ;;

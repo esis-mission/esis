@@ -24,11 +24,14 @@
 #
 # When a pass ends, a job submits the next pass or the final stages, so the
 # whole procedure needs only this command.  Every job's log is beside its
-# output.  Environment: ESIS_VENV (the virtual environment), ESIS_PARTITION
-# (default gpufairshare), ESIS_EXCLUDE (nodes to avoid, default the ones
-# whose GPUs are too old for the torch build), ESIS_CPU_PARTITION (for the
-# decisions and the record, default unsafe), and the ESIS_* settings of
-# reproduce.py.
+# output.  <dir>/provenance.txt records the commit and the installed
+# packages.  Environment: ESIS_VENV (the virtual environment, which must have
+# this checkout installed; the run stops if esis imports from elsewhere),
+# ESIS_PARTITION (default gpufairshare), ESIS_ACCOUNT (default the one in
+# reproduce.sbatch), ESIS_GPU (a GPU type, e.g. a40), ESIS_EXCLUDE (nodes to
+# avoid, default the ones whose GPUs are too old for the torch build),
+# ESIS_CPU_PARTITION (for the decisions and the record, default unsafe), and
+# the ESIS_* settings of reproduce.py.
 #
 # Internal forms, used by the jobs themselves:
 #
@@ -50,8 +53,24 @@ export ESIS_DRIFT_DEGREE=${ESIS_DRIFT_DEGREE:-3}
 export ESIS_DEFOCUS_DEGREE=${ESIS_DEFOCUS_DEGREE:-2}
 MAX=${ESIS_MAX_PASSES:-4}
 GPU="--partition=${ESIS_PARTITION:-gpufairshare} --exclude=${ESIS_EXCLUDE:-gpu[001-015,021-025,053,059-061]}"
+if [ -n "${ESIS_ACCOUNT:-}" ]; then GPU="$GPU --account=$ESIS_ACCOUNT"; fi
+if [ -n "${ESIS_GPU:-}" ]; then GPU="$GPU --gres=gpu:$ESIS_GPU:1"; fi
 CPU="--partition=${ESIS_CPU_PARTITION:-unsafe} --gres=none"
 mkdir -p "$D"
+if [ "$STEP" = start ]; then
+  # fail now, not in the first job, when the venv would run other code
+  # shellcheck disable=SC1091
+  source "${ESIS_VENV:-$HOME/venvs/linfit}/bin/activate"
+  ROOT=$(realpath "$(git rev-parse --show-toplevel)")
+  FOUND=$(python -c "import pathlib, esis; print(pathlib.Path(esis.__file__).resolve().parents[1])")
+  if [ "$FOUND" != "$ROOT" ]; then
+    echo "esis imports from $FOUND, not from this checkout $ROOT;" \
+      "set ESIS_VENV to a venv with this checkout installed (pip install -e)" >&2
+    exit 2
+  fi
+  git diff --quiet HEAD -- "$ROOT" || echo "warning: $ROOT has uncommitted changes" >&2
+  { git rev-parse HEAD; git diff --stat HEAD -- "$ROOT"; pip freeze; } > "$D/provenance.txt"
+fi
 
 # submit one stage, after the jobs in $DEP, and print its job id:
 #   run <name> <time> <directory> <sbatch options and arguments...>
