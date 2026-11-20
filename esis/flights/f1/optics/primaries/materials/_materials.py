@@ -7,6 +7,7 @@ import named_arrays as na
 import optika
 import esis
 from esis import _caching
+from ... import _oxide
 
 __all__ = [
     "time_coating",
@@ -340,18 +341,39 @@ def _multilayer_witness_fit(
     return _multilayer(*fit.x)
 
 
-def multilayer_fit() -> optika.materials.MultilayerMirror:
+def multilayer_fit(
+    time: astropy.time.Time = _oxide.time_flight,
+) -> optika.materials.MultilayerMirror:
     """
-    Modify the result of :func:`multilayer_witness_fit` to have the correct substrate.
+    Model the coating of the primary mirror at a given time.
 
+    The model is based on :func:`multilayer_witness_fit`.
     The witness sample has a silicon substrate and the primary has a glass substrate.
     So this function changes the substrate from silicon to glass and modifies the
     roughness to be consistent with the actual primary mirror.
 
+    The SiC on top of the coating kept oxidizing after the witness was
+    measured, the day after it was coated, so this function puts the SiO2
+    which grew between :data:`time_measurement` and `time` on top of the fit.
+    The oxide grows by about the same thickness in each decade of time since
+    the coating, at a rate derived from the aging of sputtered SiC measured
+    by :cite:t:`Schwarcz1994`, which gives about 0.5 nm by the flight.
+    The oxide the witness already had when it was measured is part of the fit.
+    The new oxide takes the interface width of the top of the fit, so that
+    the coating tends to the fit as the oxide thins to nothing.
+
+    Parameters
+    ----------
+    time
+        When to model the coating. It must not be before
+        :data:`time_measurement`. The default is the day of the flight,
+        2019 September 30.
+
     Examples
     --------
-    Plot the theoretical reflectivity of this multilayer stack vs. the
-    theoretical reflectivity of :func:`multilayer_witness_fit`.
+    Plot the theoretical reflectivity of this multilayer stack, when the
+    witness was measured and at the flight, vs. the theoretical reflectivity
+    of :func:`multilayer_witness_fit`.
 
     .. jupyter-execute::
 
@@ -381,6 +403,9 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
 
         # Initialize the multilayer stacks
         multilayer_witness_fit = primaries.materials.multilayer_witness_fit()
+        multilayer_measured = primaries.materials.multilayer_fit(
+            time=primaries.materials.time_measurement,
+        )
         multilayer_fit = primaries.materials.multilayer_fit()
 
         # Define the vector normal to the multilayer stack
@@ -388,6 +413,7 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
 
         # Compute the reflectivity of the multilayer for the given incident rays
         reflectivity_witness = multilayer_witness_fit.efficiency(rays, normal)
+        reflectivity_measured = multilayer_measured.efficiency(rays, normal)
         reflectivity_fit = multilayer_fit.efficiency(rays, normal)
 
         # Plot the reflectivities as a function of wavelength
@@ -402,10 +428,17 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
             );
             na.plt.plot(
                 wavelength,
+                reflectivity_measured,
+                ax=ax,
+                axis="wavelength",
+                label="primary fit, when the witness was measured",
+            );
+            na.plt.plot(
+                wavelength,
                 reflectivity_fit,
                 ax=ax,
                 axis="wavelength",
-                label="primary fit",
+                label="primary fit, at the flight",
             );
             ax.set_xlabel(f"wavelength ({ax.get_xlabel()})");
             ax.set_ylabel("reflectivity");
@@ -467,12 +500,22 @@ def multilayer_fit() -> optika.materials.MultilayerMirror:
             ax.set_ylabel("reflectivity");
             ax.legend();
     """
+    thickness_oxide = _oxide.thickness_growth(
+        time_coating=time_coating,
+        time_start=time_measurement,
+        time_stop=time,
+    )
+
     result = multilayer_design()
     witness = multilayer_witness_fit()
 
-    result.layers[+0].interface.width = witness.layers[~1].interface.width
-    result.layers[~1] = witness.layers[~1]
-    result.layers[~0] = witness.layers[~0]
+    oxide = result.layers[0]
+    oxide.thickness = thickness_oxide
+    oxide.interface.width = witness.layers[0].interface.width
+
+    result.layers = list(witness.layers)
+    if thickness_oxide > 0:
+        result.layers.insert(0, oxide)
 
     result.substrate.interface.width = ([5.38, 5.68] * u.AA).mean()
 

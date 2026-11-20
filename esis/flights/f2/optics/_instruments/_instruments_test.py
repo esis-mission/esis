@@ -4,7 +4,9 @@ import pytest
 import numpy as np
 import astropy.units as u
 import named_arrays as na
+import optika
 import esis
+from . import _instruments
 
 
 def _assert_grating_certain(
@@ -141,6 +143,41 @@ def test_primary_specifications(design: Callable[..., esis.optics.Instrument]):
     assert primary.microroughness == 1 * u.nm
 
 
+@pytest.mark.parametrize(
+    "design",
+    [
+        esis.flights.f2.optics.design_proposed,
+        esis.flights.f2.optics.design_guess,
+        esis.flights.f2.optics.design_single,
+        esis.flights.f2.optics.design,
+    ],
+)
+def test_efficiency_groove(design: Callable[..., esis.optics.Instrument]):
+    """
+    Check the groove efficiency of every EUV design of ESIS-II.
+
+    The grooves should send the quoted fraction of the light into first
+    order at both target lines, at an angle of incidence it was not given at.
+    """
+    result = design(num_distribution=0)
+    wavelength = na.ScalarArray(
+        ndarray=u.Quantity(
+            [esis.flights.f2.wavelength_Ne_VII, esis.flights.f2.wavelength_Si_XII]
+        ),
+        axes="wavelength",
+    )
+    angle = 5 * u.deg
+    rays = optika.rays.RayVectorArray(
+        wavelength=wavelength,
+        direction=na.Cartesian3dVectorArray(np.sin(angle), 0, np.cos(angle)),
+    )
+    efficiency = result.grating.rulings.efficiency(
+        rays=rays,
+        normal=na.Cartesian3dVectorArray(0, 0, -1),
+    )
+    assert np.all(efficiency == _instruments.efficiency_groove)
+
+
 @pytest.mark.parametrize("num_distribution", [0, 11])
 def test_design_single(num_distribution: int):
     result = esis.flights.f2.optics.design_single(
@@ -165,6 +202,7 @@ def test_design_visible(num_distribution: int):
         num_distribution=num_distribution,
     )
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+    assert isinstance(result.grating.rulings, optika.rulings.SawtoothRulings)
 
     euv = esis.flights.f2.optics.design(
         num_distribution=num_distribution,

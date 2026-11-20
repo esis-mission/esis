@@ -11,6 +11,21 @@ def thin_film_design() -> optika.materials.ThinFilmFilter:
     """
     Load a model of the thin-film filter design.
 
+    The filters are 100 nm of Al on a nickel mesh. Al grows an oxide in air,
+    on both sides of the film, and the oxide absorbs strongly in the EUV, so
+    the transmission of a filter depends mostly on how old it is.
+    :cite:t:`Powell1990` found that filters transmit about as a model with
+    18 Å of Al2O3 does near the time they are made, and as one with 50 to
+    100 Å does once they have aged for a year or more. The ESIS-I filters
+    were made in early 2019, about seven months before the flight.
+
+    This model puts 2 nm of amorphous Al2O3 on each side of the film. That is
+    a single value for every channel, between the 1.4 and 3.0 nm per side
+    which the brightness of the flight images at O V needs once the primary
+    and the gratings are modeled as they were at the flight. The channels
+    differ by more than one oxide can explain, and those differences are not
+    modeled here.
+
     Examples
     --------
     Plot the transmissivity of the thin-film filter over the EUV wavelength
@@ -76,7 +91,7 @@ def thin_film_design() -> optika.materials.ThinFilmFilter:
                 is_amorphous=True,
                 table="palik",
             ),
-            thickness=4 * u.nm,
+            thickness=2 * u.nm,
             kwargs_plot=dict(
                 color="gray",
             ),

@@ -92,6 +92,38 @@ jobs:
           restore-keys: |
             scene-dem-${{ steps.chianti.outputs.version }}-
 
+      # The reports search JSOC for AIA images and download them, and a
+      # runner that cannot reach JSOC, as happens now and then, fails the
+      # build, so the images and the searches for them are cached. sdo reuses
+      # an image it has downloaded, and caches its searches by their
+      # arguments, so a build which restores them all does not contact JSOC.
+      # Only the Level 1 images are cached, named as files, since a pattern
+      # which names a directory caches all of it: sdo prepares the Level 1.5
+      # images beside them without JSOC, and each is several times the size.
+      - name: Ask which version of sdo is installed
+        id: sdo
+        run: |
+          python -c "
+          import importlib.metadata
+          print('version=' + importlib.metadata.version('solar-dynamics-observatory'))
+          " >> "$GITHUB_OUTPUT"
+
+      - name: Restore the AIA images and the searches for them
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.sdo/cache/SUM*/**/image_lev1.fits
+            ~/.sdo/cache/sdo/aia/_data/_urls
+          # A new key when the reports or sdo change, so that what they search
+          # for and download anew is saved; joblib itself decides whether the
+          # searches it holds were made by the same code
+          key: >-
+            sdo-${{ steps.sdo.outputs.version }}-${{
+            hashFiles('docs/**', 'esis/**/*.py') }}
+          restore-keys: |
+            sdo-${{ steps.sdo.outputs.version }}-
+            sdo-
+
       - name: Build with Sphinx
         env:
           JSOC_EMAIL: "roytsmart@gmail.com"

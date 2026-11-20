@@ -546,11 +546,33 @@ def as_built_unfocused(
         axis=axis_channel,
     )
 
-    # the measured figure and finish of each grating, in the same order
-    result.grating.slope_error = na.ScalarArray(
-        ndarray=[2.05, 2.00, 1.70, 2.00] * u.urad,
-        axes=axis_channel,
+    # The measured figure of each grating raises its surface without tilting
+    # it. The gratings are the stop, so the rays start from the raised
+    # surface, and the figure moves them by about its height, a few
+    # nanometers. The pixels which were not measured are at the edge of the
+    # clear aperture or beyond it, and the figure error is taken to be zero
+    # there.
+    grating = result.grating
+    axis_figure = ("grating_x", "grating_y")
+    grating.sag = optika.sags.FigureErrorSag(
+        base=grating.sag,
+        figure_error=gratings.figures.figure_measurement(
+            manufacturing_number=grating.manufacturing_number,
+            aperture=grating.surface.aperture,
+            axis_x=axis_figure[0],
+            axis_y=axis_figure[1],
+        ),
+        axis=axis_figure,
+        parameters_slope_error=grating.sag.parameters_slope_error,
+        parameters_roughness=grating.sag.parameters_roughness,
+        parameters_microroughness=grating.sag.parameters_microroughness,
     )
+
+    # The slope error of each grating is worked out from our own measurement
+    # of its figure, over its clear aperture, with the step and the kernel of
+    # its specification. The roughness and the microroughness are the
+    # vendor's measurements, in the same order as the serial numbers.
+    result.grating.slope_error = grating.sag.slope_error(grating.surface.aperture)
     result.grating.roughness = na.ScalarArray(
         ndarray=[1.75, 1.75, 1.40, 1.50] * u.nm,
         axes=axis_channel,
