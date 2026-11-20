@@ -1,6 +1,8 @@
 import dataclasses
 import pytest
 import numpy as np
+import matplotlib.colors
+import matplotlib.patches
 import matplotlib.pyplot as plt
 import astropy.units as u
 import astropy.constants
@@ -216,6 +218,23 @@ class AbstractTestAbstractInstrument(
         assert axs[0].has_data()
         assert not axs[1].has_data()
         assert not axs[1].texts
+
+        plt.close(fig)
+
+    def test_schematic_primary_kwargs_footprint(
+        self,
+        a: esis.optics.abc.AbstractInstrument,
+    ) -> None:
+        """The kwargs given for the footprint override its default colors."""
+        fig, ax = plt.subplots()
+
+        a.schematic_primary(ax=ax, kwargs_footprint=dict(edgecolor="black"))
+
+        polygon = matplotlib.patches.Polygon
+        footprints = [p for p in ax.patches if isinstance(p, polygon)]
+        assert footprints
+        for footprint in footprints:
+            assert matplotlib.colors.same_color(footprint.get_edgecolor(), "black")
 
         plt.close(fig)
 

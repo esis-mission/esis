@@ -840,9 +840,12 @@ class AbstractInstrument(
         if kwargs_footprint is None:
             kwargs_footprint = dict()
 
-        kwargs_footprint = kwargs_footprint | dict(
-            facecolor="none",
-            edgecolor="tab:orange",
+        kwargs_footprint = (
+            dict(
+                facecolor="none",
+                edgecolor="tab:orange",
+            )
+            | kwargs_footprint
         )
 
         shape = instrument.system.shape
