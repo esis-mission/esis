@@ -27,8 +27,9 @@
 # output.  <dir>/provenance.txt records the commit and the installed
 # packages.  Environment: ESIS_VENV (the virtual environment, which must have
 # this checkout installed; the run stops if esis imports from elsewhere),
-# ESIS_PARTITION (default gpufairshare), ESIS_ACCOUNT (default the one in
-# reproduce.sbatch), ESIS_GPU (a GPU type, e.g. a40), ESIS_EXCLUDE (nodes to
+# ESIS_PARTITION (default gpufairshare), ESIS_ACCOUNT (the accounts for the
+# GPU stages, separated by commas, default the one in reproduce.sbatch; the
+# work is spread among them), ESIS_GPU (a GPU type, e.g. a40), ESIS_EXCLUDE (nodes to
 # avoid, default the ones whose GPUs are too old for the torch build),
 # ESIS_CPU_PARTITION (for the decisions and the record, default unsafe), and
 # the ESIS_* settings of reproduce.py.
@@ -53,8 +54,8 @@ export ESIS_DRIFT_DEGREE=${ESIS_DRIFT_DEGREE:-3}
 export ESIS_DEFOCUS_DEGREE=${ESIS_DEFOCUS_DEGREE:-2}
 MAX=${ESIS_MAX_PASSES:-4}
 GPU="--partition=${ESIS_PARTITION:-gpufairshare} --exclude=${ESIS_EXCLUDE:-gpu[001-015,021-025,053,059-061]}"
-if [ -n "${ESIS_ACCOUNT:-}" ]; then GPU="$GPU --account=$ESIS_ACCOUNT"; fi
 if [ -n "${ESIS_GPU:-}" ]; then GPU="$GPU --gres=gpu:$ESIS_GPU:1"; fi
+IFS=, read -r -a ACCOUNTS <<< "${ESIS_ACCOUNT:-}"
 CPU="--partition=${ESIS_CPU_PARTITION:-unsafe} --gres=none"
 mkdir -p "$D"
 if [ "$STEP" = start ]; then
@@ -83,6 +84,43 @@ run() {
     --output="$dir/%x_%A_%a.out" --export=ALL "$@"
 }
 
+# submit one stage on the GPUs, as run does, and print its job ids joined by
+# colons, ready for afterok.  With several accounts in ESIS_ACCOUNT, whose GPU
+# limits add up, single jobs take them in turn, and an array --array=a-b is
+# dealt among them as one array per account over interleaved indices (a-b:n,
+# a+1-b:n, ...), each task keeping its own index.
+gpu() {
+  local name=$1 time=$2 dir=$3 n=${#ACCOUNTS[@]} turn first last j ids=""
+  local arg args=()
+  shift 3
+  if [ "$n" = 0 ]; then
+    # shellcheck disable=SC2086
+    run "$name" "$time" "$dir" $GPU "$@"
+    return
+  fi
+  for arg in "$@"; do
+    if [[ $arg =~ ^--array=([0-9]+)-([0-9]+)$ ]]; then
+      first=${BASH_REMATCH[1]}
+      last=${BASH_REMATCH[2]}
+    else
+      args+=("$arg")
+    fi
+  done
+  if [ -z "${first:-}" ]; then
+    turn=$(cat "$D/.turn" 2>/dev/null || echo 0)
+    echo $(((turn + 1) % n)) > "$D/.turn"
+    # shellcheck disable=SC2086
+    run "$name" "$time" "$dir" $GPU --account="${ACCOUNTS[$turn]}" "$@"
+    return
+  fi
+  for ((j = 0; j < n && first + j <= last; j++)); do
+    # shellcheck disable=SC2086
+    ids="$ids:$(run "$name" "$time" "$dir" $GPU --account="${ACCOUNTS[$j]}" \
+      --array="$((first + j))-$last:$n" "${args[@]}")"
+  done
+  echo "${ids#:}"
+}
+
 submit_pass() {
   local k=$1
   local P="$D/pass_$k"
@@ -92,7 +130,7 @@ submit_pass() {
   if [ "$k" = 0 ]; then
     export ESIS_FIELD_STOP=regular
     # shellcheck disable=SC2086
-    H=$(run channel 12:00:00 "$P" $GPU --array=0-3 reproduce.sbatch channel "$P")
+    H=$(gpu channel 12:00:00 "$P" --array=0-3 reproduce.sbatch channel "$P")
     DEP="--dependency=afterok:$H"
   else
     cp "$D/pass_$((k - 1))/field_stop.ecsv" "$P/field_stop_input.ecsv"
@@ -101,17 +139,17 @@ submit_pass() {
   fi
   # shellcheck disable=SC2086
   {
-    E=$(run edges 04:00:00 "$P" $GPU reproduce.sbatch edges "$P")
+    E=$(gpu edges 04:00:00 "$P" reproduce.sbatch edges "$P")
     DEP="--dependency=afterok:$E"
-    C=$(run combine 12:00:00 "$P" $GPU reproduce.sbatch combine "$P")
+    C=$(gpu combine 12:00:00 "$P" reproduce.sbatch combine "$P")
     DEP="--dependency=afterok:$C"
-    F=$(run defocus 04:00:00 "$P" $GPU reproduce.sbatch defocus "$P")
+    F=$(gpu defocus 04:00:00 "$P" reproduce.sbatch defocus "$P")
     DEP="--dependency=afterok:$F"
-    T=$(run pointing 08:00:00 "$P" $GPU --array=0-29 reproduce.sbatch pointing "$P")
+    T=$(gpu pointing 08:00:00 "$P" --array=0-29 reproduce.sbatch pointing "$P")
     DEP="--dependency=afterok:$T"
-    G=$(run gather 00:30:00 "$P" $GPU reproduce.sbatch gather "$P")
+    G=$(gpu gather 00:30:00 "$P" reproduce.sbatch gather "$P")
     DEP="--dependency=afterok:$G"
-    S=$(run fieldstop 04:00:00 "$P" $GPU reproduce.sbatch fieldstop "$P")
+    S=$(gpu fieldstop 04:00:00 "$P" reproduce.sbatch fieldstop "$P")
     DEP="--dependency=afterok:$S"
     N=$(run next 00:30:00 "$P" $CPU --cpus-per-task=2 --mem=8G reproduce.sbatch next "$D" "$k")
   }
@@ -126,24 +164,24 @@ submit_final() {
   DEP=""
   # shellcheck disable=SC2086
   {
-    A=$(run accept 06:00:00 "$P" $GPU reproduce.sbatch accept "$P")
-    R=$(run coregister 04:00:00 "$P" $GPU reproduce.sbatch coregister "$P")
+    A=$(gpu accept 06:00:00 "$P" reproduce.sbatch accept "$P")
+    R=$(gpu coregister 04:00:00 "$P" reproduce.sbatch coregister "$P")
     DEP="--dependency=afterok:$R"
-    AC=$(ESIS_COREGISTERED=1 run accept-co 06:00:00 "$P" $GPU reproduce.sbatch accept "$P")
+    AC=$(ESIS_COREGISTERED=1 gpu accept-co 06:00:00 "$P" reproduce.sbatch accept "$P")
     # the same fit with the drift read from the straight edges, to compare
     mkdir -p "$Q"
     cp "$P"/channel_?.ecsv "$P/distortion_reference.ecsv" "$P/field_stop_input.ecsv" "$Q/"
     export ESIS_FIELD_STOP="$Q/field_stop_input.ecsv"
     DEP=""
-    QE=$(ESIS_DRIFT=edges run edges 04:00:00 "$Q" $GPU reproduce.sbatch edges "$Q")
+    QE=$(ESIS_DRIFT=edges gpu edges 04:00:00 "$Q" reproduce.sbatch edges "$Q")
     DEP="--dependency=afterok:$QE"
-    QF=$(run defocus 04:00:00 "$Q" $GPU reproduce.sbatch defocus "$Q")
+    QF=$(gpu defocus 04:00:00 "$Q" reproduce.sbatch defocus "$Q")
     DEP="--dependency=afterok:$QF"
-    QT=$(run pointing 08:00:00 "$Q" $GPU --array=0-29 reproduce.sbatch pointing "$Q")
+    QT=$(gpu pointing 08:00:00 "$Q" --array=0-29 reproduce.sbatch pointing "$Q")
     DEP="--dependency=afterok:$QT"
-    QG=$(run gather 00:30:00 "$Q" $GPU reproduce.sbatch gather "$Q")
+    QG=$(gpu gather 00:30:00 "$Q" reproduce.sbatch gather "$Q")
     DEP="--dependency=afterok:$QG"
-    QA=$(run accept 06:00:00 "$Q" $GPU reproduce.sbatch accept "$Q")
+    QA=$(gpu accept 06:00:00 "$Q" reproduce.sbatch accept "$Q")
     export ESIS_FIELD_STOP="$P/field_stop_input.ecsv"
     passes=$(for j in $(seq 0 "$k"); do printf '%s ' "$D/pass_$j"; done)
     DEP="--dependency=afterok:$A:$AC:$QA"
