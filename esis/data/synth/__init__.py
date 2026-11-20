@@ -4,6 +4,7 @@ from ._scene_aia import scene_aia, scene_filtergram
 from ._scene_dem import scene_dem, scene_emission_measure
 from ._scene_vdem import scene_vdem
 from ._scene_iris import scene_iris
+from ._scene_sumer import scene_sumer_observation
 
 __all__ = [
     "scene_aia",
@@ -12,4 +13,5 @@ __all__ = [
     "scene_emission_measure",
     "scene_vdem",
     "scene_iris",
+    "scene_sumer_observation",
 ]

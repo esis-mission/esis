@@ -28,6 +28,7 @@ dependencies = [
     "msfc-ccd~=1.2",
     "solar-dynamics-observatory~=1.4",
     "interface-region-imaging-spectrograph~=1.0,>=1.0.1",
+    "solar-and-heliospheric-observatory~=0.1",
     "utu~=0.7",
     "fiasco~=0.9.0",
     "zarr~=3.0",
