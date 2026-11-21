@@ -320,6 +320,13 @@ def design_full(
             ),
         )
 
+    # the sensor travel per unit of grating travel along the beam that keeps
+    # the image in focus: the longitudinal magnification, m^2, about 16;
+    # measured on the as-built model it is 16.9 on every channel (the O V
+    # spot changes by 58--59 um rms per mm of grating travel and by
+    # 3.4--3.5 um per mm of sensor travel, in opposite senses)
+    kappa_focus = 17.0
+
     return esis.optics.Instrument(
         name="ESIS 1 final design (all channels)",
         axis_channel=axis_channel,
@@ -333,6 +340,7 @@ def design_full(
         wavelength=grid.wavelength,
         field=grid.field,
         pupil=grid.pupil,
+        kappa_focus=kappa_focus,
     )
 
 
@@ -909,7 +917,6 @@ def distortion_fit(
     grid: None | optika.vectors.ObjectVectorArray = None,
     axis_channel: str = "channel",
     axis_time: None | str = None,
-    channel_offsets: bool = False,
 ) -> esis.optics.Instrument:
     """
     Apply the best-fit distortion parameters to the ESIS-I :func:`as_built`.
@@ -938,15 +945,6 @@ def distortion_fit(
     channel's windows (:func:`fit_distortion_pointing`).  The optics are
     otherwise held at the reference fit.
 
-    If `channel_offsets` is also set, each channel's own pointing offset from
-    ``_data/coregistration.ecsv`` is added: the registration of the channels
-    with one another that remains after the focus of each sector, measured
-    empirically by :func:`fit_coregistration`.  It is an option rather than
-    a stage of the fit, since it is twelve numbers with no mechanism behind
-    them; it tightens the registration of the channels by a few hundredths
-    of a pixel.  The offsets vanish at the reference frame, so without
-    `axis_time` they have no effect.
-
     Parameters
     ----------
     grid
@@ -958,9 +956,6 @@ def distortion_fit(
         The name of the logical axis corresponding to changing time.
         If :obj:`None`, the model is that of the ``time=15`` reference fit;
         otherwise its time-dependent terms gain one element per Level-1 frame.
-    channel_offsets
-        Whether to add each channel's own empirical pointing offset through
-        the flight, from ``_data/coregistration.ecsv``.  Needs `axis_time`.
 
     Examples
     --------
@@ -1071,46 +1066,27 @@ def distortion_fit(
             u.Quantity(pointing["roll"]),
             axes=axis_time,
         )
-        # the focus of the primary, which moves each channel's sky without
-        # moving its windows: one focus per sector, or one for the whole primary
-        if "z_primary" in pointing.colnames:
-            z_primary = u.Quantity(pointing["z_primary"])
-            axes = (axis_time, axis_channel) if z_primary.ndim == 2 else (axis_time,)
-            model.primary_mirror.translation.z = (
-                model.primary_mirror.translation.z
-                + na.ScalarArray(z_primary, axes=axes)
+        # the focus of each sector of the primary, which moves its channel's
+        # sky without moving its windows
+        model.primary_mirror.translation.z = (
+            model.primary_mirror.translation.z
+            + na.ScalarArray(
+                u.Quantity(pointing["z_primary"]),
+                axes=(axis_time, axis_channel),
             )
-        # each channel's own pointing offset, the empirical registration left
-        # after the sector focus, kept as an option
-        if channel_offsets:
-            coregistration = astropy.table.QTable.read(
-                _directory_data / "coregistration.ecsv",
-                format="ascii.ecsv",
-            )
-            registered = np.asarray(coregistration["frame"])
-            index = [
-                int(np.flatnonzero(registered == t)[0])
-                for t in np.asarray(pointing["frame"])
-            ]
-            for name in ("pitch", "yaw"):
-                offset = na.ScalarArray(
-                    u.Quantity(coregistration[f"{name}_channel"][index]),
-                    axes=(axis_time, axis_channel),
-                )
-                setattr(model, name, getattr(model, name) + offset)
+        )
         # the per-frame grating offsets that follow each channel's windows
         for name in ("yaw_grating", "pitch_grating"):
-            if name in pointing.colnames:
-                offset = na.ScalarArray(
-                    u.Quantity(pointing[name]),
-                    axes=(axis_time, axis_channel),
-                )
-                attribute = name.split("_")[0]
-                setattr(
-                    model.grating,
-                    attribute,
-                    getattr(model.grating, attribute) + offset,
-                )
+            offset = na.ScalarArray(
+                u.Quantity(pointing[name]),
+                axes=(axis_time, axis_channel),
+            )
+            attribute = name.split("_")[0]
+            setattr(
+                model.grating,
+                attribute,
+                getattr(model.grating, attribute) + offset,
+            )
 
     return model
 

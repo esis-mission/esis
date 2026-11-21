@@ -11,7 +11,7 @@ sky in the grating and camera terms, to a tenth of a pixel;
 :func:`measure_channel_shifts` is its measurement on its own.
 """
 
-from ._parameters import DistortionParameters, KAPPA_FOCUS
+from ._parameters import DistortionParameters
 from ._merit import LinearMerit, correlation, correlation_raytraced
 from ._fit import fit_distortion, polish
 from ._alignment import (
@@ -37,7 +37,6 @@ from ._outline import (
 
 __all__ = [
     "DistortionParameters",
-    "KAPPA_FOCUS",
     "LinearMerit",
     "correlation",
     "correlation_raytraced",

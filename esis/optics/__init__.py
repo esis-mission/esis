@@ -14,7 +14,6 @@ from ._requirements import Requirements
 from ._instruments import Instrument
 from ._distortions import (
     DistortionParameters,
-    KAPPA_FOCUS,
     LinearMerit,
     correlation,
     correlation_raytraced,
@@ -72,7 +71,6 @@ __all__ = [
     "Requirements",
     "Instrument",
     "DistortionParameters",
-    "KAPPA_FOCUS",
     "LinearMerit",
     "correlation",
     "correlation_raytraced",

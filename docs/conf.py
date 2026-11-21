@@ -38,10 +38,6 @@ _pages = {
         "sha256:"
         "c3ad7ae2e04f32182be1b054cc26b4bc9958aac65e33024ab8f6febe6d57da5d"
     ),
-    "summary.html": (
-        "sha256:"
-        "902ccecca4fd505fba046a7d2101ea0e37c6430831e110d7f4e6b2f53abcaaa8"
-    ),
 }
 for _name, _hash in _pages.items():
     pooch.retrieve(

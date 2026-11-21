@@ -2,429 +2,436 @@
 """
 Reproduce the committed distortion fit of ESIS-I from the model and the data.
 
-The stages of :func:`esis.flights.f1.optics.fit_distortion_reference` are
-split across jobs, since the absolute fit alone is hours per channel.  The
-chain, in order::
+On one machine, the whole fit is one command::
+
+    python reproduce.py run <directory>
+
+It writes every pass of the iteration into ``<directory>`` and the tables to
+commit into ``<directory>/committed``.  A stage whose output is already there
+is not run again, so an interrupted run picks up where it stopped.  Compare
+the result with the committed tables, or with another run, with::
+
+    python reproduce.py compare <directory>/committed [<other>]
+
+The field stop is iterated with the fit.  Pass 0 fits every channel from
+scratch with the regular octagon of the design and measures the field stop
+through that fit; each later pass refits, from the window edges on, with the
+stop the pass before it measured, reusing pass 0's absolute fits of the
+channels, and measures it again.  The iteration ends at the first pass whose
+measurement does not turn the sides of the stop
+(:data:`esis.flights.f1.optics._fits._record.TOLERANCE`), after at most four
+passes; that pass is the fit, which is scored on frames across the flight and
+recorded.
+
+The stages of a pass, which a cluster can run as separate jobs (see
+``slurm/chain.sh``)::
 
     python reproduce.py channel <c> <directory>   # absolute fit of channel c
-    python reproduce.py edges <directory>         # window edges of every frame
-    python reproduce.py combine <directory>       # outline + shared + alignment
+    python reproduce.py edges <directory>         # window edges and their drift
+    python reproduce.py combine <directory>       # outline, shared and internal stages
     python reproduce.py defocus <directory>       # focus of each sector, per frame
     python reproduce.py pointing <t> <directory>  # pointing of frame t
-    python reproduce.py gather <directory>        # pointing rows -> ECSV
-    python reproduce.py accept <directory>        # score the fit on held-out frames
-
-The field stop is iterated with the fit, from the regular octagon of the
-design to the polygon the channels measure, see ``chain.sh``, which runs the
-whole procedure; these commands measure it, decide whether it has stopped
-moving, and write the committed tables from the passes::
-
+    python reproduce.py gather <directory>        # pointing rows -> one table
     python reproduce.py fieldstop <directory>     # measure the field stop
-    python reproduce.py converged <directory>     # exit 0 if it stayed, 3 if it moved
-    python reproduce.py record <out> <pass>...    # committed tables from the passes
+    python reproduce.py converged <directory>     # exit 0 if it stayed, 3 if not
+    python reproduce.py accept <directory>        # score the fit across the flight
+    python reproduce.py record <out> <pass>...    # the tables to commit
 
-``record`` takes ``--straight <directory>``, the same fit with the drift
-read from the straight edges (ESIS_DRIFT=edges), whose registration it keeps
-to compare against.
+Each pass is fit with the field stop in ``field_stop_input.ecsv`` in its
+directory, or with the regular octagon if there is none.
 
-Three more commands work on a finished reference::
-
-    python reproduce.py polish <directory>      # shared + alignment, saved start
-    python reproduce.py align <directory>       # alignment only, in place
-    python reproduce.py coregister <directory>  # empirical channel offsets, a check
-
-``polish`` starts from ``start_reference.ecsv`` in the directory and carries
-its outline record into the result.  ``coregister`` measures what the focus
-of each sector leaves and writes ``coregistration.ecsv`` beside a copy of
-the pointing table with the offsets applied,
-``distortion_pointing_coregistered.ecsv``; with ESIS_COREGISTERED=1,
-``accept`` (and ``coalign.py``) read that copy and write their results with
-a ``_coregistered`` suffix, so the two models can be compared.
-
-Environment: ESIS_DEVICE (default ``cuda``; ``cpu`` or empty for the host),
-ESIS_WORKERS (default 6), ESIS_NUM_SCENE (sampling of the AIA scene,
-default 401), ESIS_SEED (seed of the capture and of the samples every
-channel is linearized on, in every command, default 0), ESIS_PRIMARY=1 to
-scan the primary, held at nominal otherwise, ESIS_DRIFT_DEGREE (polynomial
-that smooths the window drift, default 3; empty for none),
-ESIS_DEFOCUS_DEGREE (polynomial through each sector's focus, default 2),
-ESIS_DRIFT (``steps``, the default, or ``edges``: what ``edges`` reads the
-drift from), ESIS_COREGISTRATION_DEGREE (the
-same for ``coregister``, default 2), ESIS_COREGISTERED=1 to score the
-co-registered copy of the pointing table, and to depart from the committed
-configuration, ESIS_MERIT (``correlation`` or ``least_squares``),
-ESIS_FREE_ABSOLUTE, ESIS_FREE_SHARED, ESIS_WINDOW and ESIS_SKY (colon-separated
-field names), and ESIS_FIELD_STOP, a table of vertices of the field stop in
-place of the committed measurement (such as a ``field_stop.ecsv`` written by
-``fieldstop``, to iterate it), or ``regular`` for the octagon of the design.
+Options, given before the command, are also read from the environment:
+``--device`` (``ESIS_DEVICE``: ``cpu``, the default, or ``cuda`` for a GPU,
+which needs ``torch``), ``--workers`` (``ESIS_WORKERS``, the processes the
+capture and the channels are spread over, default 1), ``--seed``
+(``ESIS_SEED``, the seed of the capture and of the samples every channel is
+linearized on, default 0) and ``--num-scene`` (``ESIS_NUM_SCENE``, the
+sampling of the AIA scene, default 401: 2.1 arcsec, about 2.8 ESIS pixels).
 """
 
+from __future__ import annotations
+import argparse
 import logging
 import os
 import pathlib
-import re
+import shutil
 import sys
 
+import numpy as np
 import astropy.table
+import astropy.units as u
 import esis
 from esis.flights.f1.optics._fits import _fits, _record
+from esis.flights.f1.optics._instruments import _instruments
 
 # a dependency configures the root logger at INFO, which lets numba report
 # every device allocation
 logging.getLogger("numba").setLevel(logging.WARNING)
 
-DEVICE = os.environ.get("ESIS_DEVICE", "cuda")
-DEVICE = None if DEVICE.strip().lower() in ("", "cpu", "none") else DEVICE
-WORKERS = int(os.environ.get("ESIS_WORKERS", "6"))
-MERIT = os.environ.get("ESIS_MERIT", "correlation")
-PRIMARY = os.environ.get("ESIS_PRIMARY", "0") not in ("0", "false", "no")
-# 401 samples is 2.1 arcsec, about 2.8 ESIS pixels
-NUM_SCENE = int(os.environ.get("ESIS_NUM_SCENE", "401"))
-SEED = int(os.environ.get("ESIS_SEED", "0"))
-DRIFT_DEGREE = os.environ.get("ESIS_DRIFT_DEGREE", "3")
-DRIFT_DEGREE = int(DRIFT_DEGREE) if DRIFT_DEGREE else None
-COREGISTRATION_DEGREE = int(os.environ.get("ESIS_COREGISTRATION_DEGREE", "2"))
-DEFOCUS_DEGREE = int(os.environ.get("ESIS_DEFOCUS_DEGREE", "2"))
-COREGISTERED = os.environ.get("ESIS_COREGISTERED", "") not in ("", "0", "false", "no")
-FREE_ROLL = os.environ.get("ESIS_FREE_ROLL", "") not in ("", "0", "false", "no")
-SUFFIX = "_coregistered" if COREGISTERED else ""
-DRIFT = os.environ.get("ESIS_DRIFT", "steps") or "steps"
-FIELD_STOP = os.environ.get("ESIS_FIELD_STOP", "")
-if FIELD_STOP:
-    _fits.path_field_stop = None if FIELD_STOP == "regular" else FIELD_STOP
+NUM_CHANNEL = 4
+NUM_FRAME = 30
+"""The frames of :func:`esis.flights.f1.data.level_1`, the flight."""
+FRAME_REFERENCE = 15
+"""The frame the reference is fit to."""
+DRIFT_DEGREE = 3
+"""The degree of the polynomial in the frame index that smooths the window drift."""
+DEFOCUS_DEGREE = 2
+"""The degree of the polynomial in the frame index through each sector's focus."""
+MAX_PASSES = 4
 
-
-def _pointing(directory: pathlib.Path) -> pathlib.Path:
-    """Name the pointing table to score: the chain's, or the co-registered copy."""
-    return directory / f"distortion_pointing{SUFFIX}.ecsv"
-
-
-def _names(variable: str, default: tuple[str, ...]) -> tuple[str, ...]:
-    """Read a colon-separated list of field names from the environment."""
-    value = os.environ.get(variable)
-    if not value:
-        return default
-    # a comma would be split by Slurm's --export, so colons separate the names
-    return tuple(n for n in re.split(r"[:,\s]+", value) if n)
-
-
-FREE_ABSOLUTE = _names("ESIS_FREE_ABSOLUTE", _fits._FREE_ABSOLUTE)
-FREE_SHARED = _names("ESIS_FREE_SHARED", _fits._FREE_SHARED)
-WINDOW = _names("ESIS_WINDOW", _fits._WINDOW)
-SKY = _names("ESIS_SKY", _fits._SKY)
+options = argparse.Namespace(device=None, workers=1, seed=0, num_scene=401)
 
 
 def _channels(directory: pathlib.Path) -> list[esis.optics.DistortionParameters]:
     return [
         esis.optics.DistortionParameters.from_file(directory / f"channel_{c}.ecsv")
-        for c in range(4)
+        for c in range(NUM_CHANNEL)
     ]
 
 
+def _field_stop(directory: pathlib.Path) -> None:
+    """Fit with the pass's own field stop, or with the regular octagon."""
+    path = directory / "field_stop_input.ecsv"
+    _fits.path_field_stop = path if path.exists() else None
+
+
+def _read(directory: pathlib.Path, name: str) -> astropy.table.QTable:
+    return astropy.table.QTable.read(directory / name, format="ascii.ecsv")
+
+
 def channel(c: int, directory: pathlib.Path) -> None:
-    """Fit one channel absolutely and save it as a one-row ECSV."""
-    instrument = _fits._base(None)
-    scene, observation = _fits._frame(15, NUM_SCENE)
-    log = _fits._logger(directory, f"channel_{c}")
-    channel = instrument[dict(channel=c)]
-    p0 = esis.optics.DistortionParameters.from_instrument(channel)
-    merit = esis.optics.LinearMerit(
-        instrument=channel,
-        parameters=p0,
-        scene=scene,
-        observation=observation[dict(channel=c)],
-        device=DEVICE,
-        merit=MERIT,
-        seed=SEED,
-    )
-    log("free: " + ", ".join(FREE_ABSOLUTE))
-    fitted = esis.optics.fit_distortion(
-        objective=merit,
-        parameters=p0,
-        bounds=esis.flights.f1.optics.distortion_fit_bounds(p0),
-        workers=WORKERS,
-        free=FREE_ABSOLUTE,
-        popsize=15,
-        maxiter=80,
-        tol=0.0,
-        seed=SEED,
-        log=log,
-    )
-    fitted.to_file(
-        directory / f"channel_{c}.ecsv",
-        metadata=dict(
-            channel=c,
-            stage="absolute",
-            free=list(FREE_ABSOLUTE),
-            merit=MERIT,
-            popsize=15,
-            maxiter=80,
-            tol=0.0,
-            seed=SEED,
-            versions=_fits._versions(),
-        ),
-    )
-    log(
-        f"channel {c}: correlation {merit.correlation(fitted):.4f}, "
-        f"least-squares score {merit.score(fitted):.4f}"
+    """Fit one channel on its own and save it as a one-row table."""
+    _field_stop(directory)
+    _fits.fit_distortion_channel(
+        channel=c,
+        time=FRAME_REFERENCE,
+        num_scene=options.num_scene,
+        device=options.device,
+        workers=options.workers,
+        seed=options.seed,
+        path=directory / f"channel_{c}.ecsv",
+        directory=directory,
     )
 
 
 def edges(directory: pathlib.Path) -> None:
-    """Measure the window edges of every frame near the absolute fits' outlines."""
+    """Measure the window edges near the absolute fits' outlines, and their drift."""
+    _field_stop(directory)
     _fits.measure_window_edges(
         parameters=_channels(directory),
+        num_scene=options.num_scene,
+        frame_reference=FRAME_REFERENCE,
+        drift_degree=DRIFT_DEGREE,
         directory=directory,
         path=directory / "window_edges.ecsv",
         path_drift=directory / "window_drift.ecsv",
-        seed=SEED,
-        drift=DRIFT,
+        seed=options.seed,
     )
 
 
 def combine(directory: pathlib.Path) -> None:
-    """Run the outline, shared and internal stages from the saved per-channel fits."""
-    path_edges = directory / "window_edges.ecsv"
+    """Combine the channels' own fits into the reference."""
+    _field_stop(directory)
     _fits.fit_distortion_reference(
-        num_scene=NUM_SCENE,
-        device=DEVICE,
-        workers=WORKERS,
-        merit=MERIT,
-        channels=(),
         parameters=_channels(directory),
-        free_absolute=FREE_ABSOLUTE,
-        free_shared=FREE_SHARED,
-        edges=path_edges if path_edges.exists() else None,
-        window=WINDOW,
-        sky=SKY,
-        primary=PRIMARY,
+        edges=directory / "window_edges.ecsv",
+        time=FRAME_REFERENCE,
+        num_scene=options.num_scene,
+        device=options.device,
+        workers=options.workers,
+        seed=options.seed,
         path=directory / "distortion_reference.ecsv",
         directory=directory,
-        seed=SEED,
-    )
-
-
-def polish(directory: pathlib.Path) -> None:
-    """Rerun the shared polish and the alignment from a saved reference."""
-    path_start = directory / "start_reference.ecsv"
-    start = astropy.table.QTable.read(path_start, format="ascii.ecsv")
-    parameters = esis.optics.DistortionParameters.from_file(path_start)
-    path = directory / "distortion_reference.ecsv"
-    _fits.fit_distortion_reference(
-        num_scene=NUM_SCENE,
-        device=DEVICE,
-        workers=WORKERS,
-        merit=MERIT,
-        channels=(),
-        parameters=[_fits._channel(parameters, c) for c in range(4)],
-        free_absolute=FREE_ABSOLUTE,
-        free_shared=FREE_SHARED,
-        edges=None,
-        primary=False,
-        path=path,
-        directory=directory,
-        seed=SEED,
-    )
-    # the windows were placed by the start's outline stage: carry its record
-    result = astropy.table.QTable.read(path, format="ascii.ecsv")
-    for key in ("absolute", "outline"):
-        result.meta["stages"][key] = start.meta.get("stages", {}).get(key)
-        result.meta["scores"][key] = start.meta.get("scores", {}).get(key)
-    result.meta["stages"]["primary"] = start.meta.get("stages", {}).get("primary")
-    result.meta["start"] = dict(
-        provenance=start.meta.get("provenance"),
-        date=start.meta.get("date"),
-        commits=start.meta.get("commits"),
-        polish=f"shared polish and alignment rerun at num_scene={NUM_SCENE}",
-    )
-    result.write(path, format="ascii.ecsv", overwrite=True)
-
-
-def align(directory: pathlib.Path) -> None:
-    """Rerun only the internal alignment of the directory's reference, in place."""
-    path = directory / "distortion_reference.ecsv"
-    _fits.realign_distortion_reference(
-        reference=path,
-        num_scene=NUM_SCENE,
-        free_shared=FREE_SHARED,
-        path=path,
-        directory=directory,
-        seed=SEED,
     )
 
 
 def defocus(directory: pathlib.Path) -> None:
     """Measure the focus of each sector of the primary through the flight."""
-    path_drift = directory / "window_drift.ecsv"
+    _field_stop(directory)
     _fits.fit_defocus_history(
         reference=directory / "distortion_reference.ecsv",
-        num_scene=NUM_SCENE,
-        drift=path_drift if path_drift.exists() else None,
+        num_scene=options.num_scene,
+        frame_reference=FRAME_REFERENCE,
+        drift=directory / "window_drift.ecsv",
         drift_degree=DRIFT_DEGREE,
         degree=DEFOCUS_DEGREE,
         path=directory / "defocus.ecsv",
         directory=directory,
-        seed=SEED,
+        seed=options.seed,
     )
 
 
 def pointing(t: int, directory: pathlib.Path) -> None:
-    """Fit the pointing of one frame and save it as a one-row ECSV."""
+    """Fit the pointing of one frame and save it as a one-row table."""
+    _field_stop(directory)
     parameters = esis.optics.DistortionParameters.from_file(
         directory / "distortion_reference.ecsv"
     )
-    path_drift = directory / "window_drift.ecsv"
-    path_defocus = directory / "defocus.ecsv"
     _fits.fit_distortion_pointing(
         instrument=parameters.to_instrument(_fits._base(None)),
-        num_scene=NUM_SCENE,
-        device=DEVICE,
-        merit=MERIT,
+        num_scene=options.num_scene,
+        device=options.device,
+        frame_reference=FRAME_REFERENCE,
         frames=(t,),
-        drift=path_drift if path_drift.exists() else None,
+        drift=directory / "window_drift.ecsv",
         drift_degree=DRIFT_DEGREE,
-        defocus=path_defocus if path_defocus.exists() else None,
-        relative=False,
-        free_roll=FREE_ROLL,
+        defocus=directory / "defocus.ecsv",
         path=directory / f"pointing_{t:02d}.ecsv",
         directory=directory,
-        seed=SEED,
+        seed=options.seed,
     )
 
 
 def gather(directory: pathlib.Path) -> None:
-    """Gather the per-frame pointing rows into the committed table."""
-    tables = [
-        astropy.table.QTable.read(p, format="ascii.ecsv")
-        for p in sorted(directory.glob("pointing_*.ecsv"))
-    ]
+    """
+    Gather the per-frame pointing rows into one table, relative to the reference.
+
+    Raises
+    ------
+    FileNotFoundError
+        If a frame's row is missing.
+    """
+    paths = sorted(directory.glob("pointing_*.ecsv"))
+    if len(paths) != NUM_FRAME:
+        raise FileNotFoundError(f"{len(paths)} of {NUM_FRAME} frames in {directory}")
+    tables = [astropy.table.QTable.read(p, format="ascii.ecsv") for p in paths]
     table = astropy.table.vstack(tables, metadata_conflicts="silent")
     table.sort("frame")
     table.meta.update(tables[0].meta)
-    table.meta["environment"] = _fits._environment()
-    table = _fits.pointing_relative(table, frame=15)
+    table = _fits.pointing_relative(table, frame=FRAME_REFERENCE)
     table.write(
         directory / "distortion_pointing.ecsv", format="ascii.ecsv", overwrite=True
     )
-    print(f"{len(table)} frames -> {directory / 'distortion_pointing.ecsv'}")
 
 
 def fieldstop(directory: pathlib.Path) -> None:
     """Measure the shape of the field stop from every channel's O V window."""
+    _field_stop(directory)
     _fits.measure_field_stop(
         reference=esis.optics.DistortionParameters.from_file(
             directory / "distortion_reference.ecsv"
         ),
-        pointing=astropy.table.QTable.read(
-            directory / "distortion_pointing.ecsv", format="ascii.ecsv"
-        ),
-        num_scene=NUM_SCENE,
+        pointing=_read(directory, "distortion_pointing.ecsv"),
+        num_scene=options.num_scene,
         directory=directory,
         path=directory / "field_stop.ecsv",
         path_sides=directory / "field_stop_sides.ecsv",
-        seed=SEED,
+        seed=options.seed,
     )
 
 
-def converged(directory: pathlib.Path) -> int:
-    """Decide whether the directory's measurement of the field stop moved it."""
-    table = astropy.table.QTable.read(
-        directory / "field_stop.ecsv", format="ascii.ecsv"
-    )
+def converged(directory: pathlib.Path) -> bool:
+    """Decide whether the pass's measurement of the field stop moved it."""
+    table = _read(directory, "field_stop.ecsv")
     change = _record.field_stop_change(table)
     result = _record.field_stop_converged(table)
     print(
-        f"{directory}: the field stop moved by {change['shape_tilt_deg']:.4f} deg "
-        f"and {change['shape_offset_um']:.3f} um rms, scale "
-        f"{sum(change['scale']) / len(change['scale']):+.2e}; "
+        f"{directory}: the sides of the field stop turned by "
+        f"{change['shape_tilt_deg']:.4f} deg rms (tolerance {_record.TOLERANCE}) "
+        f"and moved by {change['shape_offset_um']:.3f} um rms; "
         + ("converged" if result else "not converged")
-        + f" (tolerance {_record.TOLERANCE})"
     )
-    return 0 if result else 3
-
-
-def record(arguments: list[str]) -> None:
-    """Write the committed tables from the passes of the iteration."""
-    straight = None
-    if "--straight" in arguments:
-        i = arguments.index("--straight")
-        straight = pathlib.Path(arguments[i + 1])
-        arguments = arguments[:i] + arguments[i + 2 :]
-    directory, *passes = (pathlib.Path(a) for a in arguments)
-    _record.record_distortion_fit(passes=passes, directory=directory, straight=straight)
-    print(f"{len(passes)} passes -> {directory}")
-
-
-def coregister(directory: pathlib.Path) -> None:
-    """Measure the channel offsets the sector focus leaves; the chain is untouched."""
-    pointing = astropy.table.QTable.read(
-        directory / "distortion_pointing.ecsv", format="ascii.ecsv"
-    )
-    table = _fits.fit_coregistration(
-        reference=directory / "distortion_reference.ecsv",
-        pointing=pointing,
-        num_scene=NUM_SCENE,
-        degree=COREGISTRATION_DEGREE,
-        path=directory / "coregistration.ecsv",
-        directory=directory,
-        seed=SEED,
-    )
-    path = directory / "distortion_pointing_coregistered.ecsv"
-    _fits.apply_coregistration(pointing, table).write(
-        path, format="ascii.ecsv", overwrite=True
-    )
-    print(f"channel offsets -> {directory / 'coregistration.ecsv'}, applied in {path}")
+    return result
 
 
 def accept(directory: pathlib.Path) -> None:
     """Score the reference on frames across the flight, without an inversion."""
-    path_edges = directory / "window_edges.ecsv"
+    _field_stop(directory)
     _fits.acceptance(
         reference=esis.optics.DistortionParameters.from_file(
             directory / "distortion_reference.ecsv"
         ),
-        pointing=astropy.table.QTable.read(_pointing(directory), format="ascii.ecsv"),
-        edges=(
-            astropy.table.QTable.read(path_edges, format="ascii.ecsv")
-            if path_edges.exists()
-            else None
-        ),
-        num_scene=NUM_SCENE,
-        device=DEVICE,
-        merit=MERIT,
-        path=directory / f"acceptance{SUFFIX}.ecsv",
+        pointing=_read(directory, "distortion_pointing.ecsv"),
+        edges=_read(directory, "window_edges.ecsv"),
+        num_scene=options.num_scene,
+        device=options.device,
+        path=directory / "acceptance.ecsv",
         directory=directory,
-        seed=SEED,
+        seed=options.seed,
     )
 
 
-if __name__ == "__main__":
-    command = sys.argv[1]
-    if command == "channel":
-        channel(int(sys.argv[2]), pathlib.Path(sys.argv[3]))
-    elif command == "edges":
-        edges(pathlib.Path(sys.argv[2]))
-    elif command == "combine":
-        combine(pathlib.Path(sys.argv[2]))
-    elif command == "polish":
-        polish(pathlib.Path(sys.argv[2]))
-    elif command == "align":
-        align(pathlib.Path(sys.argv[2]))
-    elif command == "defocus":
-        defocus(pathlib.Path(sys.argv[2]))
-    elif command == "pointing":
-        pointing(int(sys.argv[2]), pathlib.Path(sys.argv[3]))
-    elif command == "gather":
-        gather(pathlib.Path(sys.argv[2]))
-    elif command == "fieldstop":
-        fieldstop(pathlib.Path(sys.argv[2]))
-    elif command == "converged":
-        raise SystemExit(converged(pathlib.Path(sys.argv[2])))
-    elif command == "record":
-        record(sys.argv[2:])
-    elif command == "coregister":
-        coregister(pathlib.Path(sys.argv[2]))
-    elif command == "accept":
-        accept(pathlib.Path(sys.argv[2]))
+def record(directory: pathlib.Path, passes: list[pathlib.Path]) -> None:
+    """Write the tables to commit from the passes of the iteration."""
+    _record.record_distortion_fit(passes=passes, directory=directory)
+    print(f"{len(passes)} passes -> {directory}")
+
+
+def _stage(name: str, output: pathlib.Path, function, *args) -> None:
+    """Run a stage of :func:`run` unless its output is already there."""
+    if output.exists():
+        print(f"{name}: {output} exists, skipped")
+        return
+    print(f"{name} -> {output}", flush=True)
+    function(*args)
+
+
+def run_pass(directory: pathlib.Path, k: int) -> pathlib.Path:
+    """Run pass `k` of the iteration in this process."""
+    p = directory / f"pass_{k}"
+    p.mkdir(parents=True, exist_ok=True)
+    if k > 0:
+        if not (p / "field_stop_input.ecsv").exists():
+            shutil.copyfile(
+                directory / f"pass_{k - 1}" / "field_stop.ecsv",
+                p / "field_stop_input.ecsv",
+            )
+        for c in range(NUM_CHANNEL):
+            name = f"channel_{c}.ecsv"
+            if not (p / name).exists():
+                shutil.copyfile(directory / "pass_0" / name, p / name)
+    for c in range(NUM_CHANNEL):
+        _stage(f"pass {k} channel {c}", p / f"channel_{c}.ecsv", channel, c, p)
+    # the drift is written last, so it marks the stage done
+    _stage(f"pass {k} edges", p / "window_drift.ecsv", edges, p)
+    _stage(f"pass {k} combine", p / "distortion_reference.ecsv", combine, p)
+    _stage(f"pass {k} defocus", p / "defocus.ecsv", defocus, p)
+    for t in range(NUM_FRAME):
+        _stage(f"pass {k} pointing {t}", p / f"pointing_{t:02d}.ecsv", pointing, t, p)
+    _stage(f"pass {k} gather", p / "distortion_pointing.ecsv", gather, p)
+    _stage(f"pass {k} field stop", p / "field_stop.ecsv", fieldstop, p)
+    return p
+
+
+def run(directory: pathlib.Path) -> None:
+    """
+    Run the whole fit, iterating the field stop, and record it.
+
+    Raises
+    ------
+    SystemExit
+        If the field stop has not converged after :data:`MAX_PASSES` passes.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    passes = []
+    for k in range(MAX_PASSES):
+        passes.append(run_pass(directory, k))
+        # the fit with the regular octagon never ends the iteration
+        if converged(passes[-1]) and k > 0:
+            break
     else:
-        raise SystemExit(__doc__)
+        raise SystemExit(f"the field stop did not converge in {MAX_PASSES} passes")
+    final = passes[-1]
+    _stage("accept", final / "acceptance.ecsv", accept, final)
+    record(directory / "committed", passes)
+
+
+def compare(directory: pathlib.Path, other: None | pathlib.Path = None) -> None:
+    """
+    Compare a fit with the committed one, or with another fit.
+
+    Prints the differences that matter downstream: the pointing through the
+    flight, the focus of each sector, the drift of the windows, the vertices
+    of the field stop, the scores of the reference, and the registration of
+    the channels the acceptance measures.  The seed of the capture alone
+    moves the pointing by a few hundredths of an arcsecond and the
+    registration by about 0.02 px.
+    """
+    if other is None:
+        other = _instruments._directory_data
+    names = _record.TABLES + ("field_stop.ecsv",)
+    a = {n: _read(directory, n) for n in names if (directory / n).exists()}
+    b = {n: _read(other, n) for n in names if (other / n).exists()}
+    print(f"{directory} against {other} (whose values are in parentheses)")
+
+    pa, pb = a["distortion_pointing.ecsv"], b["distortion_pointing.ecsv"]
+    for name, unit in (
+        ("pitch", u.arcsec),
+        ("yaw", u.arcsec),
+        ("z_primary", u.um),
+        ("drift_x", u.pix),
+        ("drift_y", u.pix),
+    ):
+        d = np.asarray((pa[name] - pb[name]).to_value(unit))
+        print(f"  {name}: rms {_rms(d):.3f} {unit}, max {np.abs(d).max():.3f}")
+
+    fa, fb = a["field_stop.ecsv"], b["field_stop.ecsv"]
+    d = np.hypot(*(np.asarray((fa[k] - fb[k]).to_value(u.um)) for k in ("x", "y")))
+    print(f"  field stop vertices: rms {_rms(d):.2f} um, max {d.max():.2f}")
+
+    sa = a["distortion_reference.ecsv"].meta["scores"]
+    sb = b["distortion_reference.ecsv"].meta["scores"]
+    for stage in ("absolute", "shared"):
+        pairs = zip(sa[stage], sb[stage])
+        print(
+            f"  {stage} correlation: "
+            + ", ".join(f"{x:.4f} ({y:.4f})" for x, y in pairs)
+        )
+    ra = _record.registration_rms(a["acceptance.ecsv"], a["window_drift.ecsv"])
+    rb = _record.registration_rms(b["acceptance.ecsv"], b["window_drift.ecsv"])
+    for line in ra:
+        print(f"  registration {line}: {ra[line]:.3f} px ({rb[line]:.3f})")
+
+
+def _rms(values) -> float:
+    return float(np.sqrt(np.mean(np.square(values))))
+
+
+def configure(argv: None | list[str] = None) -> argparse.Namespace:
+    """
+    Read the options, from the arguments or the environment, into :data:`options`.
+
+    Parameters
+    ----------
+    argv
+        The arguments; if :obj:`None`, only the environment is read.
+
+    Returns
+    -------
+    The command and its arguments, and the options.
+    """
+    parser = argparse.ArgumentParser(
+        description="Reproduce the distortion fit of ESIS-I.",
+        epilog="The commands are listed in the docstring of this script.",
+    )
+    environ = os.environ.get
+    parser.add_argument("--device", default=environ("ESIS_DEVICE", "cpu"))
+    parser.add_argument("--workers", type=int, default=environ("ESIS_WORKERS", 1))
+    parser.add_argument("--seed", type=int, default=environ("ESIS_SEED", 0))
+    parser.add_argument("--num-scene", type=int, default=environ("ESIS_NUM_SCENE", 401))
+    if argv is not None:
+        parser.add_argument("command")
+        parser.add_argument("arguments", nargs="*")
+    parsed = parser.parse_args([] if argv is None else argv)
+    device = parsed.device.strip().lower()
+    options.device = None if device in ("", "cpu", "none") else parsed.device
+    options.workers = parsed.workers
+    options.seed = parsed.seed
+    options.num_scene = parsed.num_scene
+    return parsed
+
+
+def main(argv: list[str]) -> int:
+    """
+    Parse the options and run one command.
+
+    Raises
+    ------
+    SystemExit
+        If the command is not one of this script's.
+    """
+    parsed = configure(argv)
+    command = parsed.command
+    paths = [pathlib.Path(a) for a in parsed.arguments]
+    if command == "run":
+        run(*paths)
+    elif command == "channel":
+        channel(int(parsed.arguments[0]), paths[1])
+    elif command == "pointing":
+        pointing(int(parsed.arguments[0]), paths[1])
+    elif command in ("edges", "combine", "defocus", "gather", "fieldstop", "accept"):
+        globals()[command](*paths)
+    elif command == "converged":
+        return 0 if converged(*paths) else 3
+    elif command == "record":
+        record(paths[0], paths[1:])
+    elif command == "compare":
+        compare(*paths)
+    else:
+        raise SystemExit(f"unknown command {command!r}; see {__file__}")
+    return 0
+
+
+if __name__ == "__main__":
+    # a guard the worker processes of the capture need
+    raise SystemExit(main(sys.argv[1:]))

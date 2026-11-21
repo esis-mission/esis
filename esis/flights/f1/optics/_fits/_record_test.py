@@ -32,12 +32,13 @@ def test_field_stop_change():
 @pytest.mark.parametrize(
     "tilt, offset, scale, expected",
     [
+        # the passes of the validation run: settled, then the regular octagon
         (0.007, 0.08, 4e-4, True),
         (0.038, 1.13, -3e-4, True),
         (0.49, 1.20, -3.4e-3, False),
-        (0.007, 2.0, 0.0, False),
+        # the offsets and scales do not end the iteration, the tilts do
+        (0.007, 2.0, 2e-3, True),
         (0.08, 0.08, 0.0, False),
-        (0.007, 0.08, 2e-3, False),
     ],
 )
 def test_field_stop_converged(tilt, offset, scale, expected):
@@ -68,12 +69,10 @@ def test_record_distortion_fit(tmp_path: pathlib.Path):
         _pass(tmp_path / "pass_0", 0.5, stop=False),
         _pass(tmp_path / "pass_1", 0.005, stop=True),
     ]
-    straight = _pass(tmp_path / "straight", 0.0, stop=False)
     clocking = dict(north_deg=[-0.4] * 4, rotation_deg=-0.38)
     result = _record.record_distortion_fit(
         passes=passes,
         directory=tmp_path / "committed",
-        straight=straight,
         clocking=clocking,
     )
     vertices = astropy.table.QTable.read(_data / "field_stop.ecsv")
@@ -85,11 +84,7 @@ def test_record_distortion_fit(tmp_path: pathlib.Path):
     assert len(history[0]["outline_edges_px"]) == 4
     assert written.meta["clocking"] == clocking
     assert written.meta["parker2022"]["crota2_deg"] == _record.PARKER2022["crota2_deg"]
-    drift = astropy.table.QTable.read(tmp_path / "committed/window_drift.ecsv")
-    assert set(drift.meta["straight_edge_drift"]["acceptance_rms_px"]) == {
-        "He I",
-        "O V",
-    }
+    assert written.meta["history"]["tolerance_tilt_deg"] == 0.05
     for name in _record.TABLES:
         assert (tmp_path / "committed" / name).exists()
 
@@ -99,3 +94,15 @@ def test_record_distortion_fit_one_pass(tmp_path: pathlib.Path):
         _record.record_distortion_fit(
             passes=[tmp_path / "pass_0"], directory=tmp_path / "out", clocking={}
         )
+
+
+def test_record_distortion_fit_unsettled(tmp_path: pathlib.Path):
+    passes = [
+        _pass(tmp_path / "pass_0", 0.5, stop=False),
+        _pass(tmp_path / "pass_1", 0.3, stop=True),
+    ]
+    with pytest.raises(ValueError, match="moved"):
+        _record.record_distortion_fit(
+            passes=passes, directory=tmp_path / "out", clocking={}
+        )
+    assert not (tmp_path / "out").exists()

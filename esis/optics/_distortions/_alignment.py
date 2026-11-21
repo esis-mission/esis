@@ -177,23 +177,22 @@ def window_mask(
     shape
         The shape of the frame, ``(num_y, num_x)``.
     """
-    import matplotlib.path
-
-    vertices = np.stack(
-        [
-            np.asarray(na.value(footprint.x).ndarray).ravel(),
-            np.asarray(na.value(footprint.y).ndarray).ravel(),
-        ],
-        axis=-1,
+    # every vertex, along one axis, in the order the outline lists them
+    vertices_x, vertices_y = (
+        na.ScalarArray(np.asarray(na.value(c).ndarray, dtype=float).ravel(), "vertex")
+        for c in (footprint.x, footprint.y)
     )
     # pixel i spans [i, i + 1) in optika's sensor coordinates, so its
     # centre is at i + 1/2
     num_y, num_x = shape
-    x, y = np.meshgrid(np.arange(num_x) + 0.5, np.arange(num_y) + 0.5)
-    inside = matplotlib.path.Path(vertices).contains_points(
-        np.stack([x.ravel(), y.ravel()], axis=-1)
+    inside = na.geometry.point_in_polygon(
+        x=na.ScalarArray(np.arange(num_x) + 0.5, axes="x"),
+        y=na.ScalarArray(np.arange(num_y) + 0.5, axes="y"),
+        vertices_x=vertices_x,
+        vertices_y=vertices_y,
+        axis="vertex",
     )
-    return inside.reshape(shape)
+    return np.asarray(inside.ndarray_aligned(("y", "x")), dtype=bool)
 
 
 def sample_on_sky(
@@ -537,6 +536,7 @@ def align_channels(
     frames: list[np.ndarray],
     scene_position: na.AbstractCartesian2dVectorArray,
     wavelengths: dict[str, u.Quantity],
+    bounds: tuple[esis.optics.DistortionParameters, esis.optics.DistortionParameters],
     free: None | tuple[str, ...] = None,
     anchor: int = 1,
     num_sky: int = 1600,
@@ -577,6 +577,11 @@ def align_channels(
         sky grid.
     wavelengths
         The lines at which the sky images are made, by name.
+    bounds
+        The lower and upper bounds of the parameters, in the units of
+        `parameters`, as for :func:`fit_distortion`.  The solved parameters
+        are clipped to them, and their widths set the scale of the finite
+        differences and of the ridge penalty.
     free
         The names of the parameters the alignment may change.  If
         :obj:`None`, the grating terms and the sensor placement are free and
@@ -630,7 +635,7 @@ def align_channels(
         )
     names = [f.name for f in dataclasses.fields(parameters[0])]
     index_free = [names.index(name) for name in free]
-    lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters[0])
+    lower, upper = bounds
     lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
     scale = ub - lb
     delta = 0.002 * scale

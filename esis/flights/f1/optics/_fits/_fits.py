@@ -3,7 +3,6 @@
 from __future__ import annotations
 from typing import Callable
 import copy
-import functools
 import dataclasses
 import datetime
 import importlib
@@ -24,12 +23,10 @@ __all__ = [
     "measure_window_edges",
     "measure_field_stop",
     "fit_distortion_reference",
-    "realign_distortion_reference",
+    "fit_distortion_channel",
     "fit_defocus_history",
     "frame_parameters",
     "fit_distortion_pointing",
-    "fit_coregistration",
-    "apply_coregistration",
     "acceptance",
 ]
 
@@ -40,9 +37,6 @@ The parameters that belong to the instrument rather than to a channel.
 One primary mirror, one field stop, one payload pointing: a fit which lets
 them differ per channel is using them as stand-ins for the camera placement.
 """
-
-_PHOTOMETRIC = ("degradation",)
-"""The fields that do not move the mapping, which the alignment cannot use."""
 
 _MODE_KEYS = (
     "translation",
@@ -228,15 +222,14 @@ def _frame_times() -> list[dict[str, str | float]]:
     ]
 
 
-path_field_stop: None | str | pathlib.Path = (
-    pathlib.Path(__file__).parent.parent / "_instruments" / "_data" / "field_stop.ecsv"
-)
+path_field_stop: None | str | pathlib.Path = None
 """
-The table of vertices of the field stop the fit starts from.
+The table of vertices of the field stop the fit is made with.
 
-By default the measured polygon (:func:`esis.flights.f1.optics.field_stop_vertices`);
-:obj:`None` for the regular octagon of the design, and another table, such as
-the output of :func:`measure_field_stop`, to iterate the measurement.
+:obj:`None`, the default, for the regular octagon of the design, which the
+first pass of the fit starts from; a table such as the output of
+:func:`measure_field_stop` for each later pass, which iterates the
+measurement (``docs/reports/distortion_fit/reproduce.py`` sets it).
 """
 
 
@@ -307,28 +300,23 @@ def _polish_own(
     ----------
     job
         The channel, its parameters, the scene, its frame, the device,
-        the indices of the packed parameters that belong to the channel, the
-        merit to maximize, and the seed of the merit's samples.
+        the indices of the packed parameters that belong to the channel, and
+        the seed of the merit's samples.
 
     Returns
     -------
     The polished parameters, their correlation, and the number of
     evaluations.
     """
-    instrument, parameters, scene, observation, device, index_own, merit, seed = job
+    instrument, parameters, scene, observation, device, index_own, seed = job
     merit = esis.optics.LinearMerit(
         instrument=instrument,
         parameters=parameters,
         scene=scene,
         observation=observation,
         device=device,
-        merit=merit,
         seed=seed,
     )
-    if merit.merit == "least_squares" and np.all(na.value(parameters.degradation) == 1):
-        # a start that knows nothing about the level of the frame
-        parameters = copy.copy(parameters)
-        parameters.degradation = merit.estimate_degradation(parameters)
     lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
     lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
     x_full = na.pack(parameters).ndarray
@@ -411,41 +399,28 @@ def _outline_own(
     Parameters
     ----------
     job
-        The channel, its parameters, the scene, its frame, the device, the
-        merit, its measured edges, the window and sky terms, and the seed of
-        the merit's samples.
+        The channel, its parameters, the scene, its frame, the device, its
+        measured edges, and the seed of the merit's samples.
 
     Returns
     -------
     The parameters, their merit, the edge residual, and the log messages.
     """
-    (
-        instrument,
-        parameters,
-        scene,
-        observation,
-        device,
-        merit,
-        edges,
-        window,
-        sky,
-        seed,
-    ) = job
+    instrument, parameters, scene, observation, device, edges, seed = job
     objective = esis.optics.LinearMerit(
         instrument=instrument,
         parameters=parameters,
         scene=scene,
         observation=observation,
         device=device,
-        merit=merit,
         seed=seed,
     )
     messages = []
     result = esis.optics.fit_distortion_outline(
         objective,
         edges,
-        window=window,
-        sky=sky,
+        window=_WINDOW,
+        sky=_SKY,
         bounds=esis.flights.f1.optics.distortion_fit_bounds(parameters),
         log=messages.append,
     )
@@ -453,179 +428,6 @@ def _outline_own(
     footprints = _footprints(linear, instrument.wavelength)
     residual = esis.optics.outline_residual(footprints, edges)
     return result, -objective(na.pack(result).ndarray), residual, messages
-
-
-_PRIMARY_SCAN = tuple(d * u.mm for d in (-8, -6, -4, -2, 0))
-"""
-The primary-mirror displacements the primary stage tries.
-
-Displacing the primary changes the scale of the sky on the sensor and not
-the size of the windows, while the sensor terms change the size of the
-windows and not the scale of the sky; with the sky's scale pinned by the
-merit, the width of the windows measures the displacement.
-"""
-
-
-def _width_own(
-    job: tuple,
-) -> tuple[esis.optics.DistortionParameters, float, float]:  # pragma: nocover
-    """
-    Re-polish one channel's scale terms at a given primary displacement.
-
-    A module-level function so that the channels can be sent to worker
-    processes.
-
-    Parameters
-    ----------
-    job
-        The channel, its parameters, the scene, its frame, the device, the
-        merit, its measured edges, the names of the scale terms, and the seed
-        of the merit's samples.
-
-    Returns
-    -------
-    The polished parameters, their merit, and the error of the window
-    widths.
-    """
-    instrument, parameters, scene, observation, device, merit, edges, terms, seed = job
-    objective = esis.optics.LinearMerit(
-        instrument=instrument,
-        parameters=parameters,
-        scene=scene,
-        observation=observation,
-        device=device,
-        merit=merit,
-        seed=seed,
-    )
-    names = [f.name for f in dataclasses.fields(parameters)]
-    index = np.array([names.index(n) for n in terms])
-    lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
-    lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
-    x = na.pack(parameters).ndarray.copy()
-    y, fun, _ = _fit.polish(
-        _fit._Subset(objective, x.copy(), index),
-        x[index],
-        lb[index],
-        ub[index],
-        scale=0.01,
-        num_round=1,
-        maxfev=400,
-    )
-    x[index] = y
-    result = na.unpack(x, parameters)
-    linear = objective.linearize(result.to_instrument(instrument))
-    footprints = _footprints(linear, instrument.wavelength)
-    return result, -fun, esis.optics.width_residual(footprints, edges)
-
-
-def scan_primary(
-    instrument: esis.optics.Instrument,
-    parameters: list[esis.optics.DistortionParameters],
-    scene: na.FunctionArray,
-    observation: na.AbstractScalar,
-    edges: astropy.table.QTable,
-    displacements: tuple[u.Quantity, ...] = _PRIMARY_SCAN,
-    terms: tuple[str, ...] = ("z_sensor", "yaw_sensor", "pitch_sensor"),
-    device: None | str = None,
-    workers: int = 1,
-    merit: str = "correlation",
-    seed: int = 0,
-    log: None | Callable[[str], None] = None,
-) -> tuple[
-    list[esis.optics.DistortionParameters], u.Quantity, list[float]
-]:  # pragma: nocover
-    """
-    Find the one primary displacement whose windows have the measured width.
-
-    At every trial displacement the scale terms of each channel are
-    re-polished against the merit, which pins the scale of the sky, and the
-    widths of the windows are compared with the measured edges.  The
-    displacement with the smallest summed width error wins, refined by a
-    parabola through its neighbours, and every channel is re-polished
-    there.
-
-    Parameters
-    ----------
-    instrument
-        The instrument model.
-    parameters
-        The parameters of every channel.
-    scene
-        The scene of the reference frame.
-    observation
-        The reference frame of every channel.
-    edges
-        The measured edges of every channel's windows.
-    displacements
-        The displacements to try.
-    terms
-        The names of the terms re-polished at every displacement.
-    device
-        The device the merit runs on.
-    workers
-        The number of channels polished side by side.
-    merit
-        The comparison the polish maximizes.
-    seed
-        The seed of the samples every channel is linearized on, see
-        :class:`esis.optics.LinearMerit`.
-    log
-        A callable that records progress.
-
-    Returns
-    -------
-    The parameters of every channel at the winning displacement, the
-    displacement, and the width errors of every trial.
-    """
-    num_channel = len(parameters)
-
-    def trial(displacement: u.Quantity) -> list[tuple]:
-        jobs = []
-        for c in range(num_channel):
-            p = copy.copy(parameters[c])
-            p.displacement_primary = displacement
-            jobs.append(
-                (
-                    instrument[dict(channel=c)],
-                    p,
-                    scene,
-                    observation[dict(channel=c)],
-                    device,
-                    merit,
-                    edges[np.asarray(edges["channel"]) == c],
-                    terms,
-                    seed,
-                )
-            )
-        return _map_channels(_width_own, jobs, workers)
-
-    errors = []
-    for displacement in displacements:
-        results = trial(displacement)
-        error = float(np.sqrt(np.mean([r[2] ** 2 for r in results])))
-        errors.append(error)
-        if log is not None:
-            log(
-                f"primary {displacement:+.2f}: width error {error:.2f} px "
-                "("
-                + ", ".join(f"{r[2]:.2f}" for r in results)
-                + "), merit "
-                + ", ".join(f"{r[1]:.4f}" for r in results)
-            )
-    values = u.Quantity(displacements)
-    k = int(np.argmin(errors))
-    best = values[k]
-    if 0 < k < len(errors) - 1:
-        # a parabola through the minimum and its neighbours
-        y0, y1, y2 = errors[k - 1], errors[k], errors[k + 1]
-        denominator = y0 - 2 * y1 + y2
-        if denominator > 0:
-            step = values[k + 1] - values[k]
-            best = values[k] + 0.5 * (y0 - y2) / denominator * step
-    if log is not None:
-        log(f"primary: {best:+.2f} from the width of the windows")
-    results = trial(best)
-    return [r[0] for r in results], best, errors
 
 
 def _center(footprint: na.AbstractCartesian2dVectorArray) -> list[float]:
@@ -763,41 +565,174 @@ def _stamp(seed: int) -> dict:
     )
 
 
+def _groups(
+    table: astropy.table.QTable,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Group crossings by channel, line, side and row or column.
+
+    Returns
+    -------
+    The unique keys, and the order and bounds that list each group's
+    members: group ``g`` is ``order[bounds[g]:bounds[g + 1]]``.
+    """
+    keys = np.stack(
+        [np.asarray(table[k]) for k in ("channel", "line", "side", "index")],
+        axis=1,
+    )
+    unique, inverse = np.unique(keys, axis=0, return_inverse=True)
+    inverse = inverse.ravel()
+    order = np.argsort(inverse, kind="stable")
+    bounds = np.searchsorted(inverse[order], np.arange(len(unique) + 1))
+    return unique, order, bounds
+
+
+def window_drift(
+    crossings: astropy.table.QTable,
+    num_channel: int,
+    error_max: u.Quantity = 1 * u.pix,
+) -> astropy.table.QTable:
+    """
+    Measure the motion of every window's sides through the flight.
+
+    Each row or column's crossing of a side is taken against its own median
+    over the flight, and the median of those departures over the side's
+    rows or columns is the side's motion in that frame.
+
+    Parameters
+    ----------
+    crossings
+        The crossings of every frame, with ``channel``, ``frame``, ``line``,
+        ``side``, ``index``, ``position`` and ``error`` columns, such as
+        :func:`esis.optics.measure_edge_steps` or
+        :func:`esis.optics.measure_edges` give them with the frame and the
+        channel added.
+    num_channel
+        The number of channels.
+    error_max
+        Crossings with a larger formal error are left out.
+
+    Returns
+    -------
+    One row per channel, frame and side: the ``shift`` from the flight
+    median, and the ``num`` of crossings it is the median of.
+    """
+    every = crossings[crossings["error"] < error_max]
+    _, order, bounds = _groups(every)
+    position = np.asarray(every["position"].to_value(u.pix))
+    center = np.empty(len(every))
+    for g in range(len(bounds) - 1):
+        members = order[bounds[g] : bounds[g + 1]]
+        center[members] = np.median(position[members])
+    departure = position - center
+    channel = np.asarray(every["channel"])
+    frame = np.asarray(every["frame"])
+    side = np.asarray(every["side"])
+    rows = []
+    for c in range(num_channel):
+        for t in sorted(set(int(v) for v in frame[channel == c])):
+            for k in range(len(esis.optics.SIDES)):
+                sel = (channel == c) & (frame == t) & (side == k)
+                if sel.any():
+                    median = float(np.median(departure[sel]))
+                    rows.append((c, t, k, median, int(sel.sum())))
+    result = astropy.table.QTable(
+        rows=rows,
+        names=("channel", "frame", "side", "shift", "num"),
+        dtype=(int, int, int, float, int),
+    )
+    result["shift"].unit = u.pix
+    return result
+
+
+def _refer_to_frame(
+    edges: astropy.table.QTable,
+    drift: astropy.table.QTable,
+    frame: int,
+    degree: int,
+) -> tuple[astropy.table.QTable, astropy.table.QTable]:
+    """
+    Refer the median edges of the windows and their drift to one frame.
+
+    The edges are moved by the drift at the frame, as :func:`_drift_smooth`
+    smooths it, and the drift is taken from there, so that the smoothed
+    drift is zero at the frame.  The left and right sides move with x, the
+    top and bottom with y, as :func:`_drift_shift` reads them.
+
+    Parameters
+    ----------
+    edges
+        The median edges, one row per channel, line, side and row or column.
+    drift
+        The drift from the median, see :func:`window_drift`.
+    frame
+        The frame to refer them to.
+    degree
+        The degree of the polynomial that smooths the drift.
+
+    Returns
+    -------
+    Copies of the edges and the drift.
+    """
+    edges = edges.copy()
+    drift = drift.copy()
+    channels = sorted(set(int(c) for c in np.asarray(drift["channel"])))
+    smooth = _drift_smooth(drift, max(channels) + 1, degree)
+    for c in channels:
+        origin = smooth(c, frame)
+        for k in range(len(esis.optics.SIDES)):
+            offset = (origin[0] if k < 2 else origin[1]) * u.pix
+            mine = (np.asarray(edges["channel"]) == c) & (
+                np.asarray(edges["side"]) == k
+            )
+            edges["position"][mine] += offset
+            mine = (np.asarray(drift["channel"]) == c) & (
+                np.asarray(drift["side"]) == k
+            )
+            drift["shift"][mine] -= offset
+    return edges, drift
+
+
 def measure_window_edges(
     parameters: list[esis.optics.DistortionParameters],
     instrument: None | esis.optics.Instrument = None,
     num_scene: int = 401,
     frames: None | tuple[int, ...] = None,
+    frame_reference: int = 15,
     threshold: float = 0.5,
     lines: tuple[int, ...] = (0, 2),
     error_max: u.Quantity = 1 * u.pix,
+    drift_degree: int = 3,
     directory: None | str | pathlib.Path = None,
     path: None | str | pathlib.Path = None,
     path_drift: None | str | pathlib.Path = None,
     seed: int = 0,
-    drift: str = "steps",
 ) -> tuple[astropy.table.QTable, astropy.table.QTable]:  # pragma: nocover
     """
-    Measure the edges of every window in every frame of the flight.
+    Measure the edges of every window at the reference frame, and their drift.
 
     The windows are the image of the field stop, and do not move with the
     pointing, so the same edge is measured once per frame against a
-    different backdrop of solar structure each time and the median over the
-    frames is what the outline stage fits.  Each side of each window is fit
-    in each frame as one blurred straight edge, see
-    :func:`esis.optics.measure_edges`, and the median of the width of its
-    blur over the frames is kept with it.
+    different backdrop of solar structure each time.  Each side of each
+    window is fit in each frame as one blurred straight edge, see
+    :func:`esis.optics.measure_edges`, and the median over the frames, with
+    the median width of its blur, places it.
 
-    The drift of the windows through the flight is read from a different
-    fit: a step fit to every row and column on its own, see
-    :func:`esis.optics.measure_edge_steps`, each against its own median over
-    the flight, and the median of those departures over a side's rows per
-    frame.  The straight edges place a side better, but structure crossing
-    a side as the pointing drifts moves its straight edge by a few tenths
-    of a pixel from frame to frame, more than the median of the rows'
-    changes; on the flight the two sides of one window move apart by
-    0.25--0.35 px rms with the straight edges and 0.13--0.19 px with the
+    The windows do drift, by a few tenths of a pixel through the flight.
+    The drift is read from a different fit: a step fit to every row and
+    column on its own, see :func:`esis.optics.measure_edge_steps` and
+    :func:`window_drift`.  The straight edges place a side better, but
+    structure crossing a side as the pointing drifts moves its straight edge
+    by a few tenths of a pixel from frame to frame, more than the median of
+    the rows' changes; on the flight the two sides of one window move apart
+    by 0.25--0.35 px rms with the straight edges and 0.13--0.19 px with the
     steps.
+
+    Both are referred to the reference frame, which the sky of the reference
+    fit is fit to: the median edges are moved by the drift at that frame,
+    as the later stages smooth it (:func:`_drift_smooth`), and the drift is
+    taken from there.  The reference then places its windows where they
+    were at that frame, and the drift is zero there.
 
     Parameters
     ----------
@@ -805,13 +740,15 @@ def measure_window_edges(
         The parameters of every channel, which place the outlines the
         edges are searched near.
     instrument
-        The instrument model, see :func:`fit_distortion_reference`.
+        The instrument model, see :func:`fit_distortion_channel`.
     num_scene
         The number of samples along each axis of the resampled scene, which
         sets the grid the channel is linearized on.
     frames
         The frames to measure.  If :obj:`None`, every frame whose mean
         signal exceeds `threshold` times the median over the flight.
+    frame_reference
+        The frame the reference is fit to.
     threshold
         The fraction of the flight's median signal below which a frame is
         left out.
@@ -819,34 +756,26 @@ def measure_window_edges(
         The indices of the spectral lines whose windows are measured; the
         middle window of ESIS-I sits on its neighbours and is left out.
     error_max
-        Crossings with a larger formal error are left out of the median.
+        Crossings with a larger formal error are left out.
+    drift_degree
+        The degree of the polynomial in the frame index that smooths the
+        drift, see :func:`_drift_smooth`.
     directory
         The directory the log is written to.
     path
-        Where to save the median edges, if anywhere.
+        Where to save the edges, if anywhere.
     path_drift
         Where to save the per-frame drift, if anywhere.
     seed
         The seed of the samples every channel is linearized on, see
         :class:`esis.optics.LinearMerit`.
-    drift
-        What the drift is read from: ``steps``, the step fit to every row
-        and column, or ``edges``, the crossings of the straight edges, which
-        the drift was read from before and which is kept to compare against.
 
     Returns
     -------
-    The median edges, one row per channel, line, side and row or column,
-    with the median width of the side, and the drift, one row per channel,
-    frame and side.
-
-    Raises
-    ------
-    ValueError
-        If `drift` is neither ``steps`` nor ``edges``.
+    The edges at the reference frame, one row per channel, line, side and
+    row or column, with the median width of the side; and the drift from
+    the reference frame, one row per channel, frame and side.
     """
-    if drift not in ("steps", "edges"):
-        raise ValueError(f"drift must be 'steps' or 'edges', not {drift!r}")
     instrument = _base(instrument)
     num_channel = instrument.camera.channel.shape["channel"]
     log = _logger(directory, "edges")
@@ -858,7 +787,7 @@ def measure_window_edges(
         kept = np.all(signal > threshold * np.median(signal, axis=0), axis=1)
         frames = tuple(int(t) for t in np.where(kept)[0])
     log(f"frames kept: {', '.join(str(t) for t in frames)}")
-    scene, observation = _frame(15, num_scene)
+    scene, observation = _frame(frame_reference, num_scene)
     tables = []
     tables_steps = []
     for c in range(num_channel):
@@ -873,32 +802,26 @@ def measure_window_edges(
         linear = merit.linearize(parameters[c].to_instrument(channel))
         footprints = _footprints(linear, channel.wavelength)
         for t in frames:
-            edges = esis.optics.measure_edges(data[t, c], footprints)
-            edges = edges[np.isin(edges["line"], lines)]
-            edges["frame"] = t
-            edges["channel"] = c
-            tables.append(edges)
-            steps = esis.optics.measure_edge_steps(data[t, c], footprints)
-            steps = steps[np.isin(steps["line"], lines)]
-            steps["frame"] = t
-            steps["channel"] = c
-            tables_steps.append(steps)
+            for found, measure in (
+                (tables, esis.optics.measure_edges),
+                (tables_steps, esis.optics.measure_edge_steps),
+            ):
+                table = measure(data[t, c], footprints)
+                table = table[np.isin(table["line"], lines)]
+                table["frame"] = t
+                table["channel"] = c
+                found.append(table)
             log(
-                f"frame {t} channel {c}: {len(edges)} crossings, " f"{len(steps)} steps"
+                f"frame {t} channel {c}: {len(tables[-1])} crossings, "
+                f"{len(tables_steps[-1])} steps"
             )
+
     every = astropy.table.vstack(tables)
     every = every[every["error"] < error_max]
-    keys = np.stack(
-        [np.asarray(every[k]) for k in ("channel", "line", "side", "index")],
-        axis=1,
-    )
-    unique, inverse = np.unique(keys, axis=0, return_inverse=True)
+    unique, order, bounds = _groups(every)
     position = np.asarray(every["position"].to_value(u.pix))
     width = np.asarray(every["width"].to_value(u.pix))
-    order = np.argsort(inverse, kind="stable")
-    bounds = np.searchsorted(inverse[order], np.arange(len(unique) + 1))
     rows = []
-    center = np.empty(len(every))
     for g in range(len(unique)):
         members = order[bounds[g] : bounds[g + 1]]
         values = position[members]
@@ -906,82 +829,49 @@ def measure_window_edges(
         spread = 1.4826 * float(np.median(np.abs(values - median)))
         error = spread / np.sqrt(len(values))
         rows.append((*unique[g], median, error, np.median(width[members]), len(values)))
-        center[members] = median
-    median_edges = astropy.table.QTable(
+    edges = astropy.table.QTable(
         rows=rows,
         names=("channel", "line", "side", "index", "position", "error", "width", "num"),
         dtype=(int, int, int, int, float, float, float, int),
     )
+
     for name in ("position", "error", "width"):
-        median_edges[name].unit = u.pix
-    # the drift from the steps of every row, each against its own median, or
-    # from the crossings of the straight edges
-    every = astropy.table.vstack(tables_steps if drift == "steps" else tables)
-    every = every[every["error"] < error_max]
-    keys = np.stack(
-        [np.asarray(every[k]) for k in ("channel", "line", "side", "index")],
-        axis=1,
-    )
-    _, inverse = np.unique(keys, axis=0, return_inverse=True)
-    inverse = inverse.ravel()
-    position = np.asarray(every["position"].to_value(u.pix))
-    center = np.empty(len(every))
-    order = np.argsort(inverse, kind="stable")
-    bounds = np.searchsorted(inverse[order], np.arange(inverse.max() + 2))
-    for g in range(inverse.max() + 1):
-        members = order[bounds[g] : bounds[g + 1]]
-        center[members] = np.median(position[members])
-    departure = position - center
-    drift_rows = []
-    for c in range(num_channel):
-        for t in frames:
-            for side in range(4):
-                sel = (
-                    (np.asarray(every["channel"]) == c)
-                    & (np.asarray(every["frame"]) == t)
-                    & (np.asarray(every["side"]) == side)
-                )
-                if sel.any():
-                    drift_rows.append(
-                        (c, t, side, float(np.median(departure[sel])), int(sel.sum()))
-                    )
-    source = drift
-    drift = astropy.table.QTable(
-        rows=drift_rows,
-        names=("channel", "frame", "side", "shift", "num"),
-        dtype=(int, int, int, float, int),
-    )
-    drift["shift"].unit = u.pix
+        edges[name].unit = u.pix
+    drift = window_drift(astropy.table.vstack(tables_steps), num_channel, error_max)
+    edges, drift = _refer_to_frame(edges, drift, frame_reference, drift_degree)
+
     meta = dict(
-        description=(
-            "Where the edges of each window cross the rows and columns of the "
-            "ESIS-I frames, each side fit as one blurred straight edge, and the "
-            "width of its blur."
-        ),
         frames=list(frames),
+        frame_reference=int(frame_reference),
         lines=list(lines),
         error_max=float(error_max.to_value(u.pix)),
+        drift_degree=int(drift_degree),
         sides=list(esis.optics.SIDES),
         **_stamp(seed),
     )
-    median_edges.meta.update(meta)
-    drift.meta.update(meta)
-    drift.meta["description"] = (
-        "The departure of each window's edges from their flight median, per "
-        "frame, from the "
-        + (
-            "steps fit to every row and column."
-            if source == "steps"
-            else "crossings of the straight edge fit to each side."
-        )
+    edges.meta.update(
+        description=(
+            "Where the edges of each window cross the rows and columns of the "
+            "ESIS-I frames at the reference frame: each side fit as one "
+            "blurred straight edge in every frame, the median over the frames "
+            "moved by the smoothed drift at the reference frame, and the "
+            "width of its blur."
+        ),
+        **meta,
     )
-    drift.meta["drift"] = source
+    drift.meta.update(
+        description=(
+            "The motion of each window's sides from the reference frame, per "
+            "frame, from the steps fit to every row and column."
+        ),
+        **meta,
+    )
     if path is not None:
-        median_edges.write(path, format="ascii.ecsv", overwrite=True)
+        edges.write(path, format="ascii.ecsv", overwrite=True)
     if path_drift is not None:
         drift.write(path_drift, format="ascii.ecsv", overwrite=True)
-    log(f"{len(median_edges)} median edges, {len(drift)} drift rows")
-    return median_edges, drift
+    log(f"{len(edges)} edges, {len(drift)} drift rows")
+    return edges, drift
 
 
 class _Polynomial2d:
@@ -1176,7 +1066,7 @@ def measure_field_stop(
     if frames is None:
         kept = np.all(signal > threshold * np.median(signal, axis=0), axis=1)
         frames = tuple(int(t) for t in np.where(kept)[0])
-    time = int(pointing.meta.get("reference_frame", 15))
+    time = int(pointing.meta.get("frame_reference", 15))
     log(f"frames kept: {', '.join(str(t) for t in frames)}; reference frame {time}")
     scene, observation = _frame(time, num_scene)
     frame_column = np.asarray(pointing["frame"])
@@ -1356,257 +1246,225 @@ def measure_field_stop(
     return result, sides
 
 
-def fit_distortion_reference(
+def fit_distortion_channel(
+    channel: int,
     instrument: None | esis.optics.Instrument = None,
     time: int = 15,
     num_scene: int = 401,
     device: None | str = None,
     workers: int = 1,
-    channels: None | tuple[int, ...] = None,
-    path: None | str | pathlib.Path = None,
-    directory: None | str | pathlib.Path = None,
-    parameters: None | list[esis.optics.DistortionParameters] = None,
-    free_absolute: tuple[str, ...] = _FREE_ABSOLUTE,
-    free_shared: tuple[str, ...] = _FREE_SHARED,
-    edges: None | str | pathlib.Path | astropy.table.QTable = None,
-    window: tuple[str, ...] = _WINDOW,
-    sky: tuple[str, ...] = _SKY,
-    primary: bool = False,
-    merit: str = "correlation",
     popsize: int = 15,
     maxiter: int = 80,
-    tol: float = 0.0,
     seed: int = 0,
+    path: None | str | pathlib.Path = None,
+    directory: None | str | pathlib.Path = None,
 ) -> esis.optics.DistortionParameters:  # pragma: nocover
     """
-    Fit the reference distortion parameters of ESIS-I from the as-built model.
+    Fit one channel of ESIS-I on its own, the first stage of the reference fit.
 
-    Reproduces the values stored in ``_data/distortion_reference.ecsv`` from
-    the instrument model and the flight data alone, in these stages.
-
-    1.  **Absolute.**  Each channel is fit on its own to the AIA proxy scene
-        with :class:`esis.optics.LinearMerit` and
-        :func:`esis.optics.fit_distortion`, over the terms one frame can
-        determine: a seeded capture followed by a local polish.
-    2.  **Outline.**  If the window edges measured through the flight are
-        given, each channel's windows are placed on them with the grating
-        angles and the sensor roll, and the sky is refit with the remaining
-        terms, see :func:`esis.optics.fit_distortion_outline`.
-    3.  **Primary.**  Optionally, one shared displacement of the primary
-        from the width of the windows against the scale of the sky, see
-        :func:`scan_primary`.
-    4.  **Shared.**  The primary, the field-stop roll and the payload
-        pointing belong to the instrument; they are set to their mean over
-        the channels and each channel's own terms are polished again.
-    5.  **Internal.**  The channels are aligned to one another on the sky
-        with :func:`esis.optics.align_channels`, in the grating and camera
-        terms only.
+    The channel is fit to the AIA proxy scene of one frame with
+    :class:`esis.optics.LinearMerit` and :func:`esis.optics.fit_distortion`,
+    a seeded capture followed by a local polish, over the nine terms one
+    frame determines (:data:`_FREE_ABSOLUTE`).  Each channel is hours of
+    work, so the channels are fit separately and
+    :func:`fit_distortion_reference` combines them.
 
     Requires the ESIS Level-1 data and the AIA synthetic scene (downloaded
     and cached on first use).
 
     Parameters
     ----------
+    channel
+        The index of the channel.
     instrument
         The starting instrument model. If :obj:`None`, the as-built model
         (:func:`esis.flights.f1.optics.as_built`) is used, idealized for
-        raytracing speed.
+        raytracing speed, with the field stop of :data:`path_field_stop`.
     time
         The frame index of the reference frame.
     num_scene
         The number of samples along each axis of the resampled AIA scene.
     device
         The device on which to build and apply the regridding weights, for
-        example ``"cuda"``.
+        example ``"cuda"``; :obj:`None` for the host.
     workers
-        The number of processes evaluating the population of the capture,
-        and polishing the channels of the shared stage side by side.
-    channels
-        The channels to fit in the absolute stage.  If :obj:`None`, every
-        channel is fit; a subset lets the channels be fit by separate jobs,
-        with `parameters` supplying the others.
+        The number of processes evaluating the population of the capture.
+    popsize
+        The population of the capture, per dimension.
+    maxiter
+        The number of generations of the capture, all of which are run.
+    seed
+        The seed of the capture, and of the samples the channel is
+        linearized on, see :class:`esis.optics.LinearMerit`.
+    path
+        If given, the fitted parameters are written here as a one-row ECSV
+        table.
+    directory
+        A directory where the progress is logged.
+    """
+    instrument = _base(instrument)
+    scene, observation = _frame(time, num_scene)
+    log = _logger(directory, f"channel_{channel}")
+    model = instrument[dict(channel=channel)]
+    p0 = esis.optics.DistortionParameters.from_instrument(model)
+    merit = esis.optics.LinearMerit(
+        instrument=model,
+        parameters=p0,
+        scene=scene,
+        observation=observation[dict(channel=channel)],
+        device=device,
+        seed=seed,
+    )
+    log(f"channel {channel}: absolute fit of " + ", ".join(_FREE_ABSOLUTE))
+    result = esis.optics.fit_distortion(
+        objective=merit,
+        parameters=p0,
+        bounds=esis.flights.f1.optics.distortion_fit_bounds(p0),
+        workers=workers,
+        free=_FREE_ABSOLUTE,
+        popsize=popsize,
+        maxiter=maxiter,
+        tol=0.0,
+        seed=seed,
+        log=log,
+    )
+    log(f"channel {channel}: correlation {merit.correlation(result):.4f}")
+    if path is not None:
+        result.to_file(
+            path,
+            metadata=dict(
+                channel=channel,
+                stage="absolute",
+                time=time,
+                free=list(_FREE_ABSOLUTE),
+                popsize=popsize,
+                maxiter=maxiter,
+                **_stamp(seed),
+            ),
+        )
+    return result
+
+
+def fit_distortion_reference(
+    parameters: list[esis.optics.DistortionParameters],
+    edges: str | pathlib.Path | astropy.table.QTable,
+    instrument: None | esis.optics.Instrument = None,
+    time: int = 15,
+    num_scene: int = 401,
+    device: None | str = None,
+    workers: int = 1,
+    seed: int = 0,
+    path: None | str | pathlib.Path = None,
+    directory: None | str | pathlib.Path = None,
+) -> esis.optics.DistortionParameters:  # pragma: nocover
+    """
+    Fit the reference distortion parameters of ESIS-I from the channels' own fits.
+
+    Reproduces the values stored in ``_data/distortion_reference.ecsv`` from
+    the absolute fit of every channel (:func:`fit_distortion_channel`), in
+    three stages.
+
+    1.  **Outline.**  Each channel's windows are placed on the window edges
+        measured through the flight with the grating angles and the roll of
+        the field stop (:data:`_WINDOW`), and the sky is refit with the
+        remaining terms (:data:`_SKY`), see
+        :func:`esis.optics.fit_distortion_outline`.
+    2.  **Shared.**  The primary, the field-stop roll and the payload
+        pointing belong to the instrument (:data:`_SHARED`); they are set to
+        their mean over the channels and each channel's own terms
+        (:data:`_FREE_SHARED`) are polished again.
+    3.  **Internal.**  The channels are aligned to one another on the sky
+        with :func:`esis.optics.align_channels`, in those terms only.
+
+    Parameters
+    ----------
+    parameters
+        The absolute fit of every channel, see :func:`fit_distortion_channel`.
+    edges
+        The measured edges of the windows at the reference frame, see
+        :func:`measure_window_edges`, or the path of their table.
+    instrument
+        The instrument model, see :func:`fit_distortion_channel`.
+    time
+        The frame index of the reference frame.
+    num_scene
+        The number of samples along each axis of the resampled AIA scene.
+    device
+        The device on which to build and apply the regridding weights.
+    workers
+        The number of processes the channels are fit in side by side.
+    seed
+        The seed of the samples every channel is linearized on, see
+        :class:`esis.optics.LinearMerit`.
     path
         If given, the fitted parameters are written to this path as an ECSV
         table, in the format of ``_data/distortion_reference.ecsv``.
     directory
         A directory where the progress of every stage is logged.
-        If :obj:`None`, the fit is not logged.
-    parameters
-        The result of the absolute stage for every channel, if it was run
-        by separate jobs; the absolute stage is then skipped for those
-        channels.
-    free_absolute
-        The names of the fields the absolute stage searches, per channel.
-        The default is the nine terms one frame determines.
-    free_shared
-        The names of the fields polished per channel with the shared optics
-        fixed, and refit by the alignment.  The default is the grating and
-        camera placement.  With the least-squares merit the degradation is
-        polished too.
-    edges
-        The measured edges of the windows, see :func:`measure_window_edges`,
-        or the path of their table.  If given, an outline stage places each
-        channel's windows on them between the absolute and shared stages.
-    window
-        The names of the fields the outline stage fits to the edges.
-    sky
-        The names of the fields the outline stage re-polishes against the
-        merit.
-    primary
-        Whether to find the shared primary displacement from the width of
-        the windows, see :func:`scan_primary`; needs `edges`.
-    merit
-        The comparison every stage maximizes, see
-        :class:`esis.optics.LinearMerit`: ``"correlation"`` or
-        ``"least_squares"``.
-    popsize
-        The population of the capture of the absolute stage, per dimension.
-    maxiter
-        The number of generations of the capture.
-    tol
-        The tolerance at which the capture stops early; zero runs every
-        generation.
-    seed
-        The seed of the capture, and of the samples every channel is
-        linearized on in every stage, see :class:`esis.optics.LinearMerit`.
 
     Raises
     ------
     ValueError
-        If a channel has neither been fit here nor supplied in `parameters`.
-
-    Examples
-    --------
-    .. code-block:: python
-
-        import esis
-
-        parameters = esis.flights.f1.optics.fit_distortion_reference(
-            device="cuda",
-            workers=6,
-            path="distortion_reference.ecsv",
-            directory="distortion_reference",
-        )
+        If `parameters` does not have one entry per channel.
     """
     instrument = _base(instrument)
     num_channel = instrument.camera.channel.shape["channel"]
     scene, observation = _frame(time, num_scene)
     log = _logger(directory, "reference")
-
-    if channels is None:
-        channels = tuple(range(num_channel))
-    if parameters is None:
-        parameters = [None] * num_channel
     parameters = list(parameters)
+    if len(parameters) != num_channel:
+        raise ValueError(f"expected {num_channel} channels, got {len(parameters)}")
 
-    # absolute
-    for c in channels:
-        channel = instrument[dict(channel=c)]
-        p0 = esis.optics.DistortionParameters.from_instrument(channel)
-        objective = esis.optics.LinearMerit(
-            instrument=channel,
-            parameters=p0,
+    def merit(c: int) -> esis.optics.LinearMerit:
+        return esis.optics.LinearMerit(
+            instrument=instrument[dict(channel=c)],
+            parameters=parameters[c],
             scene=scene,
             observation=observation[dict(channel=c)],
             device=device,
-            merit=merit,
             seed=seed,
         )
-        log(f"channel {c}: absolute fit")
-        parameters[c] = esis.optics.fit_distortion(
-            objective=objective,
-            parameters=p0,
-            bounds=esis.flights.f1.optics.distortion_fit_bounds(p0),
-            workers=workers,
-            free=free_absolute,
-            popsize=popsize,
-            maxiter=maxiter,
-            tol=tol,
-            seed=seed,
-            log=log,
-        )
-    if any(p is None for p in parameters):
-        raise ValueError("every channel needs parameters before the shared stage")
-    # the merit as the absolute stage left it, whether it ran here or not
+
     scores = dict(
         absolute=[
-            float(
-                esis.optics.LinearMerit(
-                    instrument=instrument[dict(channel=c)],
-                    parameters=parameters[c],
-                    scene=scene,
-                    observation=observation[dict(channel=c)],
-                    device=device,
-                    merit=merit,
-                    seed=seed,
-                ).correlation(parameters[c])
-            )
-            for c in range(num_channel)
+            float(merit(c).correlation(parameters[c])) for c in range(num_channel)
         ]
     )
 
     # outline
-    residuals = None
     edges = _read_table(edges)
-    if edges is not None:
-        log(
-            "outline: "
-            + ", ".join(window)
-            + " on the edges; "
-            + ", ".join(sky)
-            + " on the merit"
+    log(
+        "outline: "
+        + ", ".join(_WINDOW)
+        + " on the edges; "
+        + ", ".join(_SKY)
+        + " on the merit"
+    )
+    jobs = [
+        (
+            instrument[dict(channel=c)],
+            parameters[c],
+            scene,
+            observation[dict(channel=c)],
+            device,
+            edges[np.asarray(edges["channel"]) == c],
+            seed,
         )
-        jobs = [
-            (
-                instrument[dict(channel=c)],
-                parameters[c],
-                scene,
-                observation[dict(channel=c)],
-                device,
-                merit,
-                edges[np.asarray(edges["channel"]) == c],
-                window,
-                sky,
-                seed,
-            )
-            for c in range(num_channel)
-        ]
-        results = _map_channels(_outline_own, jobs, workers)
-        residuals = []
-        for c, (parameters[c], rho, residual, messages) in enumerate(results):
-            for message in messages:
-                log(f"channel {c}: {message}")
-            log(f"channel {c}: {rho:.4f}, edge residual {residual:.2f} px")
-            residuals.append(residual)
-        scores["outline"] = dict(merit=[float(r[1]) for r in results], edges=residuals)
-
-    # primary
-    displacement = None
-    if edges is not None and primary:
-        parameters, displacement, widths = scan_primary(
-            instrument=instrument,
-            parameters=parameters,
-            scene=scene,
-            observation=observation,
-            edges=edges,
-            device=device,
-            workers=workers,
-            merit=merit,
-            seed=seed,
-            log=log,
-        )
-        scores["primary"] = dict(
-            displacements=[float(d.to_value(u.mm)) for d in _PRIMARY_SCAN],
-            widths=widths,
-            displacement=float(displacement.to_value(u.mm)),
-        )
+        for c in range(num_channel)
+    ]
+    results = _map_channels(_outline_own, jobs, workers)
+    residuals = []
+    for c, (parameters[c], rho, residual, messages) in enumerate(results):
+        for message in messages:
+            log(f"channel {c}: {message}")
+        log(f"channel {c}: {rho:.4f}, edge residual {residual:.2f} px")
+        residuals.append(residual)
+    scores["outline"] = dict(merit=[float(r[1]) for r in results], edges=residuals)
 
     # shared
     parameters = enforce_shared(parameters)
     names = [f.name for f in dataclasses.fields(parameters[0])]
-    own = [n for n in free_shared if n not in _SHARED]
-    if merit == "least_squares":
-        own = own + [n for n in _PHOTOMETRIC if n not in own]
+    own = [n for n in _FREE_SHARED if n not in _SHARED]
     index_own = [names.index(n) for n in own]
     log("polish of every channel with the shared optics fixed: " + ", ".join(own))
     jobs = [
@@ -1617,7 +1475,6 @@ def fit_distortion_reference(
             observation[dict(channel=c)],
             device,
             index_own,
-            merit,
             seed,
         )
         for c in range(num_channel)
@@ -1635,7 +1492,8 @@ def fit_distortion_reference(
         frames=_frames_by_axis(observation, num_channel),
         scene_position=scene.inputs.position,
         wavelengths=_wavelengths_alignment(),
-        free=tuple(n for n in own if n not in _PHOTOMETRIC),
+        free=tuple(own),
+        bounds=esis.flights.f1.optics.distortion_fit_bounds(parameters[0]),
         seed=seed,
         log=log,
     )
@@ -1657,138 +1515,28 @@ def fit_distortion_reference(
                 provenance=(
                     "esis.flights.f1.optics.fit_distortion_reference("
                     f"time={time}, num_scene={num_scene}): a seeded capture and "
-                    "polish of every channel against the AIA proxy scene"
-                    + (
-                        ", its windows placed on the measured edges"
-                        if edges is not None
-                        else ""
-                    )
-                    + ", the shared optics set to their mean, and the channels "
-                    "aligned to one another on the sky at "
-                    f"{', '.join(_LINES_ALIGNMENT)} "
+                    "polish of every channel against the AIA proxy scene, its "
+                    "windows placed on the measured edges, the shared optics "
+                    "set to their mean, and the channels aligned to one "
+                    f"another on the sky at {', '.join(_LINES_ALIGNMENT)} "
                     "(median shift vs channel 1: "
                     f"{', '.join(f'{m:.2f}' for m in medians)} px)"
                 ),
                 stages=dict(
-                    absolute=dict(
-                        free=list(free_absolute),
-                        popsize=popsize,
-                        maxiter=maxiter,
-                        tol=tol,
-                        seed=seed,
-                    ),
-                    outline=(
-                        dict(window=list(window), sky=list(sky), edges=residuals)
-                        if edges is not None
-                        else None
-                    ),
-                    primary=(
-                        dict(
-                            displacement=float(displacement.to_value(u.mm)),
-                            scan=[float(d.to_value(u.mm)) for d in _PRIMARY_SCAN],
-                        )
-                        if displacement is not None
-                        else None
-                    ),
+                    absolute=dict(free=list(_FREE_ABSOLUTE)),
+                    outline=dict(window=list(_WINDOW), sky=list(_SKY), edges=residuals),
                     shared=dict(free=list(own), fixed=list(_SHARED)),
                     alignment=dict(
-                        free=[n for n in own if n not in _PHOTOMETRIC],
+                        free=list(own),
                         lines=list(_LINES_ALIGNMENT),
                         anchor=1,
                     ),
                 ),
-                merit=merit,
                 scores=scores,
                 windows=windows,
                 **_stamp(seed),
             ),
         )
-    return result
-
-
-def realign_distortion_reference(
-    reference: str | pathlib.Path,
-    time: int = 15,
-    num_scene: int = 401,
-    instrument: None | esis.optics.Instrument = None,
-    free_shared: tuple[str, ...] = _FREE_SHARED,
-    path: None | str | pathlib.Path = None,
-    directory: None | str | pathlib.Path = None,
-    seed: int = 0,
-) -> esis.optics.DistortionParameters:  # pragma: nocover
-    """
-    Rerun only the internal alignment of a saved reference.
-
-    The alignment reads the channels' frames, not the proxy scene, so it is
-    cheap to repeat; the reference's record of its earlier stages is carried
-    into the result.
-
-    Parameters
-    ----------
-    reference
-        The path of the saved reference table.
-    time
-        The frame the reference was fit to.
-    num_scene
-        The number of samples along each axis of the resampled AIA scene,
-        whose extent sets the sky grid.
-    instrument
-        The base model.  If :obj:`None`, the idealized as-built model.
-    free_shared
-        The free set of the shared stage; the alignment frees the same
-        terms less the photometric ones.
-    path
-        If given, the realigned reference is written here.
-    directory
-        A directory where the progress is logged.
-    seed
-        The seed of the samples every channel is linearized on, see
-        :class:`esis.optics.LinearMerit`.
-    """
-    reference = pathlib.Path(reference)
-    start = astropy.table.QTable.read(reference, format="ascii.ecsv")
-    parameters_start = esis.optics.DistortionParameters.from_file(reference)
-    instrument = _base(instrument)
-    num_channel = instrument.camera.channel.shape["channel"]
-    parameters = [_channel(parameters_start, c) for c in range(num_channel)]
-    log = _logger(directory, "realign")
-    scene, observation = _frame(time, num_scene)
-    own = [n for n in free_shared if n not in _SHARED and n not in _PHOTOMETRIC]
-    log("internal alignment of " + reference.name + ", free: " + ", ".join(own))
-    parameters, medians = esis.optics.align_channels(
-        instruments=[instrument[dict(channel=c)] for c in range(num_channel)],
-        parameters=parameters,
-        frames=_frames_by_axis(observation, num_channel),
-        scene_position=scene.inputs.position,
-        wavelengths=_wavelengths_alignment(),
-        free=tuple(own),
-        seed=seed,
-        log=log,
-    )
-    windows = _window_centers(instrument, parameters, scene, observation, seed)
-    result = _stack(parameters, axis="channel")
-    if path is not None:
-        # the writer names the logical axis itself
-        meta = {k: v for k, v in start.meta.items() if k != "axis"}
-        meta["scores"] = dict(
-            meta.get("scores", {}), alignment=[float(m) for m in medians]
-        )
-        meta["stages"] = dict(
-            meta.get("stages", {}),
-            alignment=dict(free=list(own), lines=list(_LINES_ALIGNMENT), anchor=1),
-        )
-        meta["windows"] = windows
-        meta["realigned"] = dict(
-            start=start.meta.get("date"),
-            note=(
-                "the internal alignment rerun on the saved reference with the "
-                "frames read inside their windows (median shift vs channel 1: "
-                + ", ".join(f"{m:.2f}" for m in medians)
-                + " px)"
-            ),
-            **_stamp(seed),
-        )
-        result.to_file(path, metadata=meta)
     return result
 
 
@@ -1882,35 +1630,6 @@ def _drift_smooth(
         return np.array([np.polyval(coefficients[channel, k], t) for k in range(2)])
 
     return shift
-
-
-def _drift_function(
-    drift: None | astropy.table.QTable,
-    num_channel: int,
-    degree: None | int,
-) -> None | Callable[[int, int], np.ndarray]:
-    """
-    Choose how the measured drift of the windows is read per frame.
-
-    Parameters
-    ----------
-    drift
-        The drift table, see :func:`measure_window_edges`, or :obj:`None`.
-    num_channel
-        The number of channels.
-    degree
-        The degree of the smoothing polynomial, see :func:`_drift_smooth`;
-        :obj:`None` reads each frame as measured, see :func:`_drift_shift`.
-
-    Returns
-    -------
-    A function of the channel and the frame, or :obj:`None` without a table.
-    """
-    if drift is None:
-        return None
-    if degree is None:
-        return functools.partial(_drift_shift, drift)
-    return _drift_smooth(drift, num_channel, degree)
 
 
 def _drift_sensitivity(
@@ -2157,7 +1876,7 @@ def fit_defocus_history(
     frames: None | tuple[int, ...] = None,
     frame_reference: int = 15,
     drift: None | str | pathlib.Path | astropy.table.QTable = None,
-    drift_degree: None | int = 3,
+    drift_degree: int = 3,
     degree: int = 2,
     anchor: int = 1,
     path: None | str | pathlib.Path = None,
@@ -2236,7 +1955,10 @@ def fit_defocus_history(
         design[2 * i : 2 * i + 2, c] = pattern[c]
         design[2 * i : 2 * i + 2, anchor] = -pattern[anchor]
 
-    shift_drift = _drift_function(_read_table(drift), num_channel, drift_degree)
+    drift = _read_table(drift)
+    shift_drift = None
+    if drift is not None:
+        shift_drift = _drift_smooth(drift, num_channel, drift_degree)
     sensitivity = None
 
     rows = []
@@ -2259,10 +1981,9 @@ def fit_defocus_history(
                         for k in range(num_channel)
                     ]
                     sensitivity = _drift_sensitivity(instrument, parameters, merits)
-                # the reference was fitted at its own frame with no grating
-                # offset, so the windows have moved by the drift since then
-                shift = shift_drift(c, t) - shift_drift(c, frame_reference)
-                offset = shift / sensitivity[c]
+                # the reference places the windows where they were at its
+                # own frame, from which the drift is measured
+                offset = shift_drift(c, t) / sensitivity[c]
                 p.yaw_grating = p.yaw_grating + offset[0] * u.arcmin
                 p.pitch_grating = p.pitch_grating + offset[1] * u.arcmin
             model = p.to_instrument(instrument[dict(channel=c)])
@@ -2362,17 +2083,14 @@ def frame_parameters(
     pointing: astropy.table.QTable,
     frame: int,
     channel: int,
-    channel_offsets: bool = True,
 ) -> esis.optics.DistortionParameters:
     """
     Take one channel's reference parameters to one frame of the flight.
 
     Everything the pointing table carries for the frame is applied: the
     pointing of the payload, the focus of the channel's sector of the
-    primary, the grating offsets that follow its windows and, if the table
-    has them, the channel's own pointing offsets
-    (:func:`apply_coregistration`).  The flight factory applies the same
-    columns to the whole model.
+    primary, and the grating offsets that follow its windows.  The flight
+    factory applies the same columns to the whole model.
 
     Parameters
     ----------
@@ -2384,9 +2102,6 @@ def frame_parameters(
         The frame of :func:`esis.flights.f1.data.level_1`.
     channel
         The channel.
-    channel_offsets
-        Whether to apply the channel's own pointing offset, if the table
-        has one.
 
     Raises
     ------
@@ -2401,80 +2116,10 @@ def frame_parameters(
     p.pitch = p.pitch + row["pitch"]
     p.yaw = p.yaw + row["yaw"]
     p.roll = p.roll + row["roll"]
-    if "z_primary" in pointing.colnames:
-        z = row["z_primary"]
-        # one focus per sector, or one for the whole primary
-        p.z_primary = p.z_primary + (z[channel] if np.ndim(z) else z)
-    for name in ("yaw_grating", "pitch_grating"):
-        if name in pointing.colnames:
-            setattr(p, name, getattr(p, name) + row[name][channel])
-    if channel_offsets:
-        for name in ("pitch", "yaw"):
-            if f"{name}_channel" in pointing.colnames:
-                setattr(p, name, getattr(p, name) + row[f"{name}_channel"][channel])
+    p.z_primary = p.z_primary + row["z_primary"][channel]
+    p.yaw_grating = p.yaw_grating + row["yaw_grating"][channel]
+    p.pitch_grating = p.pitch_grating + row["pitch_grating"][channel]
     return p
-
-
-def _pointing_pattern(
-    instrument: esis.optics.Instrument,
-    parameters: list[esis.optics.DistortionParameters],
-    wavelengths: dict[str, u.Quantity],
-    anchor: int = 1,
-    step: u.Quantity = 1 * u.arcsec,
-    seed: int = 0,
-) -> np.ndarray:
-    """
-    Measure how a pointing offset of one channel moves that channel's sky.
-
-    The same finite difference as :func:`_defocus_pattern`, in the channel's
-    own pitch and yaw: where a point of the sky lands on the sensor before
-    and after, taken back to the sky and expressed in the anchor's pixels.
-
-    Parameters
-    ----------
-    instrument
-        The instrument model.
-    parameters
-        The parameters of every channel.
-    wavelengths
-        The lines to measure at; the pattern is their mean.
-    anchor
-        The channel whose pixels the shifts are expressed in.
-    step
-        The offset of the finite difference.
-    seed
-        The seed of the samples every channel is linearized on, see
-        :class:`esis.optics.LinearMerit`.
-
-    Returns
-    -------
-    An array indexed ``[channel, axis, term]``: the shift on the sky in
-    detector pixels, along each axis of the sky, of each channel per
-    arcsecond of its own pitch and of its own yaw.
-    """
-
-    def where(c, name, d):
-        p = copy.copy(parameters[c])
-        setattr(p, name, getattr(p, name) + d)
-        return _image_jacobians(p, instrument[dict(channel=c)], wavelengths, seed)
-
-    num_channel = len(parameters)
-    result = np.zeros((num_channel, 2, 2))
-    scale = None
-    for c in range(num_channel):
-        before = where(c, "pitch", 0 * step)
-        if c == anchor:
-            scale = _pixels_per_arcsec(before)
-        for k, name in enumerate(("pitch", "yaw")):
-            after = where(c, name, step)
-            result[c, :, k] = np.mean(
-                [
-                    np.linalg.solve(j, s1 - s0)
-                    for (s0, j), (s1, _) in zip(before, after)
-                ],
-                axis=0,
-            )
-    return result * scale[None, :, None] / step.to_value(u.arcsec)
 
 
 def _fit_through_reference(
@@ -2534,284 +2179,6 @@ def _fit_through_reference(
     return fitted, used, scatter
 
 
-def fit_coregistration(
-    reference: str | pathlib.Path | esis.optics.DistortionParameters,
-    pointing: str | pathlib.Path | astropy.table.QTable,
-    num_scene: int = 401,
-    instrument: None | esis.optics.Instrument = None,
-    frames: None | tuple[int, ...] = None,
-    frame_reference: int = 15,
-    degree: int = 2,
-    anchor: int = 1,
-    num_pass: int = 2,
-    path: None | str | pathlib.Path = None,
-    directory: None | str | pathlib.Path = None,
-    seed: int = 0,
-) -> astropy.table.QTable:  # pragma: nocover
-    """
-    Register the channels with one another empirically through the flight.
-
-    A check on the chain rather than a stage of it: the per-sector focus of
-    :func:`fit_defocus_history` takes out the motion of the channels' skies
-    against one another, and this measures whatever is left as a pointing
-    offset of each channel.  In every frame the channels' skies are measured
-    against the anchor's (:func:`esis.optics.measure_channel_shifts`), the
-    shift of each channel is converted to the offset of its own pitch and
-    yaw that removes it (:func:`_pointing_pattern`), and a polynomial in the
-    frame index that vanishes at the reference frame is fit through the
-    flight (:func:`_fit_through_reference`).  The offsets are taken about
-    their mean over the channels, so that the payload's pointing is left
-    where the scene put it.  A second pass measures the channels again with
-    the first fit applied and corrects it.
-
-    Parameters
-    ----------
-    reference
-        The reference parameters, or the path of their table.
-    pointing
-        The pointing table, or its path, see :func:`fit_distortion_pointing`.
-        Any channel offsets it already carries are ignored.
-    num_scene
-        The number of samples along each axis of the resampled AIA scene,
-        whose extent sets the sky grid.
-    instrument
-        The base model.  If :obj:`None`, the idealized as-built model.
-    frames
-        The frames to measure.  If :obj:`None`, every frame.
-    frame_reference
-        The frame the reference was fit to, where the offsets are zero.
-    degree
-        The degree of the polynomial in the frame index.
-    anchor
-        The channel the others are measured against.
-    num_pass
-        The number of times the channels are measured.
-    path
-        If given, the history is written here as an ECSV table.
-    directory
-        A directory where the progress is logged.
-    seed
-        The seed of the samples every channel is linearized on, see
-        :class:`esis.optics.LinearMerit`.
-
-    Returns
-    -------
-    One row per frame: the shift of every channel against the anchor as
-    first measured and as measured in the last pass, the offsets that
-    remove them, and ``pitch_channel`` and ``yaw_channel``, the fitted
-    offsets that :func:`apply_coregistration` adds to the pointing table.
-    """
-    if not isinstance(reference, esis.optics.DistortionParameters):
-        reference = esis.optics.DistortionParameters.from_file(reference)
-    pointing = _read_table(pointing)
-    instrument = _base(instrument)
-    num_channel = instrument.camera.channel.shape["channel"]
-    if frames is None:
-        frames = tuple(range(esis.flights.f1.data.level_1().shape["time"]))
-    frames = tuple(sorted(frames))
-    log = _logger(directory, "coregistration")
-    wavelengths = _wavelengths_alignment()
-    others = [c for c in range(num_channel) if c != anchor]
-
-    pattern = _pointing_pattern(
-        instrument,
-        [
-            frame_parameters(reference, pointing, frame_reference, c, False)
-            for c in range(num_channel)
-        ],
-        wavelengths,
-        anchor,
-        seed=seed,
-    )
-    log(
-        "sky shift per arcsecond of a channel's own pitch; yaw [px]: "
-        + " | ".join(
-            f"{p[0, 0]:+.2f}, {p[1, 0]:+.2f}; {p[0, 1]:+.2f}, {p[1, 1]:+.2f}"
-            for p in pattern
-        )
-    )
-
-    data = {}
-    for t in frames:
-        scene, observation = _frame(t, num_scene)
-        # copies, so that the Level-1 cube each frame was cut from is freed
-        data[t] = (
-            [np.array(f) for f in _frames_by_axis(observation, num_channel)],
-            _alignment.sky_grid(scene.inputs.position, 1600),
-        )
-        del scene, observation
-
-    num = len(frames)
-    # the motion each channel's image needs against the anchor's, in pixels
-    # on the sky: as measured in each frame, and its fit
-    motion = np.zeros((num, num_channel, 2))
-    relative = np.zeros((num, num_channel, 2))
-    offsets = np.zeros((num, num_channel, 2))  # arcseconds of pitch and yaw
-    used = np.ones((num, num_channel, 2), dtype=bool)
-    scatter = np.zeros((num_channel, 2))
-    shifts_first = np.zeros((num, num_channel, 2))
-    shifts_last = np.zeros((num, num_channel, 2))
-    for k in range(num_pass):
-        for i, t in enumerate(frames):
-            frames_data, sky = data[t]
-            linears = []
-            for c in range(num_channel):
-                p = frame_parameters(reference, pointing, t, c, False)
-                p.pitch = p.pitch + offsets[i, c, 0] * u.arcsec
-                p.yaw = p.yaw + offsets[i, c, 1] * u.arcsec
-                model = p.to_instrument(instrument[dict(channel=c)])
-                linears.append(
-                    model.system.linearize(
-                        wavelength=model.wavelength,
-                        degree=2,
-                        field_stop=True,
-                        seed_field=seed,
-                        seed_pupil=seed,
-                    )
-                )
-            fields, scales = esis.optics.measure_channel_shifts(
-                linears, frames_data, sky, wavelengths, anchor=anchor
-            )
-            medians = esis.optics.median_shifts(fields, scales)
-            for c in others:
-                shifts_last[i, c] = medians[c]
-                if k == 0:
-                    shifts_first[i, c] = medians[c]
-                # a measured shift s means the anchor shows at r + s what the
-                # channel shows at r (see shift_fft): the channel's image sits
-                # at -s, on top of the motion already applied
-                motion[i, c] = relative[i, c] - medians[c]
-            log(
-                f"pass {k}, frame {t}: shifts vs channel {anchor} "
-                + "; ".join(
-                    f"{medians[c][0]:+.2f}, {medians[c][1]:+.2f}" for c in others
-                )
-                + " px"
-            )
-        rms = float(np.sqrt(np.nanmean(shifts_last[:, others] ** 2)))
-        log(
-            f"pass {k}: rms shift of the channels against channel {anchor} {rms:.3f} px"
-        )
-        for c in others:
-            for j in range(2):
-                relative[:, c, j], used[:, c, j], scatter[c, j] = (
-                    _fit_through_reference(
-                        np.array(frames),
-                        motion[:, c, j],
-                        frame_reference,
-                        degree,
-                        floor=0.05,
-                    )
-                )
-        # about the mean of the channels, so the payload's pointing stays put
-        centered = relative - relative.mean(axis=1, keepdims=True)
-        for c in range(num_channel):
-            offsets[:, c] = np.linalg.solve(pattern[c], centered[:, c].T).T
-        log(
-            f"pass {k}: offsets at the first and the last frame, pitch; yaw [arcsec]: "
-            + " | ".join(
-                f"ch{c} {offsets[0, c, 0]:+.2f}, {offsets[-1, c, 0]:+.2f}; "
-                f"{offsets[0, c, 1]:+.2f}, {offsets[-1, c, 1]:+.2f}"
-                for c in range(num_channel)
-            )
-            + "; scatter of the measured motion about the fit [px]: "
-            + ", ".join(f"{np.hypot(*scatter[c]):.3f}" for c in others)
-        )
-
-    table = astropy.table.QTable(
-        dict(
-            frame=np.array(frames),
-            shift_x=shifts_first[..., 0] * u.pix,
-            shift_y=shifts_first[..., 1] * u.pix,
-            residual_x=shifts_last[..., 0] * u.pix,
-            residual_y=shifts_last[..., 1] * u.pix,
-            motion_x=motion[..., 0] * u.pix,
-            motion_y=motion[..., 1] * u.pix,
-            used=used.all(axis=-1),
-            pitch_channel=offsets[..., 0] * u.arcsec,
-            yaw_channel=offsets[..., 1] * u.arcsec,
-        )
-    )
-    table.meta.update(
-        dict(
-            description=(
-                "The registration of the ESIS-I channels with one another "
-                "through the flight.  shift is the median tile shift of every "
-                "channel's sky against the anchor's with the pointing, the "
-                "window drift and the focus of each sector applied, in detector "
-                "pixels, and "
-                "residual the same in the last pass, measured with the "
-                "previous pass's offsets applied.  motion is the motion on the "
-                "sky, in detector pixels, that each channel's image needs "
-                "against the anchor's in each frame; a polynomial in the frame "
-                "index that vanishes at the reference frame is fit through "
-                "it, taken about the mean of the channels, and expressed as "
-                "pitch_channel and yaw_channel, the offset of each channel's "
-                "own pointing.  used marks the frames the fit kept.  This is "
-                "what the focus of each sector leaves, an empirical term the "
-                "flight factory applies only when asked (channel_offsets)."
-            ),
-            provenance=(
-                f"esis.flights.f1.optics.fit_coregistration(num_scene={num_scene}, "
-                f"degree={degree}, anchor={anchor}, num_pass={num_pass})"
-            ),
-            frame_reference=int(frame_reference),
-            anchor=int(anchor),
-            pattern=[[[float(v) for v in row] for row in p] for p in pattern],
-            scatter=[[float(v) for v in row] for row in scatter],
-            rms_first=float(np.sqrt(np.nanmean(shifts_first[:, others] ** 2))),
-            rms_last=float(np.sqrt(np.nanmean(shifts_last[:, others] ** 2))),
-            **_stamp(seed),
-        )
-    )
-    if path is not None:
-        table.write(path, format="ascii.ecsv", overwrite=True)
-    return table
-
-
-def apply_coregistration(
-    pointing: astropy.table.QTable,
-    coregistration: astropy.table.QTable,
-) -> astropy.table.QTable:
-    """
-    Add the channels' own pointing offsets to the pointing table.
-
-    Parameters
-    ----------
-    pointing
-        The pointing table, see :func:`fit_distortion_pointing`.
-    coregistration
-        The registration of the channels, see :func:`fit_coregistration`.
-
-    Returns
-    -------
-    A copy of the pointing table with ``pitch_channel`` and ``yaw_channel``
-    columns, one value per channel, which :func:`frame_parameters` and the
-    flight factory add to each channel's pointing.
-
-    Raises
-    ------
-    ValueError
-        If a frame of the pointing table was not registered.
-    """
-    result = pointing.copy()
-    frames = [int(t) for t in np.asarray(coregistration["frame"])]
-    index = []
-    for t in np.asarray(pointing["frame"]):
-        if int(t) not in frames:
-            raise ValueError(f"frame {int(t)} was not registered")
-        index.append(frames.index(int(t)))
-    for name in ("pitch_channel", "yaw_channel"):
-        result[name] = coregistration[name][index]
-    result.meta["coregistration"] = (
-        "pitch_channel and yaw_channel are each channel's own pointing "
-        "offset, added to the payload's, which registers the channels with "
-        "one another through the flight; see fit_coregistration, whose "
-        "provenance was " + str(coregistration.meta.get("provenance", "not recorded"))
-    )
-    return result
-
-
 def fit_distortion_pointing(
     instrument: None | esis.optics.Instrument = None,
     num_scene: int = 401,
@@ -2820,12 +2187,9 @@ def fit_distortion_pointing(
     frames: None | tuple[int, ...] = None,
     path: None | str | pathlib.Path = None,
     directory: None | str | pathlib.Path = None,
-    merit: str = "correlation",
     drift: None | str | pathlib.Path | astropy.table.QTable = None,
-    drift_degree: None | int = 3,
+    drift_degree: int = 3,
     defocus: None | str | pathlib.Path | astropy.table.QTable = None,
-    relative: bool = True,
-    free_roll: bool = False,
     seed: int = 0,
 ) -> astropy.table.QTable:  # pragma: nocover
     r"""
@@ -2851,7 +2215,8 @@ def fit_distortion_pointing(
         The frame the reference was fit to.  If it is among `frames`, its
         own offset is subtracted from every row, so that the table is
         relative to the reference frame and zero there; see
-        :func:`pointing_relative`.
+        :func:`pointing_relative`.  A driver that fits one frame per job
+        gathers the rows first and takes them relative once.
     frames
         The frames to fit.  If :obj:`None`, every frame is fit.
     path
@@ -2859,9 +2224,6 @@ def fit_distortion_pointing(
         the format of ``_data/distortion_pointing.ecsv``.
     directory
         A directory where the progress of every frame is logged.
-    merit
-        The comparison the pointing maximizes, see
-        :class:`esis.optics.LinearMerit`.
     drift
         The per-frame drift of the windows, see
         :func:`measure_window_edges`, or the path of its table.  If given,
@@ -2870,25 +2232,13 @@ def fit_distortion_pointing(
         the pointing is fit; the offsets are recorded in the result.
     drift_degree
         The degree of the polynomial in the frame index that smooths the
-        drift through the flight, see :func:`_drift_smooth`; :obj:`None`
-        applies each frame's drift as measured, and zero where a frame has
-        no measured edges.
+        drift through the flight, see :func:`_drift_smooth`.
     defocus
         The focus of each sector of the primary through the flight, see
         :func:`fit_defocus_history`, or the path of its table.  If given,
         each frame's ``z_primary`` is applied before the pointing is fit and
         is not itself fit: the proxy scene cannot tell a defocus from the
         internal alignment, but the channels can.
-    relative
-        Whether to take the offsets relative to `frame_reference` when it
-        is among `frames`, see :func:`pointing_relative`.  A driver that
-        fits one frame per job gathers the rows first and takes them
-        relative once.
-    free_roll
-        Whether to fit the roll of the payload per frame as well.  The
-        merit against the proxy scene cannot measure a roll to better than
-        an arcminute, so by default the roll is held at the reference's and
-        the table's roll column is zero.
     seed
         The seed of the samples every channel is linearized on, see
         :class:`esis.optics.LinearMerit`.
@@ -2907,15 +2257,18 @@ def fit_distortion_pointing(
         for c in range(num_channel)
     ]
     names = [f.name for f in dataclasses.fields(reference[0])]
-    common = ("pitch", "yaw", "roll") if free_roll else ("pitch", "yaw")
+    # the merit against the proxy scene cannot measure a roll to better
+    # than an arcminute, so the roll is held at the reference's
+    common = ("pitch", "yaw")
     index = [names.index(n) for n in common]
     index_defocus = names.index("z_primary")
     index_grating = [names.index(n) for n in ("yaw_grating", "pitch_grating")]
     defocus = _read_table(defocus)
 
     drift = _read_table(drift)
-    shift_drift = _drift_function(drift, num_channel, drift_degree)
-    if drift is not None and drift_degree is not None:
+    shift_drift = None
+    if drift is not None:
+        shift_drift = _drift_smooth(drift, num_channel, drift_degree)
         measured = sorted(set(int(t) for t in np.asarray(drift["frame"])))
         log(
             f"window drift smoothed by a degree-{drift_degree} polynomial over "
@@ -2933,7 +2286,6 @@ def fit_distortion_pointing(
                 scene=scene,
                 observation=observation[dict(channel=c)],
                 device=device,
-                merit=merit,
                 seed=seed,
             )
             for c in range(num_channel)
@@ -2968,7 +2320,7 @@ def fit_distortion_pointing(
             log(
                 f"frame {t}: windows moved "
                 + "; ".join(f"{s[0]:+.2f}, {s[1]:+.2f}" for s in shifts)
-                + " px from the flight median"
+                + f" px from frame {frame_reference}"
             )
 
         def objective(y):
@@ -3018,24 +2370,20 @@ def fit_distortion_pointing(
                 "and applied here, which moves each channel's sky along its "
                 "dispersion without moving the windows.  drift_x and "
                 "drift_y are the measured motion of each channel's windows "
-                "from their flight median, and yaw_grating and pitch_grating "
+                "from the reference frame, and yaw_grating and pitch_grating "
                 "the per-channel grating offsets that reproduce it."
             ),
             provenance=(
                 "esis.flights.f1.optics.fit_distortion_pointing("
                 f"num_scene={num_scene}, drift_degree={drift_degree}): a local "
                 "polish of the mean linear merit of the four channels in "
-                + (
-                    "pitch, yaw and roll"
-                    if free_roll
-                    else "pitch and yaw, the roll held"
-                )
-                + ", per frame, with the measured defocus applied"
+                "pitch and yaw, the roll held, per frame, with the measured "
+                "defocus applied"
             ),
             **_stamp(seed),
         )
     )
-    if relative and frame_reference in frames:
+    if frame_reference in frames:
         table = pointing_relative(table, frame_reference)
     if path is not None:
         table.write(path, format="ascii.ecsv", overwrite=True)
@@ -3115,7 +2463,6 @@ def acceptance(
     instrument: None | esis.optics.Instrument = None,
     num_scene: int = 401,
     device: None | str = None,
-    merit: str = "correlation",
     num_sky: int = 1600,
     num_tile: int = 8,
     fraction_valid: float = 0.8,
@@ -3156,8 +2503,6 @@ def acceptance(
         The number of samples along each axis of the resampled scene.
     device
         The device the merit runs on.
-    merit
-        The comparison to report, see :class:`esis.optics.LinearMerit`.
     num_sky
         The number of samples along each axis of the common sky grid.
     num_tile
@@ -3208,7 +2553,6 @@ def acceptance(
                     scene=scene,
                     observation=observation[dict(channel=c)],
                     device=device,
-                    merit=merit,
                     seed=seed,
                 )
                 merits.append((m, p))
@@ -3493,7 +2837,9 @@ def pointing_relative(table: astropy.table.QTable, frame: int) -> astropy.table.
     A per-frame fit of the pointing alone lands a fraction of an arcsecond
     from the reference fit of the same frame, since it optimizes the mean
     merit of the channels in fewer terms; subtracting the reference frame's
-    own fit puts that frame at zero and the others relative to it.
+    own fit puts that frame at zero and the others relative to it.  The
+    drift of the windows and the focus of the sectors are zero there
+    already, since both are measured from the reference frame.
 
     Parameters
     ----------
@@ -3512,24 +2858,9 @@ def pointing_relative(table: astropy.table.QTable, frame: int) -> astropy.table.
         raise ValueError(f"frame {frame} is not in the table")
     result = table.copy()
     origin = dict()
-    for name in (
-        "pitch",
-        "yaw",
-        "roll",
-        "z_primary",
-        "drift_x",
-        "drift_y",
-        "yaw_grating",
-        "pitch_grating",
-    ):
-        if name not in table.colnames:
-            continue
+    for name in ("pitch", "yaw", "roll"):
         origin[name] = table[name][where[0]]
         result[name] = table[name] - origin[name]
-    if "description" in result.meta:
-        result.meta["description"] = result.meta["description"].replace(
-            "from their flight median", f"from their position at frame {frame}"
-        )
     result.meta["frame_reference"] = int(frame)
     result.meta["offset_reference"] = (
         f"the fit of frame {frame} alone landed at pitch {origin['pitch']:.3f}, "

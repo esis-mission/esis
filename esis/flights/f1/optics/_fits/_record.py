@@ -38,25 +38,27 @@ TABLES = (
     "acceptance.ecsv",
     "acceptance_modes.ecsv",
     "acceptance_tiles.ecsv",
-    "coregistration.ecsv",
 )
 """The tables of a pass that the package commits, besides the field stop."""
 
-TOLERANCE = dict(tilt_deg=0.05, offset_um=1.5, scale=1e-3)
+TOLERANCE = 0.05 * u.deg
 """
-How little a measurement must move the stop it was made through to end the
-iteration: the rms of the tilts and offsets of its sides, and the mean of the
-channels' scales.
+How little a measurement must turn the sides of the stop it was made
+through to end the iteration, as the rms of their tilts.
 
-The tolerance is the fit's own scatter, not a target the iteration can be
-driven below.  Once the stop has stopped improving, refitting through the stop
-a pass measured moves it again by up to 0.04 deg and 1.1 um rms (passes 1 to
-3 of the validation run, which reproduce the pointing of the committed fit to
-within the scatter between seeds); the channels' measurements of one stop
-scatter by 0.025 deg and 0.45 um about their common shape.  The tolerance is
-about 1.5 times the largest of those changes, so the iteration ends at the
-first pass after the stop has settled, and a pass that has not settled, like
-the one fit with the regular octagon (0.49 deg, 1.2 um), does not end it.
+The tilts are what the regular octagon of the design gets wrong: the first
+pass, fit with it, measures sides tilted by 0.49 deg rms.  Once the stop has
+settled, refitting through the stop a pass measured tilts its sides again by
+up to 0.04 deg rms, the fit's own scatter (passes 1 to 3 of the validation
+run, which reproduce the pointing of the committed fit to within the scatter
+between seeds), and the channels' measurements of one stop scatter by
+0.025 deg about their common shape.  The tolerance is a little above that
+scatter, so the iteration ends at the first pass after the stop has settled.
+
+The offsets of the sides and the scales of the channels are recorded but do
+not end the iteration: they scatter from pass to pass by as much as the
+regular octagon is off (1.1 um against 1.2 um), so they cannot tell a
+settled stop from an unsettled one.
 """
 
 PARKER2022 = dict(
@@ -128,7 +130,7 @@ def field_stop_change(table: astropy.table.Table) -> dict:
 
 def field_stop_converged(
     table: astropy.table.Table,
-    tolerance: None | dict = None,
+    tolerance: u.Quantity = TOLERANCE,
 ) -> bool:
     """
     Decide whether a measurement of the field stop left it where it was.
@@ -138,17 +140,10 @@ def field_stop_converged(
     table
         A measurement, as :func:`measure_field_stop` writes it.
     tolerance
-        The largest rms tilt (``tilt_deg``) and offset (``offset_um``) of the
-        sides and mean scale (``scale``) that count as not moving it; if
-        :obj:`None`, :data:`TOLERANCE`.
+        The largest rms tilt of the sides that counts as not moving it.
     """
-    tolerance = TOLERANCE if tolerance is None else tolerance
     change = field_stop_change(table)
-    return bool(
-        change["shape_tilt_deg"] < tolerance["tilt_deg"]
-        and change["shape_offset_um"] < tolerance["offset_um"]
-        and abs(np.mean(change["scale"])) < tolerance["scale"]
-    )
+    return bool(change["shape_tilt_deg"] < tolerance.to_value(u.deg))
 
 
 def registration_rms(
@@ -171,9 +166,9 @@ def registration_rms(
         the measured ones.
     """
     anchor = int(acceptance.meta["anchor"])
-    last = max(int(t) for t in drift["frame"])
+    measured = np.unique(np.asarray(drift["frame"]))
     rows = acceptance[
-        (np.asarray(acceptance["frame"]) <= last)
+        np.isin(np.asarray(acceptance["frame"]), measured)
         & (np.asarray(acceptance["channel"]) != anchor)
     ]
     result = {}
@@ -300,9 +295,8 @@ def measure_clocking(
 def record_distortion_fit(
     passes: list[str | pathlib.Path],
     directory: str | pathlib.Path,
-    straight: None | str | pathlib.Path = None,
     clocking: None | dict = None,
-    tolerance: None | dict = None,
+    tolerance: u.Quantity = TOLERANCE,
 ) -> astropy.table.QTable:
     """
     Write the tables the package commits from the passes of the iteration.
@@ -322,10 +316,6 @@ def record_distortion_fit(
         iteration.
     directory
         The directory to write the tables into.
-    straight
-        The directory of the same fit with the drift read from the straight
-        edges, see :func:`measure_window_edges`, whose registration is kept
-        in the metadata of the drift table to compare against.
     clocking
         The clocking of the stop, see :func:`measure_clocking`; if
         :obj:`None`, measured through the last pass.
@@ -339,12 +329,11 @@ def record_distortion_fit(
     Raises
     ------
     ValueError
-        If there is only one pass, the fit with the regular octagon.
+        If there is only one pass, the fit with the regular octagon, or if
+        the last pass's measurement moved the stop.
     """
     passes = [pathlib.Path(p) for p in passes]
     directory = pathlib.Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    tolerance = TOLERANCE if tolerance is None else tolerance
     final = passes[-1]
     if len(passes) < 2:
         raise ValueError("the fit with the regular octagon cannot be the last pass")
@@ -365,6 +354,10 @@ def record_distortion_fit(
         )
         entry["converged"] = field_stop_converged(measured, tolerance)
         history.append(entry)
+    if not history[-1]["converged"]:
+        raise ValueError(f"the measurement of {final} moved the field stop")
+
+    directory.mkdir(parents=True, exist_ok=True)
 
     for name in TABLES:
         shutil.copyfile(final / name, directory / name)
@@ -402,36 +395,11 @@ def record_distortion_fit(
             "measurement is within the tolerance; that pass is the fit, and "
             "this table is the stop it was fit with."
         ),
-        tolerance=dict(tolerance),
+        tolerance_tilt_deg=float(tolerance.to_value(u.deg)),
         passes=history,
     )
     stop.meta["clocking"] = clocking
     stop.meta["parker2022"] = dict(PARKER2022)
     stop.write(directory / "field_stop.ecsv", format="ascii.ecsv", overwrite=True)
 
-    if straight is not None:
-        straight = pathlib.Path(straight)
-        drift = astropy.table.QTable.read(
-            directory / "window_drift.ecsv", format="ascii.ecsv"
-        )
-        drift.meta["straight_edge_drift"] = dict(
-            description=(
-                "The registration of the channels when the drift is read from "
-                "the crossings of the straight edges instead of the steps of "
-                "every row and column, the same fit otherwise: the rms of the "
-                "median tile shift against the anchor channel over the frames "
-                "whose edges are measured, per line."
-            ),
-            acceptance_rms_px=registration_rms(
-                astropy.table.QTable.read(
-                    straight / "acceptance.ecsv", format="ascii.ecsv"
-                ),
-                astropy.table.QTable.read(
-                    straight / "window_drift.ecsv", format="ascii.ecsv"
-                ),
-            ),
-        )
-        drift.write(
-            directory / "window_drift.ecsv", format="ascii.ecsv", overwrite=True
-        )
     return stop
