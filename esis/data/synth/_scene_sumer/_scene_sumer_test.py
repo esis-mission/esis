@@ -204,6 +204,51 @@ def test_neighbours_strong(
     assert 80 * u.km / u.s <= velocity.max() <= velocities[1] - margin
 
 
+def test_neighbour_uncovered() -> None:
+    """
+    A neighbouring line which the window does not reach well past is cut off.
+
+    The window of the test file ends at about 187 km/s,
+    one standard deviation past this neighbouring line, but not two.
+    """
+    velocities = [-175, +170] * u.km / u.s
+    observation, _ = _synthetic(
+        fraction=0.05,
+        velocities=velocities,
+        slope=0.2,
+    )
+    result = esis.data.synth.scene_sumer_observation(
+        observation=observation,
+        velocities_neighbour=velocities,
+    )
+    velocity = _velocity(result)
+    assert velocity.min() < -250 * u.km / u.s
+    margin = 2 * _sigma_neighbour
+    assert 80 * u.km / u.s <= velocity.max() <= velocities[1] - margin
+
+
+def test_neighbour_residual() -> None:
+    """
+    A line left past a subtracted neighbouring line is cut off.
+
+    The scene ends at the lowest point of the mean profile before it.
+    """
+    velocity_extra = -250 * u.km / u.s
+    velocities = [-175, +130] * u.km / u.s
+    observation, _ = _synthetic(
+        fraction=0.05,
+        velocities=np.concatenate([[velocity_extra], velocities]),
+        slope=0.2,
+    )
+    result = esis.data.synth.scene_sumer_observation(
+        observation=observation,
+        velocities_neighbour=velocities,
+    )
+    velocity = _velocity(result)
+    assert velocity_extra < velocity.min() < velocities[0]
+    assert velocity.max() > 160 * u.km / u.s
+
+
 def test_neighbours_same_side() -> None:
     with pytest.raises(ValueError, match="At most one"):
         esis.data.synth.scene_sumer_observation(

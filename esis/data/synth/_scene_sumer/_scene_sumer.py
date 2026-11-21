@@ -4,6 +4,7 @@ import dataclasses
 import numpy as np
 import scipy.ndimage
 import scipy.optimize
+import scipy.signal
 import astropy.units as u
 import named_arrays as na
 import soho
@@ -38,6 +39,32 @@ _sigma_neighbour_max = 50 * u.km / u.s
 
 _num_column_min = 6
 """The fewest observed columns a neighbouring line is fitted to."""
+
+_num_column_edge = 2
+"""
+The number of columns at the end of the window which are only partly lit.
+
+In the mean profiles of the passes of
+:func:`~esis.flights.f1.data.synth.passes_sumer`,
+the outermost column is about a tenth as bright as the next,
+and the next about half as bright as the one after,
+while the columns further in differ by only about a tenth.
+"""
+
+_num_sigma_covered = 2
+"""
+How many standard deviations past the center of a neighbouring line the window
+must reach for the line to be subtracted, so that its fit sees both its sides.
+"""
+
+_prominence_max = 0.01
+"""
+The greatest prominence of a peak of the mean profile in a wing of the line,
+as a fraction of the peak of the line,
+once the neighbouring line on that side is subtracted.
+A more prominent peak is what is left of the neighbouring line,
+or another line, so the scene is cut at the lowest point before it.
+"""
 
 _percentile_floor = 5
 """The percentile of the mean profile taken as the floor under the lines."""
@@ -238,6 +265,27 @@ def _amplitude(
     return np.where(enough, np.maximum(amplitude, 0), 0)
 
 
+def _smooth(profile: np.ndarray) -> np.ndarray:
+    """
+    Return the mean of the observed columns of a profile near each column.
+
+    The columns no exposure observed, and those beyond the ends of the window,
+    are left out of the means, so that the ends do not look like troughs.
+
+    Parameters
+    ----------
+    profile
+        A mean profile, not a number (NaN) in the columns no exposure observed.
+    """
+    observed = np.isfinite(profile)
+    kernel = np.ones(_size_trough)
+    total = np.convolve(np.where(observed, profile, 0), kernel, mode="same")
+    count = np.convolve(observed, kernel, mode="same")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return np.where(observed, total / count, np.nan)
+
+
 def _level(
     value: np.ndarray,
     columns: np.ndarray,
@@ -283,12 +331,17 @@ def scene_sumer_observation(
     without the scaling which :func:`~esis.data.synth.scene_iris` needs.
 
     The wings of the line reach into those of its neighbouring lines.
-    Where the spectral window reaches past a neighbouring line
-    and that line is weaker than `height_neighbour_max`,
+    Where the spectral window reaches two standard deviations past a
+    neighbouring line and that line is weaker than `height_neighbour_max`,
     the line is subtracted from each pixel and the scene is kept out to the
-    edge of the window.
+    edge of the window,
+    unless the mean profile still has a peak in that wing,
+    in which case the scene is cut at the lowest point before the peak.
     Otherwise, the scene is cut short of the neighbouring line,
     where the mean profile is lowest between the two lines.
+    On the sides with a neighbouring line,
+    the two outermost columns of the window are only partly lit,
+    and are left out.
     The continuum under the line is then subtracted,
     and the voxels SUMER did not observe, which are not a number (NaN),
     are filled if asked to.
@@ -376,6 +429,7 @@ def scene_sumer_observation(
         warnings.simplefilter("ignore", RuntimeWarning)
         profile = np.nanmean(value, axis=(0, 1))
     observed = np.isfinite(profile)
+    lit = observed.copy()
 
     # how far each side of the scene reaches, and the strips at the end of
     # the sides whose neighbouring line is subtracted
@@ -391,59 +445,90 @@ def scene_sumer_observation(
                 f"of the line, but {velocities_neighbour} were given."
             )
 
-        line = observed & (speed < _velocity_trough_min.to_value(_unit_velocity))
-        floor = np.percentile(profile[observed], _percentile_floor)
+        # the outermost columns of the sides with a neighbouring line are
+        # only partly lit, and are left out of the fits and the scene
+        for sign in signs:
+            side = np.flatnonzero(observed & (sign * middle > 0))
+            side = side[np.argsort(sign * middle[side])]
+            lit[side[-_num_column_edge:]] = False
+        profile_lit = np.where(lit, profile, np.nan)
+
+        line = lit & (speed < _velocity_trough_min.to_value(_unit_velocity))
+        floor = np.percentile(profile[lit], _percentile_floor)
         # without the line, no neighbouring line is weak enough to subtract
         peak = profile[line].max() - floor if np.any(line) else 0
 
-        # the mean of the observed columns near each column,
-        # so that the ends of the window do not look like troughs
-        kernel = np.ones(_size_trough)
-        total = np.convolve(np.where(observed, profile, 0), kernel, mode="same")
-        count = np.convolve(observed, kernel, mode="same")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            smooth = np.where(observed, total / count, np.nan)
+        smooth = _smooth(profile_lit)
+        trough_min = _velocity_trough_min.to_value(_unit_velocity)
 
         for velocity_expected in expected:
             sign = int(np.sign(velocity_expected))
             s = sign * middle
-            reach = observed & (s > 0)
+            reach = lit & (s > 0)
             if not np.any(reach):
                 continue
             outermost = s[reach].max()
-            # the outermost column is left out, which may be only partly lit
-            edge = outermost - width_column / 2
+            edge = outermost + width_column / 2
 
             # a neighbouring line is looked for only if the window reaches
-            # where it is expected, so that the drop of a partly lit column
-            # at the end of the window is not taken for the line
+            # where it is expected, so that the drop of the window at its end
+            # is not taken for the line
             found = None
             if outermost >= abs(velocity_expected):
-                found = _neighbour(profile, middle, velocity_expected)
+                found = _neighbour(profile_lit, middle, velocity_expected)
             if found is not None:
                 center, sigma, height = found
-                covered = outermost >= sign * center + sigma
+                reach_min = sign * center + _num_sigma_covered * sigma
+                covered = outermost >= reach_min
                 if covered and height < height_neighbour_max * peak:
-                    amplitude = _amplitude(value, middle, center, sigma)
+                    amplitude = _amplitude(
+                        value=np.where(lit, value, np.nan),
+                        velocity=middle,
+                        center=center,
+                        sigma=sigma,
+                    )
                     gaussian = _gaussian(middle, center, sigma)
                     value = value - amplitude[..., np.newaxis] * gaussian
                     limit[sign] = edge
                     width = _width_continuum.to_value(_unit_velocity)
-                    strips[sign] = observed & (s >= edge - width) & (s <= edge)
+                    strips[sign] = lit & (s >= edge - width) & (s <= edge)
                     continue
                 stop = sign * center - 2 * sigma
             else:
                 trough_max = _velocity_trough_max.to_value(_unit_velocity)
                 stop = min(outermost, trough_max)
 
-            trough_min = _velocity_trough_min.to_value(_unit_velocity)
             between = np.isfinite(smooth) & (s >= trough_min) & (s <= stop)
             if np.any(between):
                 trough = s[between][np.argmin(smooth[between])]
             else:
-                trough = edge
-            limit[sign] = min(trough, edge)
+                trough = outermost
+            limit[sign] = float(trough)
+
+        # a peak in a wing of the mean profile, once the neighbouring line is
+        # subtracted, is what is left of it, or another line;
+        # a continuum which only rises toward the edge of the window is not.
+        # The mean profile is not smoothed, which would flatten narrow peaks;
+        # it averages so many pixels that its noise is far below the peaks.
+        if strips:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                after = np.nanmean(value, axis=(0, 1))
+            for sign in list(strips):
+                s = sign * middle
+                wing = lit & np.isfinite(after)
+                wing = wing & (s >= trough_min) & (s <= limit[sign])
+                wing = np.flatnonzero(wing)
+                wing = wing[np.argsort(s[wing])]
+                peaks, _ = scipy.signal.find_peaks(
+                    x=after[wing],
+                    prominence=_prominence_max * peak,
+                )
+                if peaks.size:
+                    inner = wing[: peaks[0] + 1]
+                    index = inner[np.argmin(after[inner])]
+                    limit[sign] = float(s[index])
+                    del strips[sign]
 
     kept = (-limit[-1] <= middle) & (middle <= limit[+1])
     if velocity_max is not None:
@@ -473,10 +558,10 @@ def scene_sumer_observation(
                 v_min = velocity_continuum.to_value(_unit_velocity)
                 columns = kept & (speed >= v_min)
             if np.count_nonzero(columns) < _num_continuum_min:
-                darkest = np.argsort(np.where(observed, profile, np.inf))
-                columns = np.zeros_like(observed)
+                darkest = np.argsort(np.where(lit, profile, np.inf))
+                columns = np.zeros_like(lit)
                 columns[darkest[:_num_continuum_darkest]] = True
-                columns = columns & observed
+                columns = columns & lit
             continuum = _level(value, columns, size_continuum)
             value = value - continuum[..., np.newaxis]
 
