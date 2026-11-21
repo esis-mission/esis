@@ -260,6 +260,7 @@ def _multilayer_SiSc(
                 color="tab:blue",
                 alpha=0.3,
             ),
+            x_label=1.1,
         ),
         _Si(thickness_top - _ratio_oxide * _thickness_oxide),
         _Sc(),
