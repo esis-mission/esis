@@ -284,11 +284,16 @@ def multilayer_SiSc() -> optika.materials.MultilayerMirror:
     r"""
     Load the coating design for ESIS II, which uses :math:`\text{Si/Sc}` layers.
 
-    The design has 5 periods of 26 nm, each half Si and half Sc, with a Si
+    The design has 7 periods of 26.13 nm, each half Si and half Sc, with a Si
     layer on top, on a glass substrate.
-    Ten periods would reflect about 15% more at each of the two lines, but
-    five were chosen to keep the coating thin, in case a thicker one is more
-    likely to fail.
+    The period is the one which maximizes the geometric mean of the
+    reflectivities at :data:`~esis.flights.f2.wavelength_Ne_VII` and
+    :data:`~esis.flights.f2.wavelength_Si_XII` for seven periods.
+    Seven periods balance the throughput against the stress in a thicker
+    coating.
+    They reflect about 12% more at each of the two lines than five periods,
+    and ten periods would reflect only 3-4% more again, but would be 260 nm
+    thick instead of 180 nm.
 
     The rest of the model follows the sample of
     :func:`multilayer_SiSc_sample_measured`:
@@ -338,9 +343,9 @@ def multilayer_SiSc() -> optika.materials.MultilayerMirror:
     """
     Si, Sc = multilayer_SiSc_sample_fit().layers[~0].layers
     return _multilayer_SiSc(
-        period=26 * u.nm,
+        period=26.13 * u.nm,
         ratio=0.5,
-        num_periods=5,
+        num_periods=7,
         width_Si=Si.interface.width,
         width_Sc=Sc.interface.width,
         substrate=optika.materials.Layer(
