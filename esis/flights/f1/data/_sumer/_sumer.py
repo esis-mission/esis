@@ -26,7 +26,7 @@ def _path_directory() -> pathlib.Path:
     """
     Return the directory which the files of SUMER are downloaded into.
 
-    It is under :func:`esis.flights.f1.data._fits._fits._path_cache`.
+    It is under :func:`~esis.flights.f1.data._fits._fits._path_cache`.
     """
     return _path_cache() / "sumer"
 
@@ -71,7 +71,7 @@ def path_sumer(
     repository the first time they are needed, one by one,
     and each is checked against the checksum in the manifest of the release,
     so this does not depend on the SOHO archive.
-    Load them with :meth:`soho.sumer.SpectrographObservation.from_level1`.
+    Load them with :meth:`~soho.sumer.SpectrographObservation.from_level1`.
 
     Parameters
     ----------

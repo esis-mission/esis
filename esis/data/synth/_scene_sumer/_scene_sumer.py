@@ -12,7 +12,7 @@ __all__ = [
 ]
 
 _unit_scene = u.erg / (u.cm**2 * u.sr * u.nm * u.s)
-"""The unit of the radiance of the scene, that of :func:`esis.data.synth.scene_iris`."""
+"""The unit of the radiance of the scene, as in :func:`~esis.data.synth.scene_iris`."""
 
 
 def scene_sumer_observation(
@@ -28,7 +28,7 @@ def scene_sumer_observation(
     The Solar Ultraviolet Measurements of Emitted Radiation (SUMER)
     spectrograph observed the lines ESIS does, such as O V 629.7 Angstroms,
     so its spectra are used as they are, in their own radiances,
-    without the scaling which :func:`esis.data.synth.scene_iris` needs.
+    without the scaling which :func:`~esis.data.synth.scene_iris` needs.
     The continuum under the line is subtracted, the spectra are cut to the
     velocities of the line, and the voxels SUMER did not observe,
     which are not a number (NaN), are filled if asked to.
@@ -40,7 +40,7 @@ def scene_sumer_observation(
     ----------
     observation
         The spectra of one raster, such as those loaded by
-        :meth:`soho.sumer.SpectrographObservation.from_level1`,
+        :meth:`~soho.sumer.SpectrographObservation.from_level1`,
         with the zero of their velocities where it should be.
     velocity_max
         The largest speed of the scene, toward or away from the observer.

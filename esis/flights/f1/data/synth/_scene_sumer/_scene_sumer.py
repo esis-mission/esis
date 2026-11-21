@@ -54,7 +54,7 @@ def passes_sumer() -> astropy.table.QTable:
         and the time before which its last exposure started.
     ``file``
         The level-1 file of SUMER which holds the pass,
-        in :func:`esis.flights.f1.data.path_sumer`.
+        in :func:`~esis.flights.f1.data.path_sumer`.
     ``exposure``
         The exposure time of each exposure.
     ``slit``
@@ -144,13 +144,13 @@ def scene_sumer(
     Radiation (SUMER) spectrograph, which observed the line itself,
     in the second order of its grating.
 
-    The level-1 files are those of :func:`esis.flights.f1.data.path_sumer`,
-    loaded with :meth:`soho.sumer.SpectrographObservation.from_level1`,
+    The level-1 files are those of :func:`~esis.flights.f1.data.path_sumer`,
+    loaded with :meth:`~soho.sumer.SpectrographObservation.from_level1`,
     which puts the zero of the velocities at the mean position of the line,
     since SUMER has no absolute wavelength scale.
     Bad raster steps are replaced, the rows beyond the ends of the slit are
     left out, and the stripes of the scans of the polar coronal holes are
-    removed, before :func:`esis.data.synth.scene_sumer_observation` makes
+    removed, before :func:`~esis.data.synth.scene_sumer_observation` makes
     the scene.
 
     Parameters
@@ -167,22 +167,22 @@ def scene_sumer(
         which must then be the same for all of them.
     velocity_max
         The largest speed of the scene,
-        as in :func:`esis.data.synth.scene_sumer_observation`.
+        as in :func:`~esis.data.synth.scene_sumer_observation`.
     velocity_continuum
         The least speed of the columns the continuum is measured from,
-        as in :func:`esis.data.synth.scene_sumer_observation`.
+        as in :func:`~esis.data.synth.scene_sumer_observation`.
     fill
         The radiance of the voxels which SUMER did not observe,
-        as in :func:`esis.data.synth.scene_sumer_observation`.
+        as in :func:`~esis.data.synth.scene_sumer_observation`.
     remove_bad_steps
         Whether to replace bad raster steps,
-        with :meth:`soho.sumer.SpectrographObservation.remove_bad_steps`.
+        with :meth:`~soho.sumer.SpectrographObservation.remove_bad_steps`.
     trim_slit
         Whether to leave out the rows beyond the ends of the slit,
-        with :meth:`soho.sumer.SpectrographObservation.trim_slit`.
+        with :meth:`~soho.sumer.SpectrographObservation.trim_slit`.
     remove_stripes
         Whether to remove the stripes along the slit,
-        with :meth:`soho.sumer.SpectrographObservation.remove_stripes`.
+        with :meth:`~soho.sumer.SpectrographObservation.remove_stripes`.
         If :obj:`None`, they are removed from the scans of the polar coronal
         holes, as the table of the passes marks them.
     axis_detector_x
