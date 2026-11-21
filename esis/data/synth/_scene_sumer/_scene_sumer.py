@@ -84,21 +84,6 @@ which is not found, where the neighbouring lines begin.
 _size_trough = 3
 """The number of columns over which the mean profile is smoothed to find its trough."""
 
-_width_continuum = 30 * u.km / u.s
-"""
-The width of the strip at the end of a side whose neighbouring line is
-subtracted, from which the continuum is measured.
-"""
-
-_num_continuum_min = 2
-"""
-The fewest columns the continuum is measured from,
-below which it is measured from the darkest columns of the mean profile.
-"""
-
-_num_continuum_darkest = 3
-"""The number of darkest columns of the mean profile the continuum falls back to."""
-
 
 def _gaussian(
     velocity: np.ndarray,
@@ -316,7 +301,7 @@ def _level(
 def scene_sumer_observation(
     observation: soho.sumer.SpectrographObservation,
     velocity_max: None | u.Quantity = None,
-    velocity_continuum: None | u.Quantity = 100 * u.km / u.s,
+    num_continuum: None | int = 3,
     size_continuum: int = 5,
     velocities_neighbour: None | u.Quantity = [-175, +215] * u.km / u.s,
     height_neighbour_max: float = 0.15,
@@ -339,10 +324,13 @@ def scene_sumer_observation(
     in which case the scene is cut at the lowest point before the peak.
     Otherwise, the scene is cut short of the neighbouring line,
     where the mean profile is lowest between the two lines.
-    On the sides with a neighbouring line,
-    the two outermost columns of the window are only partly lit,
+    The two outermost columns at each end of the window are only partly lit,
     and are left out.
-    The continuum under the line is then subtracted,
+
+    The scene reaches as far toward the blue as toward the red,
+    as far as the shorter side allows,
+    so that the wings it keeps on one side are not missing on the other.
+    The continuum under the line is subtracted,
     and the voxels SUMER did not observe, which are not a number (NaN),
     are filled if asked to.
 
@@ -361,18 +349,13 @@ def scene_sumer_observation(
         The columns whose middles are beyond it are left out,
         besides those left out because of the neighbouring lines.
         If :obj:`None`, the scene is as wide as the neighbouring lines allow.
-    velocity_continuum
-        The least speed of the columns from which the continuum is measured,
-        if no neighbouring line was subtracted.
-        The continuum of each pixel is the mean of those columns which are
-        kept, averaged over `size_continuum` pixels of the raster in each
+    num_continuum
+        The number of columns from which the continuum is measured:
+        those, anywhere in the window, where the mean profile of the
+        observation is lowest, before the neighbouring lines are subtracted.
+        The continuum of each pixel is the mean of those columns,
+        averaged over `size_continuum` pixels of the raster in each
         direction, and is subtracted from every column.
-        If a neighbouring line was subtracted, the continuum is measured
-        instead at the end of the window beyond it,
-        and if both were, it slopes linearly between the two ends.
-        If fewer than two columns are left to measure it from,
-        it is measured from the three columns where the mean profile of the
-        observation is lowest.
         If :obj:`None`, the continuum is not subtracted.
     size_continuum
         The number of pixels of the raster, in each direction,
@@ -387,7 +370,7 @@ def scene_sumer_observation(
         in the first order, about 215 km/s to the red,
         and another line about 175 km/s to the blue.
         If :obj:`None`, no neighbouring line is subtracted,
-        and the scene is cut only at `velocity_max`.
+        and the scene is cut only at `velocity_max` and the ends of the window.
     height_neighbour_max
         The height, as a fraction of the peak of the line, above which a
         neighbouring line is not subtracted.
@@ -429,12 +412,24 @@ def scene_sumer_observation(
         warnings.simplefilter("ignore", RuntimeWarning)
         profile = np.nanmean(value, axis=(0, 1))
     observed = np.isfinite(profile)
-    lit = observed.copy()
 
-    # how far each side of the scene reaches, and the strips at the end of
-    # the sides whose neighbouring line is subtracted
-    limit: dict[int, float] = {-1: np.inf, +1: np.inf}
-    strips: dict[int, np.ndarray] = dict()
+    # the outermost columns at each end of the window are only partly lit,
+    # and are left out of the fits, the continuum, and the scene
+    lit = observed.copy()
+    for sign in (-1, +1):
+        side = np.flatnonzero(observed & (sign * middle > 0))
+        side = side[np.argsort(sign * middle[side])]
+        lit[side[-_num_column_edge:]] = False
+    profile_lit = np.where(lit, profile, np.nan)
+
+    # how far each side of the scene reaches: no further than the window
+    limit: dict[int, float] = dict()
+    for sign in (-1, +1):
+        reach = lit & (sign * middle > 0)
+        limit[sign] = 0.0
+        if np.any(reach):
+            limit[sign] = float((sign * middle[reach]).max() + width_column / 2)
+    subtracted: set[int] = set()
 
     if velocities_neighbour is not None:
         expected = np.atleast_1d(velocities_neighbour.to_value(_unit_velocity))
@@ -444,14 +439,6 @@ def scene_sumer_observation(
                 f"At most one neighbouring line may be expected on each side "
                 f"of the line, but {velocities_neighbour} were given."
             )
-
-        # the outermost columns of the sides with a neighbouring line are
-        # only partly lit, and are left out of the fits and the scene
-        for sign in signs:
-            side = np.flatnonzero(observed & (sign * middle > 0))
-            side = side[np.argsort(sign * middle[side])]
-            lit[side[-_num_column_edge:]] = False
-        profile_lit = np.where(lit, profile, np.nan)
 
         line = lit & (speed < _velocity_trough_min.to_value(_unit_velocity))
         floor = np.percentile(profile[lit], _percentile_floor)
@@ -489,9 +476,8 @@ def scene_sumer_observation(
                     )
                     gaussian = _gaussian(middle, center, sigma)
                     value = value - amplitude[..., np.newaxis] * gaussian
-                    limit[sign] = edge
-                    width = _width_continuum.to_value(_unit_velocity)
-                    strips[sign] = lit & (s >= edge - width) & (s <= edge)
+                    limit[sign] = float(edge)
+                    subtracted.add(sign)
                     continue
                 stop = sign * center - 2 * sigma
             else:
@@ -510,11 +496,11 @@ def scene_sumer_observation(
         # a continuum which only rises toward the edge of the window is not.
         # The mean profile is not smoothed, which would flatten narrow peaks;
         # it averages so many pixels that its noise is far below the peaks.
-        if strips:
+        if subtracted:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 after = np.nanmean(value, axis=(0, 1))
-            for sign in list(strips):
+            for sign in sorted(subtracted):
                 s = sign * middle
                 wing = lit & np.isfinite(after)
                 wing = wing & (s >= trough_min) & (s <= limit[sign])
@@ -528,42 +514,20 @@ def scene_sumer_observation(
                     inner = wing[: peaks[0] + 1]
                     index = inner[np.argmin(after[inner])]
                     limit[sign] = float(s[index])
-                    del strips[sign]
 
-    kept = (-limit[-1] <= middle) & (middle <= limit[+1])
+    # as far on both sides, so that a wing kept on one side is not missing
+    # on the other
+    kept = speed <= min(limit.values())
     if velocity_max is not None:
         kept = kept & (speed <= velocity_max.to_value(_unit_velocity))
 
-    if velocity_continuum is not None:
-        strips = {
-            sign: strip
-            for sign, strip in strips.items()
-            if np.count_nonzero(strip) >= 2
-        }
-        if len(strips) == 2:
-            v_blue = middle[strips[-1]].mean()
-            v_red = middle[strips[+1]].mean()
-            weight = (middle - v_blue) / (v_red - v_blue)
-            level_blue = _level(value, strips[-1], size_continuum)
-            level_red = _level(value, strips[+1], size_continuum)
-            continuum = (
-                level_blue[..., np.newaxis] * (1 - weight)
-                + level_red[..., np.newaxis] * weight
-            )
-            value = value - continuum
-        else:
-            if strips:
-                (columns,) = strips.values()
-            else:
-                v_min = velocity_continuum.to_value(_unit_velocity)
-                columns = kept & (speed >= v_min)
-            if np.count_nonzero(columns) < _num_continuum_min:
-                darkest = np.argsort(np.where(lit, profile, np.inf))
-                columns = np.zeros_like(lit)
-                columns[darkest[:_num_continuum_darkest]] = True
-                columns = columns & lit
-            continuum = _level(value, columns, size_continuum)
-            value = value - continuum[..., np.newaxis]
+    if num_continuum is not None:
+        darkest = np.argsort(np.where(lit, profile, np.inf))[:num_continuum]
+        columns = np.zeros_like(lit)
+        columns[darkest] = True
+        columns = columns & lit
+        continuum = _level(value, columns, size_continuum)
+        value = value - continuum[..., np.newaxis]
 
     if fill is not None:
         value = np.where(np.isfinite(value), value, fill.to_value(_unit_scene))

@@ -85,6 +85,19 @@ def _synthetic(
     return dataclasses.replace(observation, outputs=radiance), height
 
 
+def _reach(scene: soho.sumer.SpectrographObservation) -> tuple[u.Quantity, u.Quantity]:
+    """Return the speed of the outermost columns of a scene, blue and red."""
+    velocity = _velocity(scene)
+    return -velocity.min().ndarray, velocity.max().ndarray
+
+
+def _assert_symmetric(scene: soho.sumer.SpectrographObservation) -> None:
+    """Check that a scene reaches as far on both sides, to within a column."""
+    blue, red = _reach(scene)
+    width = np.abs(np.diff(_velocity(scene).ndarray)).max()
+    assert abs(blue - red) <= width
+
+
 def test_scene_sumer_observation() -> None:
     observation = _observation()
     result = esis.data.synth.scene_sumer_observation(observation)
@@ -94,16 +107,15 @@ def test_scene_sumer_observation() -> None:
     num_x = observation.outputs.shape[observation.axis_detector_x]
     assert result.outputs.shape[result.axis_detector_x] == num_x
 
-    # The window of the test file reaches past the neighbouring line on the
-    # blue side, which is weak, so the line is kept beyond it.
-    # It does not reach Si II on the red side, so the line is cut short.
-    velocity = _velocity(result)
-    assert velocity.min() < -250 * u.km / u.s
-    assert 80 * u.km / u.s < velocity.max() < 160 * u.km / u.s
+    # The window of the test file does not reach Si II on the red side,
+    # so the line is cut short there, and as far on the blue side.
+    _assert_symmetric(result)
+    for reach in _reach(result):
+        assert 80 * u.km / u.s < reach < 160 * u.km / u.s
 
 
 def test_velocity_max() -> None:
-    velocity_max = 125 * u.km / u.s
+    velocity_max = 100 * u.km / u.s
     observation = _observation()
     result = esis.data.synth.scene_sumer_observation(
         observation=observation,
@@ -113,30 +125,35 @@ def test_velocity_max() -> None:
     assert np.any(_speed(observation) > velocity_max)
 
 
-def test_unchanged() -> None:
-    """Without a cut, continuum, or neighbouring lines, the scene is the observation."""
+def test_unprocessed() -> None:
+    """
+    Without a continuum or neighbouring lines, the scene is the observation.
+
+    It is only cut, as far on both sides,
+    to leave out the partly lit columns at the ends of the window.
+    """
     observation = _observation()
     result = esis.data.synth.scene_sumer_observation(
         observation=observation,
-        velocity_max=None,
-        velocity_continuum=None,
+        num_continuum=None,
         velocities_neighbour=None,
     )
-    expected = _radiance(observation)
+    _assert_symmetric(result)
+    v_observation = _velocity(observation).ndarray.value
+    v_result = _velocity(result).ndarray.value
+    kept = np.isin(np.round(v_observation, 6), np.round(v_result, 6))
+    assert 0 < kept.sum() < kept.size - 4
+    expected = _radiance(observation)[..., kept]
     assert np.allclose(_radiance(result), expected, equal_nan=True)
 
 
 def test_continuum() -> None:
-    """Without neighbouring lines, the continuum is the same in every column."""
+    """The continuum is one level for each pixel, the same in every column."""
     observation = _observation()
-    with_continuum = esis.data.synth.scene_sumer_observation(
-        observation=observation,
-        velocities_neighbour=None,
-    )
+    with_continuum = esis.data.synth.scene_sumer_observation(observation)
     without = esis.data.synth.scene_sumer_observation(
         observation=observation,
-        velocity_continuum=None,
-        velocities_neighbour=None,
+        num_continuum=None,
     )
     level = _radiance(without) - _radiance(with_continuum)
     finite = np.all(np.isfinite(level), axis=~0)
@@ -150,24 +167,26 @@ def test_continuum() -> None:
 
 def test_neighbours_subtracted() -> None:
     """
-    Weak neighbouring lines and a sloping continuum are subtracted.
+    Weak neighbouring lines and the continuum are subtracted.
 
-    The line is left alone, out to the edges of the window on both sides.
+    The line is left alone, as far on both sides as the shorter one reaches,
+    past the neighbouring line on that side.
     """
     velocities = [-175, +130] * u.km / u.s
     observation, height = _synthetic(
         fraction=0.05,
         velocities=velocities,
-        slope=0.2,
+        slope=0,
     )
     result = esis.data.synth.scene_sumer_observation(
         observation=observation,
         velocities_neighbour=velocities,
     )
-    velocity = _velocity(result)
-    assert velocity.min() < -250 * u.km / u.s
-    assert velocity.max() > 160 * u.km / u.s
+    _assert_symmetric(result)
+    for reach in _reach(result):
+        assert reach > 160 * u.km / u.s
 
+    velocity = _velocity(result)
     expected = height * np.exp(-np.square(velocity / _sigma_line) / 2)
     atol = 1e-4 * height.max()
     assert np.all(np.abs(result.outputs - expected) < atol)
@@ -196,12 +215,11 @@ def test_neighbours_strong(
         velocities_neighbour=velocities,
         height_neighbour_max=height_neighbour_max,
     )
-    # cut at the troughs, past 80 km/s and two standard deviations short of
-    # the neighbouring lines
-    velocity = _velocity(result)
-    margin = 2 * _sigma_neighbour
-    assert velocities[0] + margin <= velocity.min() <= -80 * u.km / u.s
-    assert 80 * u.km / u.s <= velocity.max() <= velocities[1] - margin
+    # cut at the trough past 80 km/s and two standard deviations short of
+    # the nearer neighbouring line, on both sides
+    _assert_symmetric(result)
+    for reach in _reach(result):
+        assert 80 * u.km / u.s <= reach <= velocities[1] - 2 * _sigma_neighbour
 
 
 def test_neighbour_uncovered() -> None:
@@ -221,20 +239,20 @@ def test_neighbour_uncovered() -> None:
         observation=observation,
         velocities_neighbour=velocities,
     )
-    velocity = _velocity(result)
-    assert velocity.min() < -250 * u.km / u.s
-    margin = 2 * _sigma_neighbour
-    assert 80 * u.km / u.s <= velocity.max() <= velocities[1] - margin
+    _assert_symmetric(result)
+    for reach in _reach(result):
+        assert 80 * u.km / u.s <= reach <= velocities[1] - 2 * _sigma_neighbour
 
 
 def test_neighbour_residual() -> None:
     """
     A line left past a subtracted neighbouring line is cut off.
 
-    The scene ends at the lowest point of the mean profile before it.
+    The scene ends at the lowest point of the mean profile before it,
+    on both sides.
     """
-    velocity_extra = -250 * u.km / u.s
-    velocities = [-175, +130] * u.km / u.s
+    velocity_extra = -165 * u.km / u.s
+    velocities = [-90, +130] * u.km / u.s
     observation, _ = _synthetic(
         fraction=0.05,
         velocities=np.concatenate([[velocity_extra], velocities]),
@@ -244,9 +262,9 @@ def test_neighbour_residual() -> None:
         observation=observation,
         velocities_neighbour=velocities,
     )
-    velocity = _velocity(result)
-    assert velocity_extra < velocity.min() < velocities[0]
-    assert velocity.max() > 160 * u.km / u.s
+    _assert_symmetric(result)
+    for reach in _reach(result):
+        assert -velocities[0] < reach < -velocity_extra
 
 
 def test_neighbours_same_side() -> None:

@@ -102,7 +102,9 @@ def test_scene_sumer(
     if velocity_max is not None:
         assert np.all(np.abs(velocity) <= velocity_max)
     else:
-        assert np.any(np.abs(velocity) > 125 * u.km / u.s)
+        # as far on both sides, to within a column
+        width = np.abs(np.diff(velocity.ndarray)).max()
+        assert np.abs(velocity.max() + velocity.min()) <= width
 
 
 def test_scene_sumer_trim_slit() -> None:

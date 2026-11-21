@@ -128,7 +128,7 @@ def scene_sumer(
     time_start: str | astropy.time.Time,
     time_stop: None | str | astropy.time.Time = None,
     velocity_max: None | u.Quantity = None,
-    velocity_continuum: None | u.Quantity = 100 * u.km / u.s,
+    num_continuum: None | int = 3,
     velocities_neighbour: None | u.Quantity = [-175, +215] * u.km / u.s,
     height_neighbour_max: float = 0.15,
     fill: None | u.Quantity = None,
@@ -154,7 +154,8 @@ def scene_sumer(
     left out, and the stripes of the scans of the polar coronal holes are
     removed, before :func:`~esis.data.synth.scene_sumer_observation` makes
     the scene, which subtracts the neighbouring lines of O V where they are
-    weak, so that its wings are kept as far as the window reaches.
+    weak, so that its wings are kept as far as the window reaches,
+    the same distance on both sides.
 
     Parameters
     ----------
@@ -171,8 +172,8 @@ def scene_sumer(
     velocity_max
         The largest speed of the scene,
         as in :func:`~esis.data.synth.scene_sumer_observation`.
-    velocity_continuum
-        The least speed of the columns the continuum is measured from,
+    num_continuum
+        The number of the darkest columns the continuum is measured from,
         as in :func:`~esis.data.synth.scene_sumer_observation`.
     velocities_neighbour
         Where the neighbouring lines of O V are expected,
@@ -252,7 +253,7 @@ def scene_sumer(
     return esis.data.synth.scene_sumer_observation(
         observation=observation,
         velocity_max=velocity_max,
-        velocity_continuum=velocity_continuum,
+        num_continuum=num_continuum,
         velocities_neighbour=velocities_neighbour,
         height_neighbour_max=height_neighbour_max,
         fill=fill,
