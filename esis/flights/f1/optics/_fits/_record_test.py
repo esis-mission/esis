@@ -33,8 +33,10 @@ def test_field_stop_change():
     "tilt, offset, scale, expected",
     [
         (0.007, 0.08, 4e-4, True),
-        (0.021, 0.50, -9e-4, False),
-        (0.007, 0.50, 0.0, False),
+        (0.038, 1.13, -3e-4, True),
+        (0.49, 1.20, -3.4e-3, False),
+        (0.007, 2.0, 0.0, False),
+        (0.08, 0.08, 0.0, False),
         (0.007, 0.08, 2e-3, False),
     ],
 )

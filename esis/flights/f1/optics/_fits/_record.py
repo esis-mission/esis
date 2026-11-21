@@ -42,11 +42,21 @@ TABLES = (
 )
 """The tables of a pass that the package commits, besides the field stop."""
 
-TOLERANCE = dict(tilt_deg=0.01, offset_um=0.25, scale=1e-3)
+TOLERANCE = dict(tilt_deg=0.05, offset_um=1.5, scale=1e-3)
 """
 How little a measurement must move the stop it was made through to end the
 iteration: the rms of the tilts and offsets of its sides, and the mean of the
 channels' scales.
+
+The tolerance is the fit's own scatter, not a target the iteration can be
+driven below.  Once the stop has stopped improving, refitting through the stop
+a pass measured moves it again by up to 0.04 deg and 1.1 um rms (passes 1 to
+3 of the validation run, which reproduce the pointing of the committed fit to
+within the scatter between seeds); the channels' measurements of one stop
+scatter by 0.025 deg and 0.45 um about their common shape.  The tolerance is
+about 1.5 times the largest of those changes, so the iteration ends at the
+first pass after the stop has settled, and a pass that has not settled, like
+the one fit with the regular octagon (0.49 deg, 1.2 um), does not end it.
 """
 
 PARKER2022 = dict(
