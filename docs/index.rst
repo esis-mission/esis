@@ -186,6 +186,7 @@ Flight 2 (Planned 2027)
     :maxdepth: 2
 
     reports/f2/design
+    reports/f2/primary
     reports/f2/grating
     reports/f2/synthetic-image
 
