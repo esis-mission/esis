@@ -127,8 +127,10 @@ def _pass(time: astropy.time.Time) -> astropy.table.Row:
 def scene_sumer(
     time_start: str | astropy.time.Time,
     time_stop: None | str | astropy.time.Time = None,
-    velocity_max: None | u.Quantity = 125 * u.km / u.s,
+    velocity_max: None | u.Quantity = None,
     velocity_continuum: None | u.Quantity = 100 * u.km / u.s,
+    velocities_neighbour: None | u.Quantity = [-175, +215] * u.km / u.s,
+    height_neighbour_max: float = 0.15,
     fill: None | u.Quantity = None,
     remove_bad_steps: bool = True,
     trim_slit: bool = True,
@@ -151,7 +153,8 @@ def scene_sumer(
     Bad raster steps are replaced, the rows beyond the ends of the slit are
     left out, and the stripes of the scans of the polar coronal holes are
     removed, before :func:`~esis.data.synth.scene_sumer_observation` makes
-    the scene.
+    the scene, which subtracts the neighbouring lines of O V where they are
+    weak, so that its wings are kept as far as the window reaches.
 
     Parameters
     ----------
@@ -170,6 +173,12 @@ def scene_sumer(
         as in :func:`~esis.data.synth.scene_sumer_observation`.
     velocity_continuum
         The least speed of the columns the continuum is measured from,
+        as in :func:`~esis.data.synth.scene_sumer_observation`.
+    velocities_neighbour
+        Where the neighbouring lines of O V are expected,
+        as in :func:`~esis.data.synth.scene_sumer_observation`.
+    height_neighbour_max
+        The height above which a neighbouring line is not subtracted,
         as in :func:`~esis.data.synth.scene_sumer_observation`.
     fill
         The radiance of the voxels which SUMER did not observe,
@@ -244,5 +253,7 @@ def scene_sumer(
         observation=observation,
         velocity_max=velocity_max,
         velocity_continuum=velocity_continuum,
+        velocities_neighbour=velocities_neighbour,
+        height_neighbour_max=height_neighbour_max,
         fill=fill,
     )
