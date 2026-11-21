@@ -1,6 +1,13 @@
 Roadmap
 =======
 
+Detailed roadmaps:
+
+.. toctree::
+    :maxdepth: 1
+
+    roadmap/cnn-inversion
+
 - ESIS Distortion Model
 
   - Pull merit functions and optimization routines out of notebooks and into codebase.
@@ -32,7 +39,7 @@ Roadmap
 - Papers
 
   - ESIS-I Instrument Paper (ASAP)
-  - CNN Inversion Paper
+  - CNN Inversion Paper, see :doc:`roadmap/cnn-inversion`
   - ESIS-I Full Detector Inversion (big event analysis)
   - ESIS-II pre-flight Science?
   - ESIS-II mission/results
