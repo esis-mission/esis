@@ -1,0 +1,162 @@
+time_start,time_stop,file,exposure,slit,study,objective,kind,polar,split,num_exposure
+1996-04-02T22:50:25.916,1996-04-02T23:38:54.719,sum_19960402_225025_l1.tgz,18,"<4> 1.0"" * 120"" centered",LEM NETWP2/2,Network,qs,false,train,160
+1996-04-03T00:43:45.131,1996-04-03T01:32:31.434,sum_19960402_225025_l1.tgz,18,"<4> 1.0"" * 120"" centered",LEM NETWP2/2,Network,qs,false,train,161
+1996-04-03T02:37:42.975,1996-04-03T03:25:21.945,sum_19960402_225025_l1.tgz,18,"<4> 1.0"" * 120"" centered",LEM NETWP2/2,Network,qs,false,train,158
+1996-04-16T13:06:38.924,1996-04-16T13:47:02.000,sum_19960416_082110_l1.tgz,20,"<4> 1.0"" * 120"" centered",CUR ION_SEQU,Quiet sun,qs,false,train,120
+1996-05-07T16:39:19.914,1996-05-07T17:04:55.841,sum_19960507_163919_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
+1996-05-07T17:44:56.161,1996-05-07T17:58:16.942,sum_19960507_163919_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
+1996-05-09T11:07:32.178,1996-05-09T11:33:01.350,sum_19960509_104137_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,validation,151
+1996-05-10T07:49:02.199,1996-05-10T08:06:57.017,sum_19960510_072515_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL HOT_LOOP,Loop,ar,false,train,106
+1996-05-25T13:35:21.261,1996-05-25T13:53:16.227,sum_19960525_131133_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP018,Sunspot,ar,false,train,106
+1996-06-02T17:31:41.222,1996-06-02T18:01:43.379,sum_19960602_155827_l1.tgz,30,"<4> 1.0"" * 120"" centered",KUC HAB2,Spicule,qs,false,train,59
+1996-06-02T19:37:06.568,1996-06-02T20:07:00.552,sum_19960602_155827_l1.tgz,30,"<4> 1.0"" * 120"" centered",KUC HAB2,Spicule,qs,false,train,58
+1996-06-05T20:56:51.604,1996-06-05T22:01:42.989,sum_19960605_205651_l1.tgz,32,"<4> 1.0"" * 120"" centered",JOR QS DIAGNOSTICS,Quiet sun,qs,false,train,118
+1996-06-05T22:01:47.964,1996-06-05T23:06:39.500,sum_19960605_205651_l1.tgz,32,"<4> 1.0"" * 120"" centered",JOR QS DIAGNOSTICS,Quiet sun,qs,false,train,113
+1996-06-08T15:03:20.565,1996-06-08T15:11:54.406,sum_19960608_150320_l1.tgz,10,"<7> 0.3"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,48
+1996-06-08T15:12:13.274,1996-06-08T15:21:02.832,sum_19960608_150320_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
+1996-06-08T15:20:52.475,1996-06-08T15:29:42.433,sum_19960608_150320_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
+1996-06-08T16:56:13.434,1996-06-08T17:04:36.116,sum_19960608_150320_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,47
+1996-06-08T17:04:52.333,1996-06-08T17:13:15.267,sum_19960608_150320_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,47
+1996-06-08T17:13:32.784,1996-06-08T17:38:16.261,sum_19960608_150320_l1.tgz,30,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,48
+1996-06-08T17:39:30.880,1996-06-08T17:47:58.666,sum_19960608_173930_l1.tgz,10,"<7> 0.3"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,48
+1996-06-08T17:48:15.783,1996-06-08T17:57:01.638,sum_19960608_173930_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
+1996-06-08T17:56:51.230,1996-06-08T18:05:35.684,sum_19960608_173930_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
+1996-06-08T19:31:15.046,1996-06-08T19:39:33.027,sum_19960608_173930_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,47
+1996-06-08T19:39:49.243,1996-06-08T19:48:07.423,sum_19960608_173930_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,47
+1996-06-08T19:48:21.788,1996-06-08T20:12:50.652,sum_19960608_173930_l1.tgz,30,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,48
+1996-06-09T15:02:20.658,1996-06-09T15:10:54.299,sum_19960609_150220_l1.tgz,10,"<7> 0.3"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,48
+1996-06-09T15:11:13.317,1996-06-09T15:20:03.024,sum_19960609_150220_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
+1996-06-09T15:19:52.717,1996-06-09T15:28:41.374,sum_19960609_150220_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
+1996-06-09T16:55:13.721,1996-06-09T17:03:36.455,sum_19960609_150220_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,47
+1996-06-09T17:03:53.622,1996-06-09T17:12:16.757,sum_19960609_150220_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,47
+1996-06-09T17:12:32.923,1996-06-09T17:37:08.544,sum_19960609_150220_l1.tgz,30,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,48
+1996-06-09T17:38:19.710,1996-06-09T17:46:48.599,sum_19960609_173819_l1.tgz,10,"<7> 0.3"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,48
+1996-06-09T17:47:06.467,1996-06-09T17:55:51.120,sum_19960609_173819_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
+1996-06-09T17:55:40.763,1996-06-09T18:04:23.916,sum_19960609_173819_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
+1996-06-09T19:30:01.577,1996-06-09T19:38:19.406,sum_19960609_173819_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,47
+1996-06-09T19:38:34.872,1996-06-09T19:46:52.751,sum_19960609_173819_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,47
+1996-06-09T19:47:07.567,1996-06-09T20:11:36.685,sum_19960609_173819_l1.tgz,30,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,48
+1996-06-09T20:31:13.192,1996-06-09T21:04:22.427,sum_19960609_203113_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,123
+1996-06-09T21:04:22.427,1996-06-09T21:36:06.055,sum_19960609_203113_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,118
+1996-06-09T21:36:06.055,1996-06-09T22:08:58.418,sum_19960609_203113_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,122
+1996-06-11T08:01:16.819,1996-06-11T08:34:33.211,sum_19960611_080116_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,123
+1996-06-11T08:34:01.039,1996-06-11T09:06:17.288,sum_19960611_080116_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,120
+1996-06-11T09:06:17.288,1996-06-11T09:39:10.153,sum_19960611_080116_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,122
+1996-06-11T09:39:47.338,1996-06-11T10:11:46.465,sum_19960611_080116_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,119
+1996-06-14T17:27:59.878,1996-06-14T17:59:23.641,sum_19960614_163131_l1.tgz,12,"<8> 0.3"" * 120"" bottom",SCH VLA,Active region,ar,false,train,143
+1996-06-15T17:42:26.499,1996-06-15T18:14:02.471,sum_19960615_164610_l1.tgz,12,"<8> 0.3"" * 120"" bottom",SCH VLA,Active region,ar,false,train,155
+1996-06-16T17:42:16.974,1996-06-16T18:13:38.886,sum_19960616_164538_l1.tgz,12,"<8> 0.3"" * 120"" bottom",SCH VLA,Active region,ar,false,train,155
+1996-06-23T01:26:46.861,1996-06-23T01:30:26.659,sum_19960622_234412_l1.tgz,11.25,"<5> 1.0"" * 120"" bottom (North on Sun)",INN EEO5,Network,qs,false,train,19
+1996-06-23T01:46:52.525,1996-06-23T01:50:19.807,sum_19960622_234412_l1.tgz,11.25,"<5> 1.0"" * 120"" bottom (North on Sun)",INN EEO5,Network,qs,false,train,18
+1996-06-24T00:30:37.300,1996-06-24T00:34:15.097,sum_19960623_224719_l1.tgz,11.25,"<5> 1.0"" * 120"" bottom (North on Sun)",INN EEO5,Network,qs,false,train,19
+1996-06-24T00:50:32.008,1996-06-24T00:53:58.340,sum_19960623_224719_l1.tgz,11.25,"<5> 1.0"" * 120"" bottom (North on Sun)",INN EEO5,Network,qs,false,train,18
+1996-07-22T07:29:17.425,1996-07-22T07:54:45.397,sum_19960722_070324_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
+1996-07-22T08:09:00.430,1996-07-22T08:22:22.710,sum_19960722_070324_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
+1996-07-23T07:24:55.544,1996-07-23T07:50:23.514,sum_19960723_065902_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
+1996-07-23T08:04:38.596,1996-07-23T08:18:00.727,sum_19960723_065902_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
+1996-07-24T10:26:14.697,1996-07-24T10:51:42.568,sum_19960724_100020_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
+1996-07-24T11:05:59.350,1996-07-24T11:19:21.732,sum_19960724_100020_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
+1996-07-25T09:02:03.700,1996-07-25T09:27:31.421,sum_19960725_083611_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
+1996-07-25T09:41:42.950,1996-07-25T09:55:09.884,sum_19960725_083611_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
+1996-07-26T09:29:35.614,1996-07-26T09:55:03.536,sum_19960726_090342_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
+1996-07-26T10:09:19.169,1996-07-26T10:22:41.352,sum_19960726_090342_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
+1996-07-27T23:16:35.643,1996-07-28T07:18:50.151,sum_19960727_231635_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH_BOUNDARY,Coronal hole,qs,true,train,481
+1996-07-28T07:20:13.597,1996-07-28T15:22:20.803,sum_19960728_072013_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Coronal hole,qs,true,train,481
+1996-07-28T16:51:39.564,1996-07-29T00:53:46.768,sum_19960728_165139_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH_BOUNDARY,Coronal hole,qs,true,train,481
+1996-07-29T00:55:07.112,1996-07-29T08:57:21.421,sum_19960729_005507_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Coronal hole,qs,true,train,481
+1996-08-02T11:41:26.498,1996-08-02T11:59:20.265,sum_19960802_111734_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP018,Sunspot,ar,false,test,106
+1996-08-10T00:03:34.878,1996-08-10T08:06:11.937,sum_19960810_000334_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-10T08:08:29.269,1996-08-10T16:10:42.667,sum_19960810_080829_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-11T00:03:43.067,1996-08-11T08:06:20.182,sum_19960811_000343_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,480
+1996-08-11T08:10:14.080,1996-08-11T16:12:27.276,sum_19960811_081014_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-12T05:31:42.484,1996-08-12T13:34:19.458,sum_19960812_053142_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-13T05:01:42.423,1996-08-13T13:03:55.270,sum_19960813_050142_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,479
+1996-08-15T06:01:38.137,1996-08-15T13:52:12.912,sum_19960815_060138_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,457
+1996-08-16T02:01:12.354,1996-08-16T10:03:25.103,sum_19960816_020112_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-17T05:01:18.567,1996-08-17T13:03:31.730,sum_19960817_050118_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-17T17:01:08.071,1996-08-18T01:03:20.516,sum_19960817_170108_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,479
+1996-08-18T05:46:20.581,1996-08-18T13:48:33.686,sum_19960818_054620_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-18T17:01:16.521,1996-08-19T01:03:29.526,sum_19960818_170116_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-19T06:16:27.887,1996-08-19T14:18:41.038,sum_19960819_061627_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,480
+1996-08-20T13:29:07.231,1996-08-20T21:31:20.186,sum_19960820_132907_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-21T23:21:40.196,1996-08-22T07:23:52.658,sum_19960821_232140_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-22T23:01:25.321,1996-08-23T07:03:38.673,sum_19960822_230125_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-24T16:01:16.463,1996-08-25T00:03:28.906,sum_19960824_160116_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-25T00:04:57.807,1996-08-25T08:07:11.353,sum_19960825_000457_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-25T08:08:48.009,1996-08-25T16:11:01.308,sum_19960825_080848_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-25T16:12:30.860,1996-08-26T00:14:44.461,sum_19960825_161230_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-08-26T00:16:11.960,1996-08-26T08:14:24.904,sum_19960826_001611_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,477
+1996-08-29T03:03:11.753,1996-08-29T08:23:15.834,sum_19960829_030311_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Coronal hole,qs,true,train,319
+1996-08-30T01:01:12.810,1996-08-30T08:07:17.755,sum_19960830_010112_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Coronal hole,qs,true,train,425
+1996-08-31T16:00:39.336,1996-09-01T00:01:15.867,sum_19960831_160039_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,479
+1996-09-01T00:03:21.792,1996-09-01T08:02:34.470,sum_19960901_000321_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,478
+1996-09-01T08:04:36.293,1996-09-01T15:57:48.577,sum_19960901_080436_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,472
+1996-09-01T16:00:27.924,1996-09-02T00:03:04.687,sum_19960901_160027_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,481
+1996-09-04T03:34:13.891,1996-09-04T11:28:49.130,sum_19960904_033413_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Quiet sun,qs,true,train,473
+1996-09-05T05:42:17.355,1996-09-05T13:44:54.028,sum_19960905_054217_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Polar coronal hole,qs,true,train,480
+1996-09-06T17:31:09.812,1996-09-07T01:33:22.565,sum_19960906_173109_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Quiet sun,qs,true,train,480
+1996-09-07T17:28:03.604,1996-09-08T01:30:40.327,sum_19960907_172803_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Corona,qs,true,train,481
+1996-09-08T01:32:11.929,1996-09-08T09:34:48.650,sum_19960908_013211_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Corona,qs,true,train,481
+1996-09-08T23:28:34.675,1996-09-09T07:31:11.497,sum_19960908_232834_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Quiet sun,qs,true,test,480
+1996-09-16T16:07:16.680,1996-09-16T22:49:15.559,sum_19960916_160201_l1.tgz,60,"<2> 1.0"" * 300"" centered",MAS OV_QS_RAS_HEM,Quiet sun,qs,false,test,401
+1996-09-29T00:16:44.955,1996-09-29T01:17:03.825,sum_19960928_151003_l1.tgz,30,"<4> 1.0"" * 120"" centered",MAR IONION,Quiet sun,qs,false,train,120
+1996-10-02T14:00:55.268,1996-10-02T15:32:01.860,sum_19961002_140055_l1.tgz,45,"<2> 1.0"" * 300"" centered",HAS AR OSC 3,Loop,ar,false,train,121
+1996-10-02T15:54:01.438,1996-10-02T17:02:32.422,sum_19961002_155401_l1.tgz,45,"<2> 1.0"" * 300"" centered",HAS AR OSC 3,Loop,ar,false,train,91
+1996-10-08T06:46:22.139,1996-10-08T07:03:30.276,sum_19961008_063345_l1.tgz,10,"<6> 0.3"" * 120"" top",CHA JOP33 TEST,Jet,qs,false,train,100
+1997-04-23T13:44:07.493,1997-04-23T18:43:46.649,sum_19970423_080043_l1.tgz,30,"<3> 1.0"" * 120"" top (South on Sun)",RUE JOP061QS1,Quiet sun,qs,false,train,529
+1999-02-27T05:43:21.268,1999-02-27T06:12:26.830,sum_19990227_050118_l1.tgz,15,"<6> 0.3"" * 120"" top",WIL O_SPOT_OSC,Sunspot,ar,false,train,106
+1999-02-27T06:55:56.095,1999-02-27T07:25:06.363,sum_19990227_061355_l1.tgz,15,"<6> 0.3"" * 120"" top",WIL O_SPOT_OSC,Sunspot,ar,false,train,106
+1999-02-27T08:08:38.029,1999-02-27T08:37:45.493,sum_19990227_072636_l1.tgz,15,"<6> 0.3"" * 120"" top",WIL O_SPOT_OSC,Sunspot,ar,false,train,106
+1999-03-16T17:12:06.858,1999-03-16T17:38:51.925,sum_19990316_163005_l1.tgz,15,"<6> 0.3"" * 120"" top",WIL SPOT_OSC_RSC,Sunspot,ar,false,validation,106
+1999-03-18T16:30:36.812,1999-03-18T16:59:20.012,sum_19990318_154814_l1.tgz,15,"<6> 0.3"" * 120"" top",Console Command,SOHO test,ar,false,train,107
+1999-03-19T17:38:43.074,1999-03-19T18:07:49.187,sum_19990319_165622_l1.tgz,15,"<6> 0.3"" * 120"" top",WIL SPOT_OSC_RSC,Sunspot,ar,false,train,107
+1999-10-14T19:58:58.841,1999-10-14T20:57:42.963,sum_19991014_195709_l1.tgz,60,"<4> 1.0"" * 120"" centered",LEM OVRASTER_OCT991H,Quiet sun,qs,false,validation,58
+1999-10-14T21:00:54.282,1999-10-14T21:59:36.350,sum_19991014_205905_l1.tgz,60,"<4> 1.0"" * 120"" centered",LEM OVRASTER_OCT991H,Quiet sun,qs,false,train,58
+2004-11-30T13:27:32.827,2004-11-30T14:15:04.019,sum_20041130_122451_l1.tgz,10,"<5> 1.0"" * 120"" bottom (North on Sun)",CUR LYMAN_DITH,Coronal hole,qs,false,train,224
+2004-12-05T21:35:19.302,2004-12-05T22:22:31.827,sum_20041205_203240_l1.tgz,10,"<5> 1.0"" * 120"" bottom (North on Sun)",CUR LYMAN_DITH,Solar limb,qs,false,train,223
+2005-04-14T14:28:39.373,2005-04-14T15:16:02.754,sum_20050414_132622_l1.tgz,10,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Quiet sun,qs,false,train,224
+2005-04-15T15:43:18.951,2005-04-15T16:05:40.801,sum_20050415_153008_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH FAST_LYMAN_DITH_,Quiet sun,qs,false,train,76
+2005-04-16T22:33:55.894,2005-04-16T22:56:18.043,sum_20050416_221213_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Quiet sun,qs,false,train,76
+2005-04-18T19:15:02.015,2005-04-18T19:37:24.417,sum_20050418_185319_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Quiet sun,qs,false,train,76
+2005-05-17T08:57:25.823,2005-05-17T09:48:13.745,sum_20050517_080420_l1.tgz,30,"<8> 0.3"" * 120"" bottom",LEM VTT_SUMER_AR_A,Corona,qs,false,train,99
+2005-05-18T08:55:16.654,2005-05-18T09:46:09.930,sum_20050518_080212_l1.tgz,30,"<8> 0.3"" * 120"" bottom",LEM VTT_SUMER_QS_A,Corona,qs,false,train,99
+2005-05-19T08:39:15.858,2005-05-19T09:30:04.782,sum_20050519_074609_l1.tgz,30,"<8> 0.3"" * 120"" bottom",LEM VTT_SUMER_AR_A,Corona,qs,false,train,99
+2005-05-20T08:54:12.811,2005-05-20T09:45:03.435,sum_20050520_080113_l1.tgz,30,"<5> 1.0"" * 120"" bottom (North on Sun)",LEM VTT_SUMER_QS_A,Corona,qs,false,train,99
+2005-10-07T09:02:47.705,2005-10-07T09:46:14.086,sum_20051007_090059_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH US_SPICULE_A_ROV,Spicule,qs,false,train,101
+2005-10-07T09:46:22.008,2005-10-07T10:29:45.542,sum_20051007_090059_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH US_SPICULE_A_ROV,Spicule,qs,false,train,101
+2005-10-08T15:22:52.134,2005-10-08T15:45:16.886,sum_20051008_150112_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
+2005-10-09T09:02:44.268,2005-10-09T09:46:11.152,sum_20051009_090054_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH US_SPICULE_A_ROV,Spicule,qs,false,train,101
+2005-10-09T09:46:18.423,2005-10-09T10:29:47.760,sum_20051009_090054_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH US_SPICULE_A_ROV,Spicule,qs,false,train,101
+2005-10-10T15:51:59.214,2005-10-10T16:14:19.863,sum_20051010_153012_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
+2005-10-11T09:05:08.336,2005-10-11T09:48:30.315,sum_20051011_090319_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH US_SPICULE_A_ROV,Spicule,qs,false,train,101
+2005-10-11T09:48:38.787,2005-10-11T10:32:07.068,sum_20051011_090319_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH US_SPICULE_A_ROV,Spicule,qs,false,train,101
+2005-10-11T15:22:42.229,2005-10-11T15:45:06.131,sum_20051011_150101_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
+2005-10-11T16:21:48.882,2005-10-11T16:44:13.834,sum_20051011_160007_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
+2005-10-12T15:25:47.905,2005-10-12T15:48:12.008,sum_20051012_150405_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
+2005-10-13T09:05:06.770,2005-10-13T09:27:03.188,sum_20051013_090317_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH JOP183-OV,Spicule,qs,false,train,51
+2005-10-14T15:24:56.102,2005-10-14T15:47:19.452,sum_20051014_150314_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
+2005-10-15T08:17:55.166,2005-10-15T08:39:53.033,sum_20051015_081606_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH JOP183-OV,Spicule,qs,false,train,51
+2005-10-15T15:22:58.053,2005-10-15T15:45:20.404,sum_20051015_150116_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
+2005-10-16T11:52:57.145,2005-10-16T12:43:49.774,sum_20051016_105957_l1.tgz,30,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH VTT_SUMER_QS_A_2,Quiet sun,qs,false,train,99
+2005-10-16T15:24:47.654,2005-10-16T15:47:10.355,sum_20051016_150307_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
+2005-10-16T18:38:52.482,2005-10-16T19:00:43.397,sum_20051016_183703_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH JOP183-OV,Spicule,qs,false,train,51
+2007-04-10T17:01:03.075,2007-04-10T17:58:51.903,sum_20070410_170103_l1.tgz,58,"<2> 1.0"" * 300"" centered",CUR INN_QS_NV,Quiet sun,qs,false,train,58
+2007-04-10T19:00:47.847,2007-04-10T19:57:41.097,sum_20070410_170103_l1.tgz,58,"<2> 1.0"" * 300"" centered",CUR INN_QS_NV,Quiet sun,qs,false,train,58
+2007-04-10T20:00:02.081,2007-04-10T20:57:53.812,sum_20070410_200002_l1.tgz,58,"<2> 1.0"" * 300"" centered",CUR INN_QS_NV,Quiet sun,qs,false,train,58
+2007-04-10T21:59:55.258,2007-04-10T22:56:47.110,sum_20070410_200002_l1.tgz,58,"<2> 1.0"" * 300"" centered",CUR INN_QS_NV,Quiet sun,qs,false,train,58
+2007-04-11T11:02:43.172,2007-04-11T11:10:38.982,sum_20070411_110057_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",TOT MADJ_NV_QS,Quiet sun,qs,false,train,29
+2007-04-12T20:07:11.674,2007-04-12T20:14:47.831,sum_20070412_200527_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",TOT MADJ_NV_QS,Quiet sun,qs,false,train,28
+2007-04-12T22:06:06.578,2007-04-12T22:13:18.759,sum_20070412_200527_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",TOT MADJ_NV_QS,Quiet sun,qs,false,train,27
+2007-04-13T12:38:50.369,2007-04-13T12:59:39.144,sum_20070413_110100_l1.tgz,20,"<5> 1.0"" * 120"" bottom (North on Sun)",CUR INN_SS_NV,Quiet sun,qs,false,train,60
+2007-04-13T14:39:18.486,2007-04-13T14:59:44.997,sum_20070413_130130_l1.tgz,20,"<5> 1.0"" * 120"" bottom (North on Sun)",CUR INN_SS_NV,Quiet sun,qs,false,train,59
+2007-04-13T16:39:26.040,2007-04-13T17:00:11.864,sum_20070413_150138_l1.tgz,20,"<5> 1.0"" * 120"" bottom (North on Sun)",CUR INN_SS_NV,Quiet sun,qs,false,train,60
+2007-04-19T20:41:07.053,2007-04-19T20:48:34.705,sum_20070419_203923_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",TOT MADJ_NV_QS,Quiet sun,qs,false,train,28
+2007-04-19T22:50:27.234,2007-04-19T22:57:36.113,sum_20070419_203923_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",TOT MADJ_NV_QS,Quiet sun,qs,false,train,27
+2007-11-04T10:41:55.157,2007-11-04T10:55:25.340,sum_20071104_090113_l1.tgz,20,"<5> 1.0"" * 120"" bottom (North on Sun)",GER INN_SS_NV_S5.SCL,Coronal hole,qs,false,train,39
+2007-11-09T03:56:43.284,2007-11-09T04:10:12.465,sum_20071109_021604_l1.tgz,20,"<5> 1.0"" * 120"" bottom (North on Sun)",GER INN_SS_NV_S5.SCL,Filament,qs,false,train,39
+2007-11-10T16:41:46.031,2007-11-10T16:55:19.564,sum_20071110_150108_l1.tgz,20,"<5> 1.0"" * 120"" bottom (North on Sun)",GER INN_SS_NV_S5.SCL,Coronal hole,qs,false,train,39
+2007-11-14T22:50:34.186,2007-11-14T23:04:09.122,sum_20071114_210951_l1.tgz,20,"<8> 0.3"" * 120"" bottom",GER MADJ_SS_NV_S8.SC,Active region,ar,false,train,36
+2007-11-15T00:47:54.236,2007-11-15T01:01:24.719,sum_20071114_230716_l1.tgz,20,"<8> 0.3"" * 120"" bottom",GER MADJ_SS_NV_S8.SC,Active region,ar,false,train,39
+2009-04-17T14:04:51.677,2009-04-17T15:18:23.685,sum_20090417_120101_l1.tgz,30,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH GIUNTA,Transition Region,qs,false,train,60
+2009-04-24T04:55:03.681,2009-04-24T05:03:10.798,sum_20090424_045503_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH LY_HIN_3_MG10,Filament,qs,false,train,30
+2009-04-24T06:58:12.244,2009-04-24T07:06:19.210,sum_20090424_065812_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH LY_HIN_3_MG10,Filament,qs,false,train,30

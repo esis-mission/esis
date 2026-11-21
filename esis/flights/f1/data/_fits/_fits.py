@@ -48,28 +48,41 @@ def _retrieve(
     known_hash: str,
     fname: str,
     path: pathlib.Path,
-    extract_dir: str,
+    extract_dir: None | str,
 ) -> pathlib.Path:
     """
-    Download a tar archive into `path` and return the directory it was unpacked into.
+    Download a file into `path`, and unpack it if it is a tar archive.
 
-    If the archive is already in `path`, it is not downloaded again,
+    Return the directory it was unpacked into if it was unpacked,
+    or the file itself if not.
+
+    If the file is already in `path`, it is not downloaded again,
     but checking it means hashing the whole file,
     so the result is kept for the rest of the process.
 
     Parameters
     ----------
     url
-        Where to download the archive from.
+        Where to download the file from.
     known_hash
-        The hash of the archive, such as ``"sha256:..."``.
+        The hash of the file, such as ``"sha256:..."``.
     fname
-        The name of the downloaded archive in `path`.
+        The name of the downloaded file in `path`.
     path
-        The directory to download the archive into.
+        The directory to download the file into.
     extract_dir
-        The name of the directory in `path` to unpack the archive into.
+        The name of the directory in `path` to unpack the archive into,
+        or :obj:`None` to keep the file as it is.
     """
+    if extract_dir is None:
+        file = pooch.retrieve(
+            url=url,
+            known_hash=known_hash,
+            fname=fname,
+            path=path,
+        )
+        return pathlib.Path(file)
+
     files = pooch.retrieve(
         url=url,
         known_hash=known_hash,

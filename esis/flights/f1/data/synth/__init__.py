@@ -1,6 +1,7 @@
 """Create synthetic solar scenes that can be observed with an instrument model."""
 
 from ._scene_aia import scene_aia
+from ._scene_sumer import passes_sumer, scene_sumer
 from ._scene_iris import (
     radiance_scale_default,
     velocity_scale_default,
@@ -12,4 +13,6 @@ __all__ = [
     "radiance_scale_default",
     "velocity_scale_default",
     "scene_iris",
+    "passes_sumer",
+    "scene_sumer",
 ]
