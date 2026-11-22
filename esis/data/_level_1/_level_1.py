@@ -37,15 +37,18 @@ class Level_1(
         * Removes the bias (or pedestal) using :meth:`~esis.data.Level_0.unbiased`.
         * Removes the non-active pixels using  :meth:`~esis.data.Level_0.active`.
         * Converts the signal to electrons using :meth:`~esis.data.Level_0.electrons`.
-        * Removes the dark signal by subtracting :attr:`~esis.data.Level_0.dark`.
         * Keeps only the solar images, :attr:`~esis.data.Level_0.lights`.
+        * Removes the dark signal by subtracting the master dark, the mean
+          over time of the despiked :attr:`~esis.data.Level_0.darks`.
         * Removes the cosmic ray spikes using :meth:`~esis.data.Level_0.despiked`.
 
-        Each of the first three steps acts on every image on its own, so they
-        are applied to :attr:`~esis.data.Level_0.darks` and to
+        The first three steps act on each image on its own, so they are
+        applied to :attr:`~esis.data.Level_0.darks` and to
         :attr:`~esis.data.Level_0.lights` separately instead of to the whole
-        sequence. The result is the same, but the images between them are
-        never converted, which keeps the memory this needs to a minimum.
+        sequence. The result is the same as converting the whole sequence and
+        subtracting its :attr:`~esis.data.Level_0.dark`, but the images
+        between them are never converted, which keeps the memory this needs
+        to a minimum.
 
         Parameters
         ----------
@@ -61,7 +64,7 @@ class Level_1(
 
         return cls(
             inputs=a.inputs,
-            outputs=a.outputs[dict(detector_y=slice(None, None, -1))],
+            outputs=a.outputs[{a.axis_y: slice(None, None, -1)}],
             instrument=instrument,
             axis_time=a.axis_time,
             axis_channel=a.axis_channel,
