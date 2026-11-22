@@ -14,22 +14,7 @@ import esis
 
 __all__ = [
     "DistortionParameters",
-    "KAPPA_FOCUS",
 ]
-
-KAPPA_FOCUS = 17.0
-"""
-The sensor travel per unit of grating travel along the beam that keeps the
-image in focus.
-
-For a magnification :math:`m` the longitudinal magnification is :math:`m^2`,
-about 16 for ESIS; measured on the as-built model it is 16.9 on every
-channel (the O V spot size changes by 58--59 μm rms per mm of grating
-travel and by 3.4--3.5 μm per mm of sensor travel, in opposite senses).
-:attr:`DistortionParameters.z_sensor` moves the grating by this fraction of
-the sensor move, so that it changes the magnification of a channel without
-defocusing it.
-"""
 
 
 @dataclasses.dataclass(eq=False, repr=False)
@@ -116,7 +101,8 @@ class DistortionParameters(
     z_sensor: u.Quantity | na.AbstractScalar = 0 * u.mm
     """
     The displacement of the sensor along its normal, with the grating
-    following along the beam by :obj:`KAPPA_FOCUS` times less so that the
+    following along the beam by
+    :attr:`~esis.optics.Instrument.kappa_focus` times less so that the
     image stays in focus: a change of the magnification of one channel
     without a change of its focus.
     """
@@ -204,8 +190,23 @@ class DistortionParameters(
         Parameters
         ----------
         instrument
-            The instrument model to apply the parameters to.
+            The instrument model to apply the parameters to.  It must carry
+            its focus ratio, :attr:`~esis.optics.Instrument.kappa_focus`.
+
+        Raises
+        ------
+        TypeError
+            If `instrument` does not carry a focus ratio.  This is a fault of
+            the setup, so it is not a :class:`ValueError`, which merits treat
+            as a failed trial.
         """
+        kappa_focus = getattr(instrument, "kappa_focus", None)
+        if kappa_focus is None:
+            raise TypeError(
+                "the instrument must carry its focus ratio, kappa_focus, "
+                "for the focus-preserving sensor move"
+            )
+
         result = copy.copy(instrument)
 
         # discard the cached system before the deep copy so that the
@@ -238,7 +239,7 @@ class DistortionParameters(
         sensor = result.camera.sensor
         sensor.translation.z = _design(instrument, "z_sensor") + p.z_sensor
         result.grating.translation.z = (
-            _design(instrument, "z_grating") + p.z_sensor / KAPPA_FOCUS
+            _design(instrument, "z_grating") + p.z_sensor / kappa_focus
         )
         sensor.roll = p.roll_sensor
         sensor.pitch = p.pitch_sensor

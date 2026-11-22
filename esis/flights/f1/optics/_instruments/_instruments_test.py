@@ -626,9 +626,20 @@ def test_as_built_figure_grating_rays() -> None:
     assert np.all(rays.intensity == rays_without.intensity)
 
 
+def test_field_stop_vertices() -> None:
+    result = esis.flights.f1.optics.field_stop_vertices()
+    assert na.shape(result) == dict(vertex=8)
+    design = esis.flights.f1.optics.as_built().field_stop.aperture.vertices
+    radius_design = np.sqrt(na.nominal(design.x) ** 2 + na.nominal(design.y) ** 2)
+    radius = np.sqrt(result.x**2 + result.y**2)
+    # an octagon of the design's size, moved by microns rather than millimeters
+    assert np.all(np.abs(radius - radius_design.mean()) < 20 * u.um)
+
+
 def test_distortion_fit() -> None:
     result = esis.flights.f1.optics.distortion_fit()
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+    assert result.field_stop.vertices is not None
     # the fitted model is exact: no Monte Carlo sample of the as-built
     # tolerances survives into where the light lands
     position = result.system.rayfunction_default.outputs.position
@@ -720,15 +731,16 @@ def test_distortion_fit_windows():
         _instruments._directory_data / "distortion_reference.ecsv",
         format="ascii.ecsv",
     )
-    if "windows" not in table.meta:
-        pytest.skip("the committed table predates the window record")
     from esis.flights.f1.optics._fits import _fits
 
     # the fit traces the idealized as-built model, whose uncertain ruling
-    # coefficients are stripped; the committed parameters go back onto it
+    # coefficients are stripped, with the field stop it measured; the
+    # committed parameters go back onto it
+    base = _fits._base(None)
+    base.field_stop.vertices = esis.flights.f1.optics.field_stop_vertices()
     model = esis.optics.DistortionParameters.from_file(
         _instruments._directory_data / "distortion_reference.ecsv"
-    ).to_instrument(_fits._base(None))
+    ).to_instrument(base)
     for c, centers in enumerate(table.meta["windows"]):
         channel = model[dict(channel=c)]
         linear = channel.system.linearize(
@@ -739,26 +751,3 @@ def test_distortion_fit_windows():
             cx, cy = _fits._center(footprint)
             assert abs(cx - x) < 1
             assert abs(cy - y) < 1
-
-
-def test_distortion_fit_channel_offsets():
-    reference = esis.flights.f1.optics.distortion_fit(axis_time="time")
-    result = esis.flights.f1.optics.distortion_fit(
-        axis_time="time",
-        channel_offsets=True,
-    )
-    for name in ("pitch", "yaw"):
-        delta = getattr(result, name) - getattr(reference, name)
-        assert na.shape(delta) == dict(channel=4, time=30)
-        # zero at the reference frame and about the mean of the channels,
-        # so the payload's pointing is left where the scene put it
-        assert np.all(np.abs(delta[dict(time=15)]) < 1e-6 * u.arcsec)
-        # (the centering is done on the sky, so in angle it holds to a
-        # ten-thousandth of a pixel)
-        assert np.all(np.abs(delta.mean("channel")) < 1e-4 * u.arcsec)
-        # a few hundredths of a pixel, well under a pixel of 0.76 arcsec
-        assert np.all(np.abs(delta) < 0.5 * u.arcsec)
-    assert np.any(np.abs(result.yaw - reference.yaw) > 0.01 * u.arcsec)
-    # the optics are untouched
-    z = result.primary_mirror.translation.z - reference.primary_mirror.translation.z
-    assert np.all(np.abs(z) < 1e-9 * u.um)

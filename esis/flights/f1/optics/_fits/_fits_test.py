@@ -83,13 +83,12 @@ def test_pointing_relative():
             pitch=np.array([1.0, 2.0, 3.0]) * u.arcsec,
             yaw=np.array([-1.0, 0.0, 1.0]) * u.arcsec,
             roll=np.array([0.1, 0.2, 0.3]) * u.deg,
+            drift_x=np.array([0.3, 0.0, -0.2]) * u.pix,
         )
     )
-    table.meta["description"] = "windows from their flight median, and more"
     result = _fits.pointing_relative(table, frame=1)
-    assert (
-        result.meta["description"] == "windows from their position at frame 1, and more"
-    )
+    # the drift is measured from the reference frame already
+    assert np.all(result["drift_x"] == table["drift_x"])
     assert result["pitch"][1] == 0 * u.arcsec
     assert result["yaw"][1] == 0 * u.arcsec
     assert result["roll"][1] == 0 * u.deg
@@ -105,8 +104,19 @@ def test_base():
     instrument = _fits._base(None)
     assert isinstance(instrument, esis.optics.Instrument)
     assert na.shape(instrument.wavelength) == dict(wavelength=3)
+    # a fit from scratch starts from the regular octagon of the design
+    assert instrument.field_stop.vertices is None
     # a given instrument is passed through untouched
     assert _fits._base(instrument) is instrument
+
+
+def test_base_measured(monkeypatch: pytest.MonkeyPatch):
+    from esis.flights.f1.optics._instruments import _instruments
+
+    path = _instruments._directory_data / "field_stop.ecsv"
+    monkeypatch.setattr(_fits, "path_field_stop", path)
+    instrument = _fits._base(None)
+    assert na.shape(instrument.field_stop.vertices) == dict(vertex=8)
 
 
 def test_logger(tmp_path: pathlib.Path):
@@ -191,11 +201,9 @@ def _pointing_table() -> astropy.table.QTable:
             pitch=np.array([1.0, 0.0]) * u.arcsec,
             yaw=np.array([-2.0, 0.0]) * u.arcsec,
             roll=np.array([0.1, 0.0]) * u.deg,
-            z_primary=np.array([0.01, 0.0]) * u.mm,
+            z_primary=np.array([[0.01, 0.02, 0.03, 0.04], [0, 0, 0, 0]]) * u.mm,
             yaw_grating=np.array([[0.1, 0.2, 0.3, 0.4], [0, 0, 0, 0]]) * u.arcmin,
             pitch_grating=np.array([[-0.1, -0.2, -0.3, -0.4], [0, 0, 0, 0]]) * u.arcmin,
-            pitch_channel=np.array([[0.3, -0.1, -0.1, -0.1], [0, 0, 0, 0]]) * u.arcsec,
-            yaw_channel=np.array([[0.2, 0.0, -0.1, -0.1], [0, 0, 0, 0]]) * u.arcsec,
         )
     )
 
@@ -210,35 +218,17 @@ def test_frame_parameters():
     base = _fits._channel(reference, 2)
 
     p = _fits.frame_parameters(reference, pointing, frame=3, channel=2)
-    # the payload's pointing and the channel's own offset add up
-    assert np.isclose(p.pitch - base.pitch, (1.0 - 0.1) * u.arcsec)
-    assert np.isclose(p.yaw - base.yaw, (-2.0 - 0.1) * u.arcsec)
+    assert np.isclose(p.pitch - base.pitch, 1.0 * u.arcsec)
+    assert np.isclose(p.yaw - base.yaw, -2.0 * u.arcsec)
     assert np.isclose(p.roll - base.roll, 0.1 * u.deg)
-    assert np.isclose(p.z_primary - base.z_primary, 0.01 * u.mm)
+    # the focus of the channel's own sector of the primary
+    assert np.isclose(p.z_primary - base.z_primary, 0.03 * u.mm)
     assert np.isclose(p.yaw_grating - base.yaw_grating, 0.3 * u.arcmin)
     assert np.isclose(p.pitch_grating - base.pitch_grating, -0.3 * u.arcmin)
-
-    # without the channel's own offset only the payload's pointing is applied
-    q = _fits.frame_parameters(reference, pointing, 3, 2, channel_offsets=False)
-    assert np.isclose(q.pitch - base.pitch, 1.0 * u.arcsec)
-    assert np.isclose(q.yaw - base.yaw, -2.0 * u.arcsec)
-
-    # a table from before the defocus, the drift and the registration
-    old = pointing["frame", "pitch", "yaw", "roll"]
-    r = _fits.frame_parameters(reference, old, frame=3, channel=2)
-    assert np.isclose(r.pitch - base.pitch, 1.0 * u.arcsec)
-    assert r.z_primary == base.z_primary
-    assert r.yaw_grating == base.yaw_grating
 
     # the reference frame is the reference
     s = _fits.frame_parameters(reference, pointing, frame=15, channel=0)
     assert s.pitch == _fits._channel(reference, 0).pitch
-
-    # one focus per channel's sector of the primary
-    sectors = pointing.copy()
-    sectors["z_primary"] = np.array([[0.01, 0.02, 0.03, 0.04], [0, 0, 0, 0]]) * u.mm
-    v = _fits.frame_parameters(reference, sectors, frame=3, channel=2)
-    assert np.isclose(v.z_primary - base.z_primary, 0.03 * u.mm)
 
     with pytest.raises(ValueError):
         _fits.frame_parameters(reference, pointing, frame=7, channel=0)
@@ -277,58 +267,6 @@ def test_fit_through_reference():
     curve = 0.02 * (frames - 15) + 0.003 * (frames - 15) ** 2
     fitted, _, _ = _fits._fit_through_reference(frames, curve, 15, degree=2)
     assert np.abs(fitted - curve).max() < 1e-9
-
-
-def test_apply_coregistration():
-    pointing = _pointing_table()["frame", "pitch", "yaw", "roll"]
-    coregistration = astropy.table.QTable(
-        dict(
-            frame=np.array([15, 3, 20]),
-            pitch_channel=np.array([[0, 0, 0, 0], [1, 2, 3, 4], [5, 6, 7, 8]])
-            * u.arcsec,
-            yaw_channel=np.array([[0, 0, 0, 0], [-1, -2, -3, -4], [9, 9, 9, 9]])
-            * u.arcsec,
-        )
-    )
-    coregistration.meta["provenance"] = "a test"
-
-    result = _fits.apply_coregistration(pointing, coregistration)
-
-    # the rows are matched by frame, not by position
-    assert np.all(result["pitch_channel"][0] == [1, 2, 3, 4] * u.arcsec)
-    assert np.all(result["yaw_channel"][0] == [-1, -2, -3, -4] * u.arcsec)
-    assert np.all(result["pitch_channel"][1] == 0 * u.arcsec)
-    assert "a test" in result.meta["coregistration"]
-    # the input is untouched
-    assert "pitch_channel" not in pointing.colnames
-
-    with pytest.raises(ValueError):
-        _fits.apply_coregistration(pointing, coregistration[:1])
-
-
-def test_pointing_pattern():
-    """
-    Check that a channel's own pointing moves its sky the way the payload's does.
-
-    The pitch and the yaw are angles on the sky, so an arcsecond of either
-    moves every channel's image by the same vector there, a plate scale's
-    worth of pixels, whichever way the channel disperses.
-    """
-    from esis.flights.f1.optics._instruments import _instruments
-
-    reference = esis.optics.DistortionParameters.from_file(
-        _instruments._directory_data / "distortion_reference.ecsv"
-    )
-    parameters = [_fits._channel(reference, c) for c in range(4)]
-    pattern = _fits._pointing_pattern(
-        _fits._base(None), parameters, _fits._wavelengths_alignment()
-    )
-    assert pattern.shape == (4, 2, 2)
-    for c in range(4):
-        # the two terms move the image at right angles, a pixel and a third
-        # per arcsecond
-        assert abs(np.linalg.det(pattern[c])) == pytest.approx(1.7, abs=0.2)
-        assert np.abs(pattern[c] - pattern[1]).max() < 0.05
 
 
 def test_environment():
@@ -401,16 +339,54 @@ def _drift_table(num_frame: int) -> astropy.table.QTable:
     return drift
 
 
-def test_drift_function():
-    drift = _drift_table(6)
-    assert _fits._drift_function(None, 2, 3) is None
-    raw = _fits._drift_function(drift, 2, None)
-    smooth = _fits._drift_function(drift, 2, 1)
-    assert np.allclose(raw(1, 4), [0.8, 0.8])
-    assert np.allclose(smooth(1, 4), [0.8, 0.8], atol=1e-6)
-    # the raw reading of an unmeasured frame is zero, the smooth one is held
-    assert np.allclose(raw(1, 9), 0)
-    assert np.allclose(smooth(1, 9), smooth(1, 5))
+def test_window_drift():
+    """Each side moves by the median departure of its rows from their own medians."""
+    rows = []
+    for t, shift in enumerate((0.0, 0.2, -0.1)):
+        for index in range(5):
+            # every row sits at its own place; the side moves them together
+            rows.append((0, t, 0, 1, index, 100 + index + shift, 0.1))
+            rows.append((0, t, 0, 3, index, 50 - index - shift, 0.1))
+        # a crossing whose error is too large is left out
+        rows.append((0, t, 0, 1, 9, 500.0, 5.0))
+    crossings = astropy.table.QTable(
+        rows=rows,
+        names=("channel", "frame", "line", "side", "index", "position", "error"),
+    )
+    crossings["position"] = crossings["position"] * u.pix
+    crossings["error"] = crossings["error"] * u.pix
+    drift = _fits.window_drift(crossings, num_channel=1)
+    right = drift[drift["side"] == 1]
+    bottom = drift[drift["side"] == 3]
+    # each against the flight median of its rows, which is frame 0's here
+    assert np.allclose(right["shift"].to_value(u.pix), [0.0, 0.2, -0.1])
+    assert np.allclose(bottom["shift"].to_value(u.pix), [0.0, -0.2, 0.1])
+    assert list(right["num"]) == [5, 5, 5]
+
+
+def test_refer_to_frame():
+    """The smoothed drift is zero at the frame, and the edges move by it."""
+    drift = _drift_table(8)
+    edges = astropy.table.QTable(
+        rows=[(c, 0, side, 0, 10.0) for c in range(2) for side in range(4)],
+        names=("channel", "line", "side", "index", "position"),
+    )
+    edges["position"] = edges["position"] * u.pix
+    before = _fits._drift_smooth(drift, num_channel=2, degree=1)
+    moved, referred = _fits._refer_to_frame(edges, drift, frame=5, degree=1)
+    after = _fits._drift_smooth(referred, num_channel=2, degree=1)
+    for c in range(2):
+        assert np.allclose(after(c, 5), 0, atol=1e-9)
+        # the drift keeps its shape
+        assert np.allclose(after(c, 7) - after(c, 2), before(c, 7) - before(c, 2))
+        # the edges are where the drift put them at the frame
+        x, y = before(c, 5)
+        mine = moved[moved["channel"] == c]
+        horizontal = np.asarray(mine["side"]) <= 1
+        assert np.allclose(mine["position"][horizontal].value, 10 + x)
+        assert np.allclose(mine["position"][~horizontal].value, 10 + y)
+    # the inputs are untouched
+    assert np.all(edges["position"] == 10 * u.pix)
 
 
 def test_drift_smooth_too_few_frames():
@@ -443,7 +419,7 @@ def test_defocus_pattern():
     assert own.shape == relative.shape == (4, 2)
     assert np.allclose(relative, own - own[1])
     assert np.allclose(relative[1], 0)
-    # about a pixel and a half per hundred microns, see KAPPA_FOCUS
+    # about a pixel and a half per hundred microns, see Instrument.kappa_focus
     lengths = np.hypot(own[:, 0], own[:, 1])
     assert np.all((lengths > 5) & (lengths < 50))
     # the channels disperse 45 degrees apart, so no two vectors are parallel

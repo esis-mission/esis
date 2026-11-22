@@ -25,6 +25,7 @@ _tables = dict(
     window_drift="window_drift.ecsv",
     defocus="defocus.ecsv",
     coregistration="coregistration.ecsv",
+    field_stop="field_stop.ecsv",
 )
 """The tables the distortion fit committed, by the name this module reads them under."""
 
@@ -49,9 +50,12 @@ def distortion_fit_table(
         ``acceptance_tiles`` (the decomposition of the tile shifts and the
         tiles themselves), ``window_edges`` and ``window_drift`` (the
         measured edges and their motion), ``defocus`` (the focus of each
-        sector of the primary through the flight) or ``coregistration`` (the
-        optional empirical offset of each channel's pointing, what the
-        sector focus leaves).
+        sector of the primary through the flight), ``coregistration`` (the
+        empirical offset of each channel's pointing that the sector focus
+        leaves, written by the coregistration check of the report) or
+        ``field_stop`` (the measured vertices of
+        the field stop, with the history of the measurement, the outline
+        residuals of the regular octagon and the clocking on the sky).
     directory
         The directory to read from.  If :obj:`None`, the committed tables.
 
@@ -87,8 +91,9 @@ def plot_distortion_flight(
     applied defocus of the primary, the mean over its sectors; the focus of
     each channel's sector about that mean; and the shift of every channel's
     sky against the anchor's, before the focus dashed, after it solid and,
-    where the optional channel offsets were measured
-    (``coregistration.ecsv``), after them dash-dotted.
+    where the coregistration check of the report has been run
+    (``coregistration.ecsv``), after its empirical channel offsets
+    dash-dotted.
 
     Parameters
     ----------
@@ -110,7 +115,7 @@ def plot_distortion_flight(
     pointing = distortion_fit_table("pointing", directory)
     acceptance = distortion_fit_table("acceptance", directory)
     defocus = distortion_fit_table("defocus", directory)
-    # the optional empirical offsets, where they were measured
+    # the empirical channel offsets of the coregistration check, if it was run
     directory = _directory_data if directory is None else pathlib.Path(directory)
     path = directory / "coregistration.ecsv"
     coregistration = (

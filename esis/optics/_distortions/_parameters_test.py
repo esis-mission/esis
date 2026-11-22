@@ -7,7 +7,7 @@ import astropy.table
 import named_arrays as na
 import optika
 import esis
-from . import _parameters
+from . import _testing
 
 
 def _channel() -> esis.optics.Instrument:
@@ -55,11 +55,21 @@ def test_to_instrument():
         (result.grating.translation.z - instrument.grating.translation.z).to_value(
             u.mm
         ),
-        2 / _parameters.KAPPA_FOCUS,
+        2 / instrument.kappa_focus,
     )
     # the original is untouched
     assert instrument.pitch == 0 * u.arcsec
     assert instrument.camera.sensor.roll == 0 * u.deg
+
+
+def test_to_instrument_requires_kappa_focus():
+    """Refuse an instrument that does not carry its focus ratio."""
+    instrument = _channel()
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    instrument.kappa_focus = None
+    # not a ValueError, which a merit would swallow as a failed trial
+    with pytest.raises(TypeError, match="kappa_focus"):
+        parameters.to_instrument(instrument)
 
 
 def test_to_instrument_repeated():
@@ -133,10 +143,8 @@ def test_z_primary_moves_the_sky_not_the_windows():
     solar image, defocused, is seen through the channel's sector of the
     primary and shifts by the sector's offset times the defocus.
     """
-    from esis.flights.f1.optics._fits._fits import _idealized, _wavelength_lines
-
-    instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
-    instrument.wavelength = _wavelength_lines()
+    instrument = _testing.idealized(esis.flights.f1.optics.design(num_distribution=0))
+    instrument.wavelength = _testing.wavelength_lines()
     channel = instrument[dict(channel=0)]
     p = esis.optics.DistortionParameters.from_instrument(channel)
     wavelength = channel.wavelength[dict(wavelength=1)]

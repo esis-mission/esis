@@ -3,7 +3,7 @@ import scipy.ndimage
 import astropy.units as u
 import named_arrays as na
 import esis
-from . import _alignment
+from . import _alignment, _testing
 from ._merit_test import _scene
 
 
@@ -94,14 +94,8 @@ def test_align_channels():
     From a frame the anchor made, the alignment must recover the error to a
     fraction of a pixel.
     """
-    from esis.flights.f1.optics._fits._fits import (
-        _idealized,
-        _wavelength_lines,
-        _wavelengths_alignment,
-    )
-
-    instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
-    instrument.wavelength = _wavelength_lines()
+    instrument = _testing.idealized(esis.flights.f1.optics.design(num_distribution=0))
+    instrument.wavelength = _testing.wavelength_lines()
     channel = instrument[dict(channel=1)]
     p_anchor = esis.optics.DistortionParameters.from_instrument(channel)
     p_wrong = na.unpack(na.pack(p_anchor).ndarray.copy(), p_anchor)
@@ -126,7 +120,8 @@ def test_align_channels():
         parameters=[p_anchor, p_wrong],
         frames=[frame, frame],
         scene_position=scene.inputs.position,
-        wavelengths=_wavelengths_alignment(),
+        wavelengths=_testing.wavelengths_alignment(),
+        bounds=esis.flights.f1.optics.distortion_fit_bounds(p_anchor),
         anchor=0,
         num_sky=400,
         num_tile=4,
@@ -149,14 +144,8 @@ def test_align_channels_seed() -> None:
     seed measures the same shifts and another seed measures them through
     other samples.
     """
-    from esis.flights.f1.optics._fits._fits import (
-        _idealized,
-        _wavelength_lines,
-        _wavelengths_alignment,
-    )
-
-    instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
-    instrument.wavelength = _wavelength_lines()
+    instrument = _testing.idealized(esis.flights.f1.optics.design(num_distribution=0))
+    instrument.wavelength = _testing.wavelength_lines()
     channel = instrument[dict(channel=1)]
     p_anchor = esis.optics.DistortionParameters.from_instrument(channel)
     p_wrong = na.unpack(na.pack(p_anchor).ndarray.copy(), p_anchor)
@@ -178,7 +167,8 @@ def test_align_channels_seed() -> None:
             parameters=[p_anchor, p_wrong],
             frames=[frame, frame],
             scene_position=scene.inputs.position,
-            wavelengths=_wavelengths_alignment(),
+            wavelengths=_testing.wavelengths_alignment(),
+            bounds=esis.flights.f1.optics.distortion_fit_bounds(p_anchor),
             anchor=0,
             num_sky=400,
             num_tile=4,
@@ -203,14 +193,8 @@ def test_channel_shifts_agree_on_the_pixel_convention():
     the channels turns into a shift between them on the sky of most of a
     pixel; the shift measured must be a small fraction of a pixel.
     """
-    from esis.flights.f1.optics._fits._fits import (
-        _idealized,
-        _wavelength_lines,
-        _wavelengths_alignment,
-    )
-
-    instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
-    instrument.wavelength = _wavelength_lines()
+    instrument = _testing.idealized(esis.flights.f1.optics.design(num_distribution=0))
+    instrument.wavelength = _testing.wavelength_lines()
     scene = _scene(num=81, seed=3)
     frames, linears = [], []
     for c in (0, 2):
@@ -231,7 +215,7 @@ def test_channel_shifts_agree_on_the_pixel_convention():
     # a sky sample of 0.7 px, so the correlation resolves a tenth of a pixel
     sky = esis.optics.sky_grid(scene.inputs.position, 1200)
     fields, scales = esis.optics.measure_channel_shifts(
-        linears, frames, sky, _wavelengths_alignment(), anchor=0, num_tile=4
+        linears, frames, sky, _testing.wavelengths_alignment(), anchor=0, num_tile=4
     )
     shift = esis.optics.median_shifts(fields, scales)[1]
     assert np.all(np.isfinite(shift))

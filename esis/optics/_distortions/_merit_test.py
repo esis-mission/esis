@@ -6,22 +6,18 @@ import astropy.units as u
 import named_arrays as na
 import optika
 import esis
-from . import _merit
+from . import _merit, _testing
 
 
 def _channel() -> esis.optics.Instrument:
-    from esis.flights.f1.optics._fits._fits import _idealized, _wavelength_lines
-
-    instrument = _idealized(esis.flights.f1.optics.design(num_distribution=0))
-    instrument.wavelength = _wavelength_lines()
+    instrument = _testing.idealized(esis.flights.f1.optics.design(num_distribution=0))
+    instrument.wavelength = _testing.wavelength_lines()
     return instrument[dict(channel=1)]
 
 
 def _scene(num: int = 41, seed: int = 0) -> na.FunctionArray:
     """Make a random scene on the vertices of a coarse field grid, three lines."""
-    from esis.flights.f1.optics._fits._fits import _wavelength_lines
-
-    wavelength = _wavelength_lines()
+    wavelength = _testing.wavelength_lines()
     position = na.Cartesian2dVectorLinearSpace(
         start=-400 * u.arcsec,
         stop=400 * u.arcsec,

@@ -180,7 +180,6 @@ Flight 1 (2019)
     reports/level-0
     reports/level-1
     reports/distortion-fit
-    reports/distortion-fit-summary
 
 Flight 2 (Planned 2027)
 -----------------------

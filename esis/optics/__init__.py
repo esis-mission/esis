@@ -14,7 +14,6 @@ from ._requirements import Requirements
 from ._instruments import Instrument
 from ._distortions import (
     DistortionParameters,
-    KAPPA_FOCUS,
     LinearMerit,
     correlation,
     correlation_raytraced,
@@ -30,6 +29,8 @@ from ._distortions import (
     shift_modes,
     SIDES,
     measure_edges,
+    measure_edge_steps,
+    measure_polygon_edges,
     predict_edges,
     outline_residual,
     width_residual,
@@ -70,7 +71,6 @@ __all__ = [
     "Requirements",
     "Instrument",
     "DistortionParameters",
-    "KAPPA_FOCUS",
     "LinearMerit",
     "correlation",
     "correlation_raytraced",
@@ -79,6 +79,8 @@ __all__ = [
     "align_channels",
     "SIDES",
     "measure_edges",
+    "measure_edge_steps",
+    "measure_polygon_edges",
     "predict_edges",
     "outline_residual",
     "width_residual",

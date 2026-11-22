@@ -27,20 +27,16 @@ os.environ['PYTHONPATH'] = ';'.join((package_path, os.environ.get('PYTHONPATH', 
 # static files.  A new release of the pages is named here.
 _url_pages = (
     "https://github.com/esis-mission/esis-data-2019/releases/download"
-    "/distortion-pages-v1.0"
+    "/distortion-pages-v1.1"
 )
 _pages = {
     "blink.html": (
         "sha256:"
-        "9fbfe94dc7dcdd3312be64de283ebff84c6e79696ad4cab7f697cb7ac968e903"
+        "a1c519c7272716056ba7e1f2249bb5eb2c2ab40aac757f0aca848ba5d709a68e"
     ),
     "coalign.html": (
         "sha256:"
-        "c3ad7ae2e04f32182be1b054cc26b4bc9958aac65e33024ab8f6febe6d57da5d"
-    ),
-    "summary.html": (
-        "sha256:"
-        "902ccecca4fd505fba046a7d2101ea0e37c6430831e110d7f4e6b2f53abcaaa8"
+        "91383ca90128642acef85bef8eeb6b935db2f91e21aae549e32d24d5532c0cee"
     ),
 }
 for _name, _hash in _pages.items():

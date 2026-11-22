@@ -38,6 +38,9 @@ dynamic = ["version"]
 test = [
     "pytest",
 ]
+gpu = [
+    "torch",
+]
 doc = [
     "pytest",
     "matplotlib",
