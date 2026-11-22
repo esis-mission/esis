@@ -253,7 +253,19 @@ def accept(directory: pathlib.Path) -> None:
 
 def record(directory: pathlib.Path, passes: list[pathlib.Path]) -> None:
     """Write the tables to commit from the passes of the iteration."""
-    _record.record_distortion_fit(passes=passes, directory=directory)
+    final = passes[-1]
+    instrument = _fits._base(None)
+    instrument.field_stop.vertices = esis.flights.f1.optics.field_stop_vertices(
+        final / "field_stop_input.ecsv"
+    )
+    clocking = _record.measure_clocking(
+        reference=esis.optics.DistortionParameters.from_file(
+            final / "distortion_reference.ecsv"
+        ),
+        pointing=_read(final, "distortion_pointing.ecsv"),
+        instrument=instrument,
+    )
+    _record.record_distortion_fit(passes=passes, directory=directory, clocking=clocking)
     print(f"{len(passes)} passes -> {directory}")
 
 

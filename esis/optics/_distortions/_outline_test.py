@@ -287,6 +287,24 @@ def test_measure_polygon_edges():
             x1 - x0, y1 - y0
         )
         assert np.median(np.abs(distance)) < 0.1
+    # vertices given clockwise find the same sides
+    backward = _outline.measure_polygon_edges(
+        _frame(rotated), np.stack([px, py], 1)[::-1]
+    )
+    assert set(np.asarray(backward["side"])) == set(range(8))
+    x, y = backward["x"].to_value(u.pix), backward["y"].to_value(u.pix)
+    distance = np.min(
+        [
+            np.abs(
+                (rx[(k + 1) % 8] - rx[k]) * (ry[k] - y)
+                - (rx[k] - x) * (ry[(k + 1) % 8] - ry[k])
+            )
+            / np.hypot(rx[(k + 1) % 8] - rx[k], ry[(k + 1) % 8] - ry[k])
+            for k in range(8)
+        ],
+        axis=0,
+    )
+    assert np.median(distance) < 0.1
     # a polygon off the frame gives no edges
     far = _outline.measure_polygon_edges(_frame(true), np.stack([px, py], 1) + 1000)
     assert len(far) == 0

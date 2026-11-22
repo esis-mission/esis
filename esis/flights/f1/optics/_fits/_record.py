@@ -295,7 +295,7 @@ def measure_clocking(
 def record_distortion_fit(
     passes: list[str | pathlib.Path],
     directory: str | pathlib.Path,
-    clocking: None | dict = None,
+    clocking: dict,
     tolerance: u.Quantity = TOLERANCE,
 ) -> astropy.table.QTable:
     """
@@ -317,8 +317,8 @@ def record_distortion_fit(
     directory
         The directory to write the tables into.
     clocking
-        The clocking of the stop, see :func:`measure_clocking`; if
-        :obj:`None`, measured through the last pass.
+        The clocking of the stop through the last pass, see
+        :func:`measure_clocking`.
     tolerance
         The tolerance the iteration ended on, see :func:`field_stop_converged`.
 
@@ -365,20 +365,6 @@ def record_distortion_fit(
     stop = astropy.table.QTable.read(
         final / "field_stop_input.ecsv", format="ascii.ecsv"
     )
-    if clocking is None:
-        instrument = _fits._base(None)
-        instrument.field_stop.vertices = esis.flights.f1.optics.field_stop_vertices(
-            final / "field_stop_input.ecsv"
-        )
-        clocking = measure_clocking(
-            reference=esis.optics.DistortionParameters.from_file(
-                final / "distortion_reference.ecsv"
-            ),
-            pointing=astropy.table.QTable.read(
-                final / "distortion_pointing.ecsv", format="ascii.ecsv"
-            ),
-            instrument=instrument,
-        )
     stop.meta["history"] = dict(
         description=(
             "The passes of the iteration that measured the stop, in order.  "
