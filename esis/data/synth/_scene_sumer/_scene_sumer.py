@@ -488,7 +488,9 @@ def scene_sumer_observation(
             if np.any(between):
                 trough = s[between][np.argmin(smooth[between])]
             else:
-                trough = outermost
+                # the window ends, or the neighbouring line begins,
+                # before the least speed at which the scene is cut
+                trough = min(outermost, trough_min)
             limit[sign] = float(trough)
 
         # a peak in a wing of the mean profile, once the neighbouring line is

@@ -1,11 +1,15 @@
+import typing
 import functools
 import dataclasses
 import pytest
 import numpy as np
+import scipy.optimize
 import astropy.units as u
+import astropy.constants
 import named_arrays as na
 import soho
 import esis
+from esis.data.synth._scene_sumer import _scene_sumer
 from esis.flights.f1.spectrum import O_V
 
 _unit = u.erg / (u.cm**2 * u.sr * u.nm * u.s)
@@ -244,6 +248,29 @@ def test_neighbour_uncovered() -> None:
         assert 80 * u.km / u.s <= reach <= velocities[1] - 2 * _sigma_neighbour
 
 
+def test_neighbour_close() -> None:
+    """
+    A strong neighbouring line too close to look for a trough is cut off at 80 km/s.
+
+    Two standard deviations short of the neighbouring line is closer than
+    the least speed at which the scene is cut, so it is cut at that speed.
+    """
+    velocities = [-95, +130] * u.km / u.s
+    observation, _ = _synthetic(
+        fraction=0.5,
+        velocities=velocities,
+        slope=0.2,
+    )
+    result = esis.data.synth.scene_sumer_observation(
+        observation=observation,
+        velocities_neighbour=velocities,
+    )
+    _assert_symmetric(result)
+    width = np.abs(np.diff(_velocity(observation).ndarray)).max()
+    for reach in _reach(result):
+        assert 80 * u.km / u.s - width < reach <= 80 * u.km / u.s
+
+
 def test_neighbour_residual() -> None:
     """
     A line left past a subtracted neighbouring line is cut off.
@@ -301,3 +328,124 @@ def test_velocity_max_empty() -> None:
             observation=_observation(),
             velocity_max=-1 * u.km / u.s,
         )
+
+
+def test_line_outside_window() -> None:
+    """A window which lies to the red of the line has no scene."""
+    observation = _observation()
+    inputs = observation.inputs
+    shift = 1 + (400 * u.km / u.s / astropy.constants.c).to(u.dimensionless_unscaled)
+    inputs = dataclasses.replace(inputs, wavelength_rest=inputs.wavelength_rest / shift)
+    observation = dataclasses.replace(observation, inputs=inputs)
+    assert np.all(_velocity(observation) > 0 * u.km / u.s)
+    with pytest.raises(ValueError, match="No column"):
+        esis.data.synth.scene_sumer_observation(observation)
+
+
+_velocity_profile = np.arange(-295, 300, 10, dtype=float)
+"""The velocities, in km/s, of the columns of the profiles of the fit tests."""
+
+
+def _profile_line(
+    center: float = 215,
+    sigma: float = 15,
+) -> np.ndarray:
+    """
+    Return a profile of a line of height 100 on a floor which rises to the red.
+
+    Parameters
+    ----------
+    center
+        The center of the line, in km/s.
+    sigma
+        The standard deviation of the line, in km/s.
+    """
+    v = _velocity_profile
+    floor = 10 + 0.01 * v
+    return floor + 100 * np.exp(-np.square((v - center) / sigma) / 2)
+
+
+def test_neighbour_fit() -> None:
+    """The fit finds the center, width, and height of the line."""
+    found = _scene_sumer._neighbour(
+        profile=_profile_line(center=210),
+        velocity=_velocity_profile,
+        velocity_expected=215,
+    )
+    assert found is not None
+    assert np.allclose(found, (210, 15, 100), rtol=1e-3)
+
+
+def _profile_unobserved() -> np.ndarray:
+    """Return a profile not observed within 30 km/s of the line."""
+    profile = _profile_line()
+    return np.where(np.abs(_velocity_profile - 215) <= 30, np.nan, profile)
+
+
+def _profile_few() -> np.ndarray:
+    """Return a profile observed in only the five columns of the line."""
+    profile = _profile_line()
+    return np.where(np.abs(_velocity_profile - 215) <= 20, profile, np.nan)
+
+
+def _profile_dip() -> np.ndarray:
+    """
+    Return a profile with a dip, not a peak, where the line is expected.
+
+    A spike in the bottom column of the dip makes it the brightest column
+    searched, so the fit starts there, and finds the dip.
+    """
+    v = _velocity_profile
+    dip = 50 * np.exp(-np.square((v - 215) / 20) / 2)
+    spike = np.where(v == 215, 45, 0)
+    return _profile_line(sigma=1e6) - dip + spike
+
+
+def _profile_narrow() -> np.ndarray:
+    """Return a profile whose line lies in one column, narrower than any line."""
+    return _profile_line(sigma=2)
+
+
+def _profile_far() -> np.ndarray:
+    """Return a profile whose line is 40 km/s from where it is expected."""
+    return _profile_line(center=255)
+
+
+def _curve_fit_fails(*args: object, **kwargs: object) -> typing.NoReturn:
+    """
+    Stand in for :func:`scipy.optimize.curve_fit` running out of tries.
+
+    Raises
+    ------
+    RuntimeError
+        Always, as :func:`scipy.optimize.curve_fit` does when it gives up.
+    """
+    raise RuntimeError("Optimal parameters not found")
+
+
+@pytest.mark.parametrize(
+    argnames="profile,fails",
+    argvalues=[
+        (_profile_unobserved(), False),
+        (_profile_few(), False),
+        (_profile_line(), True),
+        (_profile_dip(), False),
+        (_profile_narrow(), False),
+        (_profile_far(), False),
+    ],
+    ids=["unobserved", "few", "fit_fails", "dip", "narrow", "far"],
+)
+def test_neighbour_not_found(
+    profile: np.ndarray,
+    fails: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No neighbouring line is found where none can be fitted."""
+    if fails:
+        monkeypatch.setattr(scipy.optimize, "curve_fit", _curve_fit_fails)
+    found = _scene_sumer._neighbour(
+        profile=profile,
+        velocity=_velocity_profile,
+        velocity_expected=215,
+    )
+    assert found is None
