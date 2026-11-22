@@ -281,12 +281,13 @@ def test_neighbour_uncovered() -> None:
 
 def test_neighbour_close() -> None:
     """
-    A strong neighbouring line too close to look for a trough is cut off at 80 km/s.
+    A strong neighbouring line too close to look for a trough is cut off.
 
     Two standard deviations short of the neighbouring line is closer than
-    the least speed at which the scene is cut, so it is cut at that speed.
+    80 km/s, the least speed at which a trough is looked for,
+    so the scene is cut two standard deviations short of it.
     """
-    velocities = [-95, +130] * u.km / u.s
+    velocities = [-85, +130] * u.km / u.s
     observation, _ = _synthetic(
         fraction=0.5,
         velocities=velocities,
@@ -297,9 +298,36 @@ def test_neighbour_close() -> None:
         velocities_neighbour=velocities,
     )
     _assert_symmetric(result)
+    stop = -velocities[0] - 2 * _sigma_neighbour
+    assert stop < 80 * u.km / u.s
     width = np.abs(np.diff(_velocity(observation).ndarray)).max()
     for reach in _reach(result):
-        assert 80 * u.km / u.s - width < reach <= 80 * u.km / u.s
+        assert stop - width < reach <= stop + 0.1 * u.km / u.s
+
+
+def test_line_unexpected() -> None:
+    """
+    A line which is not expected, between the line and a trough, is cut off.
+
+    The continuum falls to the red, so the trough short of where the red
+    neighbouring line begins lies beyond the unexpected line.
+    The scene ends at the lowest point of the mean profile before it,
+    on both sides.
+    """
+    velocity_extra = +110 * u.km / u.s
+    velocities = [-175, +215] * u.km / u.s
+    observation, _ = _synthetic(
+        fraction=0.05,
+        velocities=[-175, velocity_extra.value] * u.km / u.s,
+        slope=-0.2,
+    )
+    result = esis.data.synth.scene_sumer_observation(
+        observation=observation,
+        velocities_neighbour=velocities,
+    )
+    _assert_symmetric(result)
+    for reach in _reach(result):
+        assert 80 * u.km / u.s <= reach < velocity_extra
 
 
 def test_neighbour_residual() -> None:
@@ -405,6 +433,25 @@ def test_neighbour_fit() -> None:
     )
     assert found is not None
     assert np.allclose(found, (210, 15, 100), rtol=1e-3)
+
+
+def test_amplitude_unbiased() -> None:
+    """The fitted heights of a weak line in noisy pixels average to its height."""
+    rng = np.random.default_rng(0)
+    velocity = _velocity_profile
+    height = 1
+    line = height * _scene_sumer._gaussian(velocity, center=215, sigma=15)
+    value = line + rng.normal(scale=10, size=(2000, velocity.size))
+    amplitude = _scene_sumer._amplitude(
+        value=value,
+        lit=np.ones(velocity.shape, dtype=bool),
+        velocity=velocity,
+        center=215,
+        sigma=15,
+    )
+    assert np.any(amplitude < 0)
+    error = amplitude.std() / np.sqrt(amplitude.size)
+    assert abs(amplitude.mean() - height) < 4 * error
 
 
 def _profile_unobserved() -> np.ndarray:

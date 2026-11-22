@@ -64,9 +64,10 @@ _prominence_max = 0.01
 """
 The greatest prominence of a peak of the mean profile in a wing of the line,
 as a fraction of the peak of the line,
-once the neighbouring line on that side is subtracted.
-A more prominent peak is what is left of the neighbouring line,
-or another line, so the scene is cut at the lowest point before it.
+once the neighbouring lines are subtracted.
+A more prominent peak is what is left of a neighbouring line,
+or a line which is not expected,
+so the scene is cut at the lowest point before it.
 """
 
 _percentile_floor = 5
@@ -74,8 +75,11 @@ _percentile_floor = 5
 
 _velocity_trough_min = 80 * u.km / u.s
 """
-The least speed at which the scene is cut short of a neighbouring line
-which is not subtracted; the line itself is taken to be within it.
+The least speed at which the scene is cut at a trough short of a neighbouring
+line which is not subtracted; the line itself is taken to be within it.
+
+A neighbouring line which comes closer, within two of its standard deviations,
+cuts the scene two standard deviations short of it instead.
 """
 
 _velocity_trough_max = 160 * u.km / u.s
@@ -209,6 +213,7 @@ def _neighbour(
 
 def _amplitude(
     value: np.ndarray,
+    lit: np.ndarray,
     velocity: np.ndarray,
     center: float,
     sigma: float,
@@ -218,15 +223,18 @@ def _amplitude(
 
     In each pixel, a constant, a slope, and the Gaussian of the neighbouring
     line, whose center and width are those of the mean profile,
-    are fitted by least squares to the columns near the line which were
+    are fitted by least squares to the lit columns near the line which were
     observed.
-    The height is zero where it would be negative,
-    or where too few columns were observed.
+    The height is negative in some noisy pixels, and is kept,
+    so that the line is not subtracted too much on average.
+    It is zero where too few columns were observed.
 
     Parameters
     ----------
     value
         The radiance of each pixel, with the columns along the last axis.
+    lit
+        Which columns are fully lit, the only ones fitted.
     velocity
         The velocity of the middle of each column, in :data:`_unit_velocity`.
     center
@@ -236,7 +244,7 @@ def _amplitude(
         in :data:`_unit_velocity`.
     """
     width = _width_neighbour.to_value(_unit_velocity)
-    columns = np.abs(velocity - center) <= width
+    columns = lit & (np.abs(velocity - center) <= width)
     v = velocity[columns]
     basis = np.stack(
         arrays=[np.ones_like(v), (v - center) / width, _gaussian(v, center, sigma)],
@@ -250,7 +258,7 @@ def _amplitude(
     solution = (np.linalg.pinv(normal) @ right[..., np.newaxis])[..., 0]
     amplitude = solution[..., ~0]
     enough = np.count_nonzero(weight, axis=~0) >= _num_column_min
-    return np.where(enough, np.maximum(amplitude, 0), 0)
+    return np.where(enough, amplitude, 0)
 
 
 def _smooth(profile: np.ndarray) -> np.ndarray:
@@ -322,11 +330,14 @@ def scene_sumer_observation(
     Where the spectral window reaches two standard deviations past a
     neighbouring line and that line is weaker than `height_neighbour_max`,
     the line is subtracted from each pixel and the scene is kept out to the
-    edge of the window,
-    unless the mean profile still has a peak in that wing,
-    in which case the scene is cut at the lowest point before the peak.
+    edge of the window.
     Otherwise, the scene is cut short of the neighbouring line,
-    where the mean profile is lowest between the two lines.
+    where the mean profile is lowest between the two lines,
+    and at least two standard deviations short of it.
+    On either side, if the mean profile has a peak beyond 80 km/s
+    and before the cut, such as what is left of a subtracted line,
+    or a line which is not expected,
+    the scene is cut at the lowest point before the peak.
     The columns at each end of the window which are only partly lit,
     each dimmer than half the column inside it in the mean profile,
     up to three, are left out.
@@ -441,7 +452,6 @@ def scene_sumer_observation(
         if np.any(reach):
             outermost[sign] = float((sign * middle[reach]).max())
             limit[sign] = outermost[sign] + width_column / 2
-    subtracted: set[int] = set()
 
     if velocities_neighbour is not None:
         expected = np.atleast_1d(velocities_neighbour.to_value(_unit_velocity))
@@ -479,7 +489,8 @@ def scene_sumer_observation(
                 covered = outer >= reach_min
                 if covered and height < height_neighbour_max * peak:
                     amplitude = _amplitude(
-                        value=np.where(lit, value, np.nan),
+                        value=value,
+                        lit=lit,
                         velocity=middle,
                         center=center,
                         sigma=sigma,
@@ -487,7 +498,6 @@ def scene_sumer_observation(
                     gaussian = _gaussian(middle, center, sigma)
                     value = value - amplitude[..., np.newaxis] * gaussian
                     limit[sign] = outer + width_column / 2
-                    subtracted.add(sign)
                     continue
                 stop = sign * center - 2 * sigma
             else:
@@ -499,33 +509,32 @@ def scene_sumer_observation(
                 trough = s[between][np.argmin(smooth[between])]
             else:
                 # the window ends, or the neighbouring line begins,
-                # before the least speed at which the scene is cut
-                trough = min(outer, trough_min)
+                # before the least speed at which a trough is looked for
+                trough = min(outer, stop)
             limit[sign] = float(trough)
 
-        # a peak in a wing of the mean profile, once the neighbouring line is
-        # subtracted, is what is left of it, or another line;
+        # a peak in a wing of the mean profile, once the neighbouring lines
+        # are subtracted, is what is left of one, or a line not expected;
         # a continuum which only rises toward the edge of the window is not.
         # The mean profile is not smoothed, which would flatten narrow peaks;
         # it averages so many pixels that its noise is far below the peaks.
-        if subtracted:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", RuntimeWarning)
-                after = np.nanmean(value, axis=(0, 1))
-            for sign in sorted(subtracted):
-                s = sign * middle
-                wing = lit & np.isfinite(after)
-                wing = wing & (s >= trough_min) & (s <= limit[sign])
-                wing = np.flatnonzero(wing)
-                wing = wing[np.argsort(s[wing])]
-                peaks, _ = scipy.signal.find_peaks(
-                    x=after[wing],
-                    prominence=_prominence_max * peak,
-                )
-                if peaks.size:
-                    inner = wing[: peaks[0] + 1]
-                    index = inner[np.argmin(after[inner])]
-                    limit[sign] = float(s[index])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            after = np.nanmean(value, axis=(0, 1))
+        for sign in (-1, +1) if peak > 0 else ():
+            s = sign * middle
+            wing = lit & np.isfinite(after)
+            wing = wing & (s >= trough_min) & (s <= limit[sign])
+            wing = np.flatnonzero(wing)
+            wing = wing[np.argsort(s[wing])]
+            peaks, _ = scipy.signal.find_peaks(
+                x=after[wing],
+                prominence=_prominence_max * peak,
+            )
+            if peaks.size:
+                inner = wing[: peaks[0] + 1]
+                index = inner[np.argmin(after[inner])]
+                limit[sign] = float(s[index])
 
     # as far on both sides, so that a wing kept on one side is not missing
     # on the other
