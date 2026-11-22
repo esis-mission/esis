@@ -1,3 +1,4 @@
+import typing
 import pytest
 import numpy as np
 import astropy.units as u
@@ -129,3 +130,34 @@ def test_scene_sumer_time_stop() -> None:
     expected = esis.flights.f1.data.synth.scene_sumer(_time_test)
     assert result.outputs.shape == expected.outputs.shape
     assert np.all(na.nominal(result.outputs) == na.nominal(expected.outputs))
+
+
+class _Loaded(Exception):
+    """Raised in place of loading the files of a pass."""
+
+
+def test_scene_sumer_velocity_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O V is looked for as far from where the files put it as the passes need."""
+    arguments = dict()
+
+    def from_level1(cls: type, **kwargs: object) -> typing.NoReturn:
+        """
+        Keep the arguments instead of loading the files.
+
+        Raises
+        ------
+        _Loaded
+            Always, once the arguments are kept.
+        """
+        arguments.update(kwargs)
+        raise _Loaded
+
+    monkeypatch.setattr(
+        soho.sumer.SpectrographObservation,
+        "from_level1",
+        classmethod(from_level1),
+    )
+    with pytest.raises(_Loaded):
+        esis.flights.f1.data.synth.scene_sumer(_time_test)
+    assert arguments["velocity_search"] == _scene_sumer._velocity_search
+    assert _scene_sumer._velocity_search >= 200 * u.km / u.s

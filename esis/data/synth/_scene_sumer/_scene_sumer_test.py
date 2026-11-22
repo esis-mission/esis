@@ -287,12 +287,13 @@ def test_neighbours_strong(
         assert 80 * u.km / u.s <= reach <= velocities[1] - 2 * _sigma_neighbour
 
 
-def test_neighbour_uncovered() -> None:
+def test_neighbour_uncovered(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     A neighbouring line which the window does not reach well past is cut off.
 
     The window of the test file ends at about 187 km/s,
-    one standard deviation past this neighbouring line, but not two.
+    one standard deviation past this neighbouring line, but not two,
+    so the line is fitted but not subtracted.
     """
     velocities = [-175, +170] * u.km / u.s
     observation, _ = _synthetic(
@@ -300,10 +301,25 @@ def test_neighbour_uncovered() -> None:
         velocities=velocities,
         slope=0.2,
     )
+    found = dict()
+    neighbour = _scene_sumer._neighbour
+
+    def spy(
+        profile: np.ndarray,
+        velocity: np.ndarray,
+        velocity_expected: float,
+    ) -> None | tuple[float, float, float]:
+        """Keep what the fit of each neighbouring line finds."""
+        result = neighbour(profile, velocity, velocity_expected)
+        found[velocity_expected] = result
+        return result
+
+    monkeypatch.setattr(_scene_sumer, "_neighbour", spy)
     result = esis.data.synth.scene_sumer_observation(
         observation=observation,
         velocities_neighbour=velocities,
     )
+    assert found[velocities[1].value] is not None
     _assert_symmetric(result)
     for reach in _reach(result):
         assert 80 * u.km / u.s <= reach <= velocities[1] - 2 * _sigma_neighbour
@@ -417,6 +433,15 @@ def test_velocity_max_empty() -> None:
             observation=_observation(),
             velocity_max=-1 * u.km / u.s,
         )
+
+
+def test_unlit() -> None:
+    """An observation with no lit column has no scene."""
+    observation = _observation()
+    outputs = observation.outputs * np.nan
+    observation = dataclasses.replace(observation, outputs=outputs)
+    with pytest.raises(ValueError, match="No column"):
+        esis.data.synth.scene_sumer_observation(observation)
 
 
 def test_line_outside_window() -> None:

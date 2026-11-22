@@ -456,6 +456,8 @@ def scene_sumer_observation(
             if not profile[end] < _ratio_edge * profile[inside]:
                 break
             lit[end] = False
+    if not np.any(lit):
+        raise ValueError("No column of the observation is kept, since none is lit.")
     profile_lit = np.where(lit, profile, np.nan)
 
     # the speed of the outermost lit column on each side, if any,
