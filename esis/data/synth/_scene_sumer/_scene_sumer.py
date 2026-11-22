@@ -284,29 +284,43 @@ def _smooth(profile: np.ndarray) -> np.ndarray:
 
 def _level(
     value: np.ndarray,
-    columns: np.ndarray,
+    ranking: np.ndarray,
+    num: int,
     size: int,
 ) -> np.ndarray:
     """
-    Return the continuum of each pixel, from the mean of some columns.
+    Return the continuum of each pixel, from the darkest columns it observed.
 
-    The mean is averaged over the neighbouring pixels.
-    Pixels which observed none of the columns have no continuum.
+    The continuum of a pixel is the mean of the first `num` columns of
+    `ranking` which it observed, averaged over the neighbouring pixels which
+    observed any of them, so that a pixel which did not observe the darkest
+    columns of the window takes the darkest it did.
+    Pixels none of whose neighbours observed any of the columns have no
+    continuum.
 
     Parameters
     ----------
     value
         The radiance of each pixel, with the columns along the last axis.
-    columns
-        Which columns to average.
+    ranking
+        The columns from which the continuum may be measured, darkest first.
+    num
+        The number of columns to average in each pixel.
     size
         The number of pixels, in each direction, over which to average.
     """
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        level = np.nanmean(value[..., columns], axis=~0)
-    level = np.nan_to_num(level)
-    return scipy.ndimage.uniform_filter(level, size=size)
+    ranked = value[..., ranking]
+    finite = np.isfinite(ranked)
+    first = finite & (np.cumsum(finite, axis=~0) <= num)
+    count = np.count_nonzero(first, axis=~0)
+    observed = count > 0
+    level = np.where(first, ranked, 0).sum(axis=~0) / np.maximum(count, 1)
+    total = scipy.ndimage.uniform_filter(level, size=size)
+    weight = scipy.ndimage.uniform_filter(observed.astype(float), size=size)
+    # at least one pixel of the neighbourhood observed the columns,
+    # allowing for the rounding of the filter
+    enough = weight > 0.5 / size**level.ndim
+    return np.where(enough, total / np.where(enough, weight, 1), 0)
 
 
 def scene_sumer_observation(
@@ -366,11 +380,13 @@ def scene_sumer_observation(
         If :obj:`None`, the scene is as wide as the neighbouring lines allow.
     num_continuum
         The number of columns from which the continuum is measured:
-        those, anywhere in the window, where the mean profile of the
-        observation is lowest, before the neighbouring lines are subtracted.
+        in each pixel, the lit columns it observed where the mean profile
+        of the observation is lowest, anywhere in the window,
+        before the neighbouring lines are subtracted.
         The continuum of each pixel is the mean of those columns,
-        averaged over `size_continuum` pixels of the raster in each
-        direction, and is subtracted from every column.
+        averaged over the pixels within `size_continuum` pixels of the raster
+        in each direction which observed any,
+        and is subtracted from every column.
         If :obj:`None`, the continuum is not subtracted.
     size_continuum
         The number of pixels of the raster, in each direction,
@@ -543,11 +559,9 @@ def scene_sumer_observation(
         kept = kept & (speed <= velocity_max.to_value(_unit_velocity))
 
     if num_continuum is not None:
-        darkest = np.argsort(np.where(lit, profile, np.inf))[:num_continuum]
-        columns = np.zeros_like(lit)
-        columns[darkest] = True
-        columns = columns & lit
-        continuum = _level(value, columns, size_continuum)
+        ranking = np.flatnonzero(lit)
+        ranking = ranking[np.argsort(profile[ranking])]
+        continuum = _level(value, ranking, num_continuum, size_continuum)
         value = value - continuum[..., np.newaxis]
 
     if fill is not None:

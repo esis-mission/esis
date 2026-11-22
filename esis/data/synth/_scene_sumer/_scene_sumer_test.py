@@ -200,6 +200,36 @@ def test_continuum() -> None:
     assert np.median(level[..., 0]) > 0
 
 
+def test_continuum_unobserved() -> None:
+    """
+    Pixels take their continuum from the darkest columns they observed.
+
+    The exposures of the block, wider than the average of the continuum,
+    observed only the columns within 100 km/s of the line,
+    not the darkest columns of the window.
+    """
+    observation, height = _synthetic(
+        fraction=0,
+        velocities=[] * u.km / u.s,
+        slope=0,
+    )
+    x = na.indices(observation.outputs.shape)[observation.axis_detector_x]
+    speed = np.abs(_velocity(observation))
+    block = (x >= 10) & (x < 40) & (speed > 100 * u.km / u.s)
+    outputs = np.where(block, np.nan * _unit, observation.outputs)
+    observation = dataclasses.replace(observation, outputs=outputs)
+
+    result = esis.data.synth.scene_sumer_observation(
+        observation=observation,
+        velocities_neighbour=None,
+    )
+    expected = height * np.exp(-np.square(_velocity(result) / _sigma_line) / 2)
+    difference = np.abs(result.outputs - expected)
+    finite = np.isfinite(difference)
+    assert np.any(~finite)
+    assert np.all((difference < 1e-4 * height.max()) | ~finite)
+
+
 def test_neighbours_subtracted() -> None:
     """
     Weak neighbouring lines and the continuum are subtracted.
