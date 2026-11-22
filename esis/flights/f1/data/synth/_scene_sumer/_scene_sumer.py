@@ -24,6 +24,16 @@ How far from the start of a pass a time may be to name it,
 so that it can be given to the minute.
 """
 
+_velocity_search = 200 * u.km / u.s
+"""
+How far from where the files put O V the line is looked for,
+since the wavelength scale of some of the passes is off by as much as
+17 columns, about 170 km/s, such as those of 1996 August, 2005 May and
+October, and 2007 November.
+
+It finds the same line in every pass as a search within 190 or 210 km/s.
+"""
+
 
 @functools.cache
 def _rows() -> tuple[dict[str, str], ...]:
@@ -153,7 +163,9 @@ def scene_sumer(
     The level-1 files are those of :func:`~esis.flights.f1.data.path_sumer`,
     loaded with :meth:`~soho.sumer.SpectrographObservation.from_level1`,
     which puts the zero of the velocities at the mean position of the line,
-    since SUMER has no absolute wavelength scale.
+    since SUMER has no absolute wavelength scale,
+    looking for it within 200 kilometers per second of where the files put it,
+    since the scale of some of the files is off by as much as 17 columns.
     Bad raster steps are replaced, the rows beyond the ends of the slit are
     left out, and the stripes of the scans of the polar coronal holes are
     removed, before :func:`~esis.data.synth.scene_sumer_observation` makes
@@ -241,6 +253,7 @@ def scene_sumer(
         time_stop=stop,
         timedelta=timedelta,
         slit=slit,
+        velocity_search=_velocity_search,
         axis_wavelength=axis_velocity,
         axis_detector_x=axis_detector_x,
         axis_detector_y=axis_detector_y,
