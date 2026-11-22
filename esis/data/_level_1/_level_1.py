@@ -37,8 +37,15 @@ class Level_1(
         * Removes the bias (or pedestal) using :meth:`~esis.data.Level_0.unbiased`.
         * Removes the non-active pixels using  :meth:`~esis.data.Level_0.active`.
         * Converts the signal to electrons using :meth:`~esis.data.Level_0.electrons`.
-        * Removes the dark signal using :attr:`~esis.data.Level_0.dark_subtracted`.
+        * Removes the dark signal by subtracting :attr:`~esis.data.Level_0.dark`.
+        * Keeps only the solar images, :attr:`~esis.data.Level_0.lights`.
         * Removes the cosmic ray spikes using :meth:`~esis.data.Level_0.despiked`.
+
+        Each of the first three steps acts on every image on its own, so they
+        are applied to :attr:`~esis.data.Level_0.darks` and to
+        :attr:`~esis.data.Level_0.lights` separately instead of to the whole
+        sequence. The result is the same, but the images between them are
+        never converted, which keeps the memory this needs to a minimum.
 
         Parameters
         ----------
@@ -47,13 +54,9 @@ class Level_1(
         instrument
             A model of the ESIS instrument to associate with these observations.
         """
-        taps = a.taps
-        taps = taps.unbiased
-        taps = taps.active
-        taps = taps.electrons
-        a = a.from_taps(taps)
-        a = a.dark_subtracted
-        a = a.lights
+        dark = _electrons(a.darks).despiked.mean(axis=a.axis_time)
+        a = _electrons(a.lights)
+        a = a - dark.outputs
         a = a.despiked
 
         return cls(
@@ -65,3 +68,19 @@ class Level_1(
             axis_x=a.axis_x,
             axis_y=a.axis_y,
         )
+
+
+def _electrons(a: Level_0) -> Level_0:
+    """
+    Remove the bias and the non-active pixels of `a` and convert it to electrons.
+
+    Parameters
+    ----------
+    a
+        The images to convert.
+    """
+    taps = a.taps
+    taps = taps.unbiased
+    taps = taps.active
+    taps = taps.electrons
+    return a.from_taps(taps)
