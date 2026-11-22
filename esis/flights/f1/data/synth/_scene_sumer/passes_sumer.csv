@@ -3,15 +3,10 @@ time_start,time_stop,file,exposure,slit,study,objective,kind,polar,split,num_exp
 1996-04-03T00:43:45.131,1996-04-03T01:32:31.434,sum_19960402_225025_l1.tgz,18,"<4> 1.0"" * 120"" centered",LEM NETWP2/2,Network,qs,false,train,161
 1996-04-03T02:37:42.975,1996-04-03T03:25:21.945,sum_19960402_225025_l1.tgz,18,"<4> 1.0"" * 120"" centered",LEM NETWP2/2,Network,qs,false,train,158
 1996-04-16T13:06:38.924,1996-04-16T13:47:02.000,sum_19960416_082110_l1.tgz,20,"<4> 1.0"" * 120"" centered",CUR ION_SEQU,Quiet sun,qs,false,train,120
-1996-05-07T16:39:19.914,1996-05-07T17:04:55.841,sum_19960507_163919_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
-1996-05-07T17:44:56.161,1996-05-07T17:58:16.942,sum_19960507_163919_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
-1996-05-09T11:07:32.178,1996-05-09T11:33:01.350,sum_19960509_104137_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,validation,151
 1996-05-10T07:49:02.199,1996-05-10T08:06:57.017,sum_19960510_072515_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL HOT_LOOP,Loop,ar,false,train,106
 1996-05-25T13:35:21.261,1996-05-25T13:53:16.227,sum_19960525_131133_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP018,Sunspot,ar,false,train,106
 1996-06-02T17:31:41.222,1996-06-02T18:01:43.379,sum_19960602_155827_l1.tgz,30,"<4> 1.0"" * 120"" centered",KUC HAB2,Spicule,qs,false,train,59
 1996-06-02T19:37:06.568,1996-06-02T20:07:00.552,sum_19960602_155827_l1.tgz,30,"<4> 1.0"" * 120"" centered",KUC HAB2,Spicule,qs,false,train,58
-1996-06-05T20:56:51.604,1996-06-05T22:01:42.989,sum_19960605_205651_l1.tgz,32,"<4> 1.0"" * 120"" centered",JOR QS DIAGNOSTICS,Quiet sun,qs,false,train,118
-1996-06-05T22:01:47.964,1996-06-05T23:06:39.500,sum_19960605_205651_l1.tgz,32,"<4> 1.0"" * 120"" centered",JOR QS DIAGNOSTICS,Quiet sun,qs,false,train,113
 1996-06-08T15:03:20.565,1996-06-08T15:11:54.406,sum_19960608_150320_l1.tgz,10,"<7> 0.3"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,48
 1996-06-08T15:12:13.274,1996-06-08T15:21:02.832,sum_19960608_150320_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
 1996-06-08T15:20:52.475,1996-06-08T15:29:42.433,sum_19960608_150320_l1.tgz,10,"<4> 1.0"" * 120"" centered",KUC HAB3,Spicule,qs,false,train,49
@@ -39,7 +34,6 @@ time_start,time_stop,file,exposure,slit,study,objective,kind,polar,split,num_exp
 1996-06-09T20:31:13.192,1996-06-09T21:04:22.427,sum_19960609_203113_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,123
 1996-06-09T21:04:22.427,1996-06-09T21:36:06.055,sum_19960609_203113_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,118
 1996-06-09T21:36:06.055,1996-06-09T22:08:58.418,sum_19960609_203113_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,122
-1996-06-11T08:01:16.819,1996-06-11T08:34:33.211,sum_19960611_080116_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,123
 1996-06-11T08:34:01.039,1996-06-11T09:06:17.288,sum_19960611_080116_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,120
 1996-06-11T09:06:17.288,1996-06-11T09:39:10.153,sum_19960611_080116_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,122
 1996-06-11T09:39:47.338,1996-06-11T10:11:46.465,sum_19960611_080116_l1.tgz,16,"<7> 0.3"" * 120"" centered",JOR AR TE & NE DIAG,Active region,ar,false,train,119
@@ -54,11 +48,9 @@ time_start,time_stop,file,exposure,slit,study,objective,kind,polar,split,num_exp
 1996-07-22T08:09:00.430,1996-07-22T08:22:22.710,sum_19960722_070324_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
 1996-07-23T07:24:55.544,1996-07-23T07:50:23.514,sum_19960723_065902_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
 1996-07-23T08:04:38.596,1996-07-23T08:18:00.727,sum_19960723_065902_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
-1996-07-24T10:26:14.697,1996-07-24T10:51:42.568,sum_19960724_100020_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
 1996-07-24T11:05:59.350,1996-07-24T11:19:21.732,sum_19960724_100020_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
 1996-07-25T09:02:03.700,1996-07-25T09:27:31.421,sum_19960725_083611_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
 1996-07-25T09:41:42.950,1996-07-25T09:55:09.884,sum_19960725_083611_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
-1996-07-26T09:29:35.614,1996-07-26T09:55:03.536,sum_19960726_090342_l1.tgz,10,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,151
 1996-07-26T10:09:19.169,1996-07-26T10:22:41.352,sum_19960726_090342_l1.tgz,12,"<6> 0.3"" * 120"" top",WIL JOP036,Loop,ar,false,train,66
 1996-07-27T23:16:35.643,1996-07-28T07:18:50.151,sum_19960727_231635_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH_BOUNDARY,Coronal hole,qs,true,train,481
 1996-07-28T07:20:13.597,1996-07-28T15:22:20.803,sum_19960728_072013_l1.tgz,60,"<2> 1.0"" * 300"" centered",HAS CH BOUNDARY 2,Coronal hole,qs,true,train,481
@@ -102,8 +94,6 @@ time_start,time_stop,file,exposure,slit,study,objective,kind,polar,split,num_exp
 1996-09-29T00:16:44.955,1996-09-29T01:17:03.825,sum_19960928_151003_l1.tgz,30,"<4> 1.0"" * 120"" centered",MAR IONION,Quiet sun,qs,false,train,120
 1996-10-02T14:00:55.268,1996-10-02T15:32:01.860,sum_19961002_140055_l1.tgz,45,"<2> 1.0"" * 300"" centered",HAS AR OSC 3,Loop,ar,false,train,121
 1996-10-02T15:54:01.438,1996-10-02T17:02:32.422,sum_19961002_155401_l1.tgz,45,"<2> 1.0"" * 300"" centered",HAS AR OSC 3,Loop,ar,false,train,91
-1996-10-08T06:46:22.139,1996-10-08T07:03:30.276,sum_19961008_063345_l1.tgz,10,"<6> 0.3"" * 120"" top",CHA JOP33 TEST,Jet,qs,false,train,100
-1997-04-23T13:44:07.493,1997-04-23T18:43:46.649,sum_19970423_080043_l1.tgz,30,"<3> 1.0"" * 120"" top (South on Sun)",RUE JOP061QS1,Quiet sun,qs,false,train,529
 1999-02-27T05:43:21.268,1999-02-27T06:12:26.830,sum_19990227_050118_l1.tgz,15,"<6> 0.3"" * 120"" top",WIL O_SPOT_OSC,Sunspot,ar,false,train,106
 1999-02-27T06:55:56.095,1999-02-27T07:25:06.363,sum_19990227_061355_l1.tgz,15,"<6> 0.3"" * 120"" top",WIL O_SPOT_OSC,Sunspot,ar,false,train,106
 1999-02-27T08:08:38.029,1999-02-27T08:37:45.493,sum_19990227_072636_l1.tgz,15,"<6> 0.3"" * 120"" top",WIL O_SPOT_OSC,Sunspot,ar,false,train,106
@@ -139,7 +129,6 @@ time_start,time_stop,file,exposure,slit,study,objective,kind,polar,split,num_exp
 2005-10-15T15:22:58.053,2005-10-15T15:45:20.404,sum_20051015_150116_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
 2005-10-16T11:52:57.145,2005-10-16T12:43:49.774,sum_20051016_105957_l1.tgz,30,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH VTT_SUMER_QS_A_2,Quiet sun,qs,false,train,99
 2005-10-16T15:24:47.654,2005-10-16T15:47:10.355,sum_20051016_150307_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH NEW_LYMAN_DITH_S,Spicule,qs,false,train,76
-2005-10-16T18:38:52.482,2005-10-16T19:00:43.397,sum_20051016_183703_l1.tgz,25,"<5> 1.0"" * 120"" bottom (North on Sun)",SCH JOP183-OV,Spicule,qs,false,train,51
 2007-04-10T17:01:03.075,2007-04-10T17:58:51.903,sum_20070410_170103_l1.tgz,58,"<2> 1.0"" * 300"" centered",CUR INN_QS_NV,Quiet sun,qs,false,train,58
 2007-04-10T19:00:47.847,2007-04-10T19:57:41.097,sum_20070410_170103_l1.tgz,58,"<2> 1.0"" * 300"" centered",CUR INN_QS_NV,Quiet sun,qs,false,train,58
 2007-04-10T20:00:02.081,2007-04-10T20:57:53.812,sum_20070410_200002_l1.tgz,58,"<2> 1.0"" * 300"" centered",CUR INN_QS_NV,Quiet sun,qs,false,train,58
@@ -153,7 +142,6 @@ time_start,time_stop,file,exposure,slit,study,objective,kind,polar,split,num_exp
 2007-04-19T20:41:07.053,2007-04-19T20:48:34.705,sum_20070419_203923_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",TOT MADJ_NV_QS,Quiet sun,qs,false,train,28
 2007-04-19T22:50:27.234,2007-04-19T22:57:36.113,sum_20070419_203923_l1.tgz,15,"<5> 1.0"" * 120"" bottom (North on Sun)",TOT MADJ_NV_QS,Quiet sun,qs,false,train,27
 2007-11-04T10:41:55.157,2007-11-04T10:55:25.340,sum_20071104_090113_l1.tgz,20,"<5> 1.0"" * 120"" bottom (North on Sun)",GER INN_SS_NV_S5.SCL,Coronal hole,qs,false,train,39
-2007-11-09T03:56:43.284,2007-11-09T04:10:12.465,sum_20071109_021604_l1.tgz,20,"<5> 1.0"" * 120"" bottom (North on Sun)",GER INN_SS_NV_S5.SCL,Filament,qs,false,train,39
 2007-11-10T16:41:46.031,2007-11-10T16:55:19.564,sum_20071110_150108_l1.tgz,20,"<5> 1.0"" * 120"" bottom (North on Sun)",GER INN_SS_NV_S5.SCL,Coronal hole,qs,false,train,39
 2007-11-14T22:50:34.186,2007-11-14T23:04:09.122,sum_20071114_210951_l1.tgz,20,"<8> 0.3"" * 120"" bottom",GER MADJ_SS_NV_S8.SC,Active region,ar,false,train,36
 2007-11-15T00:47:54.236,2007-11-15T01:01:24.719,sum_20071114_230716_l1.tgz,20,"<8> 0.3"" * 120"" bottom",GER MADJ_SS_NV_S8.SC,Active region,ar,false,train,39

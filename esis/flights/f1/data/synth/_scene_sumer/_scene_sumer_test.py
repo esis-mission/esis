@@ -20,7 +20,7 @@ _unit = u.erg / (u.cm**2 * u.sr * u.nm * u.s)
 def test_passes_sumer() -> None:
     result = esis.flights.f1.data.synth.passes_sumer()
     assert isinstance(result, astropy.table.QTable)
-    assert len(result) == 161
+    assert len(result) == 149
     start = result["time_start"]
     assert np.all(start[1:] > start[:-1])
     assert np.all(result["time_start"] < result["time_stop"])

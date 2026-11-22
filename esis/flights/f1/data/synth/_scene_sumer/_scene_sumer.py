@@ -46,6 +46,10 @@ def passes_sumer() -> astropy.table.QTable:
     passes where the slit turns back or jumps,
     and only some of the passes of a sequence which repeats are used,
     since they are much alike.
+    A pass whose scene, from :func:`scene_sumer`, reaches less than
+    60 kilometers per second on either side of O V is left out,
+    as is a sequence which holds the slit still for most of its exposures,
+    which is a series in time rather than a map.
 
     The columns are:
 
