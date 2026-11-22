@@ -288,7 +288,10 @@ def multilayer_SiSc() -> optika.materials.MultilayerMirror:
     layer on top, on a glass substrate.
     The period is the one which maximizes the geometric mean of the
     reflectivities at :data:`~esis.flights.f2.wavelength_Ne_VII` and
-    :data:`~esis.flights.f2.wavelength_Si_XII` for seven periods.
+    :data:`~esis.flights.f2.wavelength_Si_XII` for seven periods, half Sc.
+    A little less Sc would raise that mean by less than 1%, but would reflect
+    more of He II 25.6 nm, whose second order the gratings send into the
+    passband.
     Seven periods balance the throughput against the stress in a thicker
     coating.
     They reflect about 12% more at each of the two lines than five periods,
