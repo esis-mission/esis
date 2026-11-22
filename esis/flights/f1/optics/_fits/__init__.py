@@ -1,5 +1,6 @@
 from ._fits import (
     measure_window_edges,
+    window_drift,
     measure_field_stop,
     fit_distortion_reference,
     fit_distortion_channel,
@@ -21,6 +22,7 @@ from ._plots import (
 
 __all__ = [
     "measure_window_edges",
+    "window_drift",
     "measure_field_stop",
     "fit_distortion_reference",
     "fit_distortion_channel",

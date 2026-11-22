@@ -308,3 +308,34 @@ def test_measure_polygon_edges():
     # a polygon off the frame gives no edges
     far = _outline.measure_polygon_edges(_frame(true), np.stack([px, py], 1) + 1000)
     assert len(far) == 0
+
+
+def test_measure_polygon_edges_gap():
+    """
+    A gap inside a side, where the frame has no data, does not bend it.
+
+    The rows on either side of the gap keep their place along the side, so
+    the side is still fit as one straight edge through them.
+    """
+    angle = np.deg2rad(1)
+    true = _octagon(300, 200, 120)
+    px, py = _outline._polygon(true)
+    c, s = np.cos(angle), np.sin(angle)
+    rotated = na.Cartesian2dVectorArray(
+        x=na.ScalarArray(300 + c * (px - 300) - s * (py - 200), axes="wire") * u.pix,
+        y=na.ScalarArray(200 + s * (px - 300) + c * (py - 200), axes="wire") * u.pix,
+    )
+    rx, ry = _outline._polygon(rotated)
+    frame = _frame(rotated)
+    # a hole across the middle of side 0, wider than the profiles
+    mx, my = (rx[0] + rx[1]) / 2, (ry[0] + ry[1]) / 2
+    yy, xx = np.mgrid[: frame.shape[0], : frame.shape[1]] + 1 / 2
+    frame[np.hypot(xx - mx, yy - my) < 20] = np.nan
+    edges = _outline.measure_polygon_edges(frame, np.stack([px, py], 1))
+    e = edges[np.asarray(edges["side"]) == 0]
+    x, y = e["x"].to_value(u.pix), e["y"].to_value(u.pix)
+    assert np.all(np.hypot(x - mx, y - my) > 15)
+    distance = (
+        (rx[1] - rx[0]) * (ry[0] - y) - (rx[0] - x) * (ry[1] - ry[0])
+    ) / np.hypot(rx[1] - rx[0], ry[1] - ry[0])
+    assert np.max(np.abs(distance)) < 0.2

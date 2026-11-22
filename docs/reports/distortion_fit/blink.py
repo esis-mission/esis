@@ -24,6 +24,9 @@ import astropy.table
 import esis
 from esis.flights.f1.optics._fits import _fits
 
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import reproduce  # noqa: E402
+
 logging.getLogger("numba").setLevel(logging.WARNING)
 
 BLOCK = 4
@@ -60,6 +63,8 @@ def render(directory: pathlib.Path, device: None | str) -> None:
     pointing = astropy.table.QTable.read(
         directory / "distortion_pointing.ecsv", format="ascii.ecsv"
     )
+    # the field stop the tables were fit with, not the regular octagon
+    reproduce._field_stop(directory)
     instrument = _fits._base(None)
     num_channel = instrument.camera.channel.shape["channel"]
     axes = ("detector_y", "detector_x")

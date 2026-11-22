@@ -89,10 +89,36 @@ def _channels(directory: pathlib.Path) -> list[esis.optics.DistortionParameters]
     ]
 
 
-def _field_stop(directory: pathlib.Path) -> None:
-    """Fit with the pass's own field stop, or with the regular octagon."""
+def field_stop_fit(directory: pathlib.Path) -> None | pathlib.Path:
+    """
+    Find the field stop a directory's tables were fit with.
+
+    A pass was fit with the stop in its ``field_stop_input.ecsv``, or with
+    the regular octagon if there is none; its own ``field_stop.ecsv`` is what
+    it measured.  A directory of committed tables, which has no channel
+    fits, was fit with the stop in its ``field_stop.ecsv``.
+
+    Parameters
+    ----------
+    directory
+        A pass, or a directory of committed tables.
+
+    Returns
+    -------
+    The path of the stop's vertices, or :obj:`None` for the regular octagon.
+    """
     path = directory / "field_stop_input.ecsv"
-    _fits.path_field_stop = path if path.exists() else None
+    if path.exists():
+        return path
+    path = directory / "field_stop.ecsv"
+    if path.exists() and not (directory / "channel_0.ecsv").exists():
+        return path
+    return None
+
+
+def _field_stop(directory: pathlib.Path) -> None:
+    """Model the field stop the directory's tables were fit with."""
+    _fits.path_field_stop = field_stop_fit(directory)
 
 
 def _read(directory: pathlib.Path, name: str) -> astropy.table.QTable:
@@ -179,6 +205,9 @@ def pointing(t: int, directory: pathlib.Path) -> None:
         path=directory / f"pointing_{t:02d}.ecsv",
         directory=directory,
         seed=options.seed,
+        # every row absolute, the reference frame's too: gather takes them
+        # relative once
+        relative=False,
     )
 
 

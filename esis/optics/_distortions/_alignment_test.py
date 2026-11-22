@@ -101,6 +101,9 @@ def test_align_channels():
     p_wrong = na.unpack(na.pack(p_anchor).ndarray.copy(), p_anchor)
     p_wrong.z_sensor = 2 * u.mm
     p_wrong.roll_sensor = 0.05 * u.deg
+    # a frozen parameter outside the anchor's box, which the mapping
+    # does not see, is not clipped to it
+    p_wrong.degradation = 10 * p_anchor.degradation
 
     # a frame of a smooth random scene, made by the anchor
     scene = _scene(num=81, seed=2)
@@ -134,6 +137,7 @@ def test_align_channels():
     assert aligned[0].z_sensor == p_anchor.z_sensor
     assert aligned[1].pitch == p_wrong.pitch
     assert aligned[1].displacement_primary == p_wrong.displacement_primary
+    assert aligned[1].degradation == p_wrong.degradation
 
 
 def test_align_channels_seed() -> None:
@@ -168,7 +172,11 @@ def test_align_channels_seed() -> None:
             frames=[frame, frame],
             scene_position=scene.inputs.position,
             wavelengths=_testing.wavelengths_alignment(),
-            bounds=esis.flights.f1.optics.distortion_fit_bounds(p_anchor),
+            # one box per channel, about its own values
+            bounds=[
+                esis.flights.f1.optics.distortion_fit_bounds(p)
+                for p in (p_anchor, p_wrong)
+            ],
             anchor=0,
             num_sky=400,
             num_tile=4,

@@ -17,6 +17,7 @@ from ._instruments import (
 )
 from ._fits import (
     measure_window_edges,
+    window_drift,
     measure_field_stop,
     fit_distortion_reference,
     fit_distortion_channel,
@@ -46,6 +47,7 @@ __all__ = [
     "distortion_fit",
     "distortion_fit_bounds",
     "measure_window_edges",
+    "window_drift",
     "measure_field_stop",
     "fit_distortion_reference",
     "fit_distortion_channel",

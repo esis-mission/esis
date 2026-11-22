@@ -536,7 +536,12 @@ def align_channels(
     frames: list[np.ndarray],
     scene_position: na.AbstractCartesian2dVectorArray,
     wavelengths: dict[str, u.Quantity],
-    bounds: tuple[esis.optics.DistortionParameters, esis.optics.DistortionParameters],
+    bounds: (
+        tuple[esis.optics.DistortionParameters, esis.optics.DistortionParameters]
+        | list[
+            tuple[esis.optics.DistortionParameters, esis.optics.DistortionParameters]
+        ]
+    ),
     free: None | tuple[str, ...] = None,
     anchor: int = 1,
     num_sky: int = 1600,
@@ -579,9 +584,10 @@ def align_channels(
         The lines at which the sky images are made, by name.
     bounds
         The lower and upper bounds of the parameters, in the units of
-        `parameters`, as for :func:`fit_distortion`.  The solved parameters
-        are clipped to them, and their widths set the scale of the finite
-        differences and of the ridge penalty.
+        `parameters`, as for :func:`fit_distortion`: one pair for every
+        channel, or a list of pairs, one per channel.  The solved free
+        parameters are clipped to them, and their widths set the scale of
+        the finite differences and of the ridge penalty.
     free
         The names of the parameters the alignment may change.  If
         :obj:`None`, the grating terms and the sensor placement are free and
@@ -635,10 +641,12 @@ def align_channels(
         )
     names = [f.name for f in dataclasses.fields(parameters[0])]
     index_free = [names.index(name) for name in free]
-    lower, upper = bounds
-    lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
-    scale = ub - lb
-    delta = 0.002 * scale
+    if not isinstance(bounds, list):
+        bounds = [bounds] * len(parameters)
+    lb = [na.pack(lower).ndarray for lower, _ in bounds]
+    ub = [na.pack(upper).ndarray for _, upper in bounds]
+    scale = [high - low for low, high in zip(lb, ub)]
+    delta = [0.002 * w for w in scale]
 
     sky = sky_grid(scene_position, num_sky)
     axis = ("sky_x", "sky_y")
@@ -722,12 +730,14 @@ def align_channels(
                 cols = np.zeros((len(s0), len(x[c])))
                 for k in index_free:
                     v = x[c].copy()
-                    v[k] += delta[k]
-                    cols[:, k] = (sensor(linear(c, v).distortion, pos) - s0) / delta[k]
+                    v[k] += delta[c][k]
+                    cols[:, k] = (sensor(linear(c, v).distortion, pos) - s0) / delta[c][
+                        k
+                    ]
                 columns.append(cols)
             A = np.vstack(columns)
             b = np.concatenate(targets)
-            A_s = A * scale[None, :]
+            A_s = A * scale[c][None, :]
             lam = ridge * np.sqrt(np.mean(A_s[:, index_free] ** 2)) * np.sqrt(len(b))
             keep = np.ones(len(b), dtype=bool)
             for _ in range(4):
@@ -742,10 +752,14 @@ def align_channels(
                 if keep_new.sum() < len(index_free) + 4 or (keep_new == keep).all():
                     break
                 keep = keep_new  # pragma: nocover
-            dp = dp_s * scale * damping
-            # the frozen parameters stay exactly where they are
-            dp[[k for k in range(len(dp)) if k not in index_free]] = 0
-            x[c] = np.clip(x[c] + dp, lb, ub)
+            dp = dp_s * scale[c] * damping
+            # the frozen parameters stay exactly where they are, and only
+            # the free ones are held to the bounds
+            x[c][index_free] = np.clip(
+                x[c][index_free] + dp[index_free],
+                lb[c][index_free],
+                ub[c][index_free],
+            )
             linears[c] = linear(c, x[c])
             distortions[c] = linears[c].distortion
 

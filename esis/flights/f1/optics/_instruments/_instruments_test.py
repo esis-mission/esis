@@ -636,6 +636,19 @@ def test_field_stop_vertices() -> None:
     assert np.all(np.abs(radius - radius_design.mean()) < 20 * u.um)
 
 
+def test_field_stop_vertices_units(tmp_path: pathlib.Path) -> None:
+    """A table in another unit is converted, not relabelled as millimeters."""
+    table = astropy.table.QTable(
+        dict(x=[1000.0, -1000.0, 0.0] * u.um, y=[0.0, 0.0, 1500.0] * u.um)
+    )
+    path = tmp_path / "stop.ecsv"
+    table.write(path, format="ascii.ecsv")
+    result = esis.flights.f1.optics.field_stop_vertices(path)
+    assert na.shape(result) == dict(vertex=3)
+    assert np.allclose(result.x.ndarray, [1, -1, 0] * u.mm)
+    assert np.allclose(result.y.ndarray, [0, 0, 1.5] * u.mm)
+
+
 def test_distortion_fit() -> None:
     result = esis.flights.f1.optics.distortion_fit()
     assert isinstance(result, esis.optics.abc.AbstractInstrument)

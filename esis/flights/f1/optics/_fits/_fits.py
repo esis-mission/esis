@@ -725,7 +725,7 @@ def measure_window_edges(
     structure crossing a side as the pointing drifts moves its straight edge
     by a few tenths of a pixel from frame to frame, more than the median of
     the rows' changes; on the flight the two sides of one window move apart
-    by 0.25--0.35 px rms with the straight edges and 0.13--0.19 px with the
+    by 0.14--0.39 px rms with the straight edges and 0.06--0.20 px with the
     steps.
 
     Both are referred to the reference frame, which the sky of the reference
@@ -1055,6 +1055,11 @@ def measure_field_stop(
     The vertices of the measured stop, in mm in its own frame, and the
     offset and tilt of every side as each channel measured it, before and
     after its rotation, translation and scale are taken out.
+
+    Raises
+    ------
+    ValueError
+        If no channel measured some side of the stop.
     """
     instrument = _base(instrument)
     num_channel = instrument.camera.channel.shape["channel"]
@@ -1156,9 +1161,18 @@ def measure_field_stop(
     # shape carries no rotation, translation or scale of its own
     channel = np.asarray(sides["channel"])
     k = np.asarray(sides["side"])
-    azimuth = np.radians(
-        [np.median(sides["azimuth"].to_value(u.deg)[k == i]) for i in range(num_vertex)]
-    )
+    missing = sorted(set(range(num_vertex)) - set(int(i) for i in k))
+    if missing:
+        raise ValueError(
+            f"no channel measured side(s) {missing} of the field stop, so its "
+            "shape cannot be fit"
+        )
+    # the direction of each side's outward normal, from the stop's vertices,
+    # which are the same in every channel
+    middle = (vertices + np.roll(vertices, -1, axis=0)) / 2
+    normal = np.stack([edge[:, 1], -edge[:, 0]], axis=1)
+    normal *= np.sign(np.sum(middle * normal, axis=1))[:, None]
+    azimuth = np.arctan2(normal[:, 1], normal[:, 0])
     weight = 1e3
     a = np.zeros((len(sides) + 1, num_channel + num_vertex))
     a[np.arange(len(sides)), channel] = 1
@@ -1493,7 +1507,8 @@ def fit_distortion_reference(
         scene_position=scene.inputs.position,
         wavelengths=_wavelengths_alignment(),
         free=tuple(own),
-        bounds=esis.flights.f1.optics.distortion_fit_bounds(parameters[0]),
+        # each channel's box about its own values
+        bounds=[esis.flights.f1.optics.distortion_fit_bounds(p) for p in parameters],
         seed=seed,
         log=log,
     )
@@ -1549,8 +1564,8 @@ def _drift_shift(
     Read the motion of one channel's windows in one frame, in pixels.
 
     The x motion is the mean over the left and right sides, the y motion
-    over the top and bottom; a side not measured in that frame counts as
-    zero.
+    over the top and bottom; an axis none of whose sides was measured in
+    that frame is NaN, not zero.
 
     Parameters
     ----------
@@ -1567,7 +1582,7 @@ def _drift_shift(
     ]
     side = np.asarray(rows["side"])
     shift = rows["shift"].to_value(u.pix)
-    result = np.zeros(2)
+    result = np.full(2, np.nan)
     for k, sides in enumerate(((0, 1), (2, 3))):
         values = shift[np.isin(side, sides)]
         if values.size:
@@ -1584,9 +1599,11 @@ def _drift_smooth(
     Fit the motion of every channel's windows through the flight with a polynomial.
 
     A per-frame shift applied as measured jitters by a few tenths of a pixel
-    and drops to zero in frames too dark to measure; the motion is smooth,
-    so a low-order polynomial in the frame index carries it instead, held at
-    the nearest measured frame outside them.
+    and is missing in frames too dark to measure; the motion is smooth, so a
+    low-order polynomial in the frame index carries it instead, held at the
+    nearest measured frame outside them.  Each axis is fit over the frames
+    in which it was measured, since a channel can see only one side along
+    an axis and lose it in a frame while keeping the other axis.
 
     Parameters
     ----------
@@ -1605,31 +1622,78 @@ def _drift_smooth(
     Raises
     ------
     ValueError
-        If a channel was measured in too few frames for the polynomial.
+        If an axis of a channel was measured in too few frames for the
+        polynomial.
     """
     channel_of = np.asarray(drift["channel"])
     frame_of = np.asarray(drift["frame"])
     coefficients = np.zeros((num_channel, 2, degree + 1))
-    span = np.zeros((num_channel, 2), dtype=int)
+    span = np.zeros((num_channel, 2, 2), dtype=int)
     for c in range(num_channel):
-        # only the frames this channel was measured in: an unmeasured frame
-        # is not a zero
-        frames = sorted(set(int(t) for t in frame_of[channel_of == c]))
-        if len(frames) <= degree:
-            raise ValueError(
-                f"channel {c} has {len(frames)} measured frames, too few for a "
-                f"degree-{degree} polynomial"
-            )
+        frames = np.array(sorted(set(int(t) for t in frame_of[channel_of == c])))
         measured = np.array([_drift_shift(drift, c, t) for t in frames])
+        measured = measured.reshape(len(frames), 2)
         for k in range(2):
-            coefficients[c, k] = np.polyfit(frames, measured[:, k], degree)
-        span[c] = frames[0], frames[-1]
+            # only the frames this axis was measured in: an unmeasured frame
+            # is not a zero
+            where = np.isfinite(measured[:, k])
+            if where.sum() <= degree:
+                raise ValueError(
+                    f"channel {c} has {where.sum()} frames measured in "
+                    f"{'xy'[k]}, too few for a degree-{degree} polynomial"
+                )
+            coefficients[c, k] = np.polyfit(frames[where], measured[where, k], degree)
+            span[c, k] = frames[where][0], frames[where][-1]
 
     def shift(channel: int, frame: int) -> np.ndarray:
-        t = min(max(frame, span[channel, 0]), span[channel, 1])
-        return np.array([np.polyval(coefficients[channel, k], t) for k in range(2)])
+        return np.array(
+            [
+                np.polyval(
+                    coefficients[channel, k],
+                    min(max(frame, span[channel, k, 0]), span[channel, k, 1]),
+                )
+                for k in range(2)
+            ]
+        )
 
     return shift
+
+
+def _drift_consistent(
+    drift: astropy.table.QTable,
+    degree: int,
+    frame_reference: int,
+) -> None:
+    """
+    Check that a stage smooths the drift the way its table was referred.
+
+    :func:`measure_window_edges` refers the drift to the reference frame
+    through a polynomial of one degree, so that the smoothed drift is zero
+    there; a stage that smooths it with another degree, or takes another
+    frame as the reference, would see a drift that is not zero at its
+    reference.
+
+    Parameters
+    ----------
+    drift
+        The drift table, whose metadata may name the degree and the frame it
+        was referred with.
+    degree
+        The degree the stage smooths the drift with.
+    frame_reference
+        The frame the stage takes as the reference.
+
+    Raises
+    ------
+    ValueError
+        If the table names a different degree or reference frame.
+    """
+    for key, value in (("drift_degree", degree), ("frame_reference", frame_reference)):
+        if key in drift.meta and int(drift.meta[key]) != int(value):
+            raise ValueError(
+                f"the drift was referred with {key}={drift.meta[key]}, "
+                f"but this stage uses {key}={value}"
+            )
 
 
 def _drift_sensitivity(
@@ -1958,6 +2022,7 @@ def fit_defocus_history(
     drift = _read_table(drift)
     shift_drift = None
     if drift is not None:
+        _drift_consistent(drift, drift_degree, frame_reference)
         shift_drift = _drift_smooth(drift, num_channel, drift_degree)
     sensitivity = None
 
@@ -2191,6 +2256,7 @@ def fit_distortion_pointing(
     drift_degree: int = 3,
     defocus: None | str | pathlib.Path | astropy.table.QTable = None,
     seed: int = 0,
+    relative: bool = True,
 ) -> astropy.table.QTable:  # pragma: nocover
     r"""
     Fit the per-frame payload pointing of the whole flight.
@@ -2212,18 +2278,17 @@ def fit_distortion_pointing(
     device
         The device on which to build and apply the regridding weights.
     frame_reference
-        The frame the reference was fit to.  If it is among `frames`, its
-        own offset is subtracted from every row, so that the table is
-        relative to the reference frame and zero there; see
-        :func:`pointing_relative`.  A driver that fits one frame per job
-        gathers the rows first and takes them relative once.
+        The frame the reference was fit to, from which the drift is
+        measured.  With `relative`, the table is taken relative to it.
     frames
         The frames to fit.  If :obj:`None`, every frame is fit.
     path
         If given, the offsets are written to this path as an ECSV table, in
         the format of ``_data/distortion_pointing.ecsv``.
     directory
-        A directory where the progress of every frame is logged.
+        A directory where the progress of every frame is logged, in
+        ``pointing.log``, or in ``pointing_<frame>.log`` when one frame is
+        fit.
     drift
         The per-frame drift of the windows, see
         :func:`measure_window_edges`, or the path of its table.  If given,
@@ -2242,6 +2307,13 @@ def fit_distortion_pointing(
     seed
         The seed of the samples every channel is linearized on, see
         :class:`esis.optics.LinearMerit`.
+    relative
+        If the reference frame is among `frames`, subtract its own offset
+        from every row, so that the table is relative to the reference frame
+        and zero there; see :func:`pointing_relative`.  A driver that fits
+        one frame per job passes :obj:`False`, so that every row, the
+        reference frame's included, is the absolute fit, then gathers the
+        rows and takes them relative once.
     """
     if instrument is None:
         instrument = _idealized(esis.flights.f1.optics.distortion_fit())
@@ -2250,7 +2322,10 @@ def fit_distortion_pointing(
     num_time = esis.flights.f1.data.level_1().shape["time"]
     if frames is None:
         frames = tuple(range(num_time))
-    log = _logger(directory, "pointing")
+    # a driver that fits one frame per job, side by side, gets one log per
+    # frame, since each log starts its file afresh
+    name = "pointing" if len(frames) > 1 else f"pointing_{frames[0]:02d}"
+    log = _logger(directory, name)
 
     reference = [
         esis.optics.DistortionParameters.from_instrument(instrument[dict(channel=c)])
@@ -2268,6 +2343,7 @@ def fit_distortion_pointing(
     drift = _read_table(drift)
     shift_drift = None
     if drift is not None:
+        _drift_consistent(drift, drift_degree, frame_reference)
         shift_drift = _drift_smooth(drift, num_channel, drift_degree)
         measured = sorted(set(int(t) for t in np.asarray(drift["frame"])))
         log(
@@ -2383,7 +2459,7 @@ def fit_distortion_pointing(
             **_stamp(seed),
         )
     )
-    if frame_reference in frames:
+    if relative and frame_reference in frames:
         table = pointing_relative(table, frame_reference)
     if path is not None:
         table.write(path, format="ascii.ecsv", overwrite=True)
@@ -2523,10 +2599,9 @@ def acceptance(
 
     Returns
     -------
-    A table with a row per frame and channel: the correlation, the
-    least-squares score, and the median shift against the anchor at each
-    aligned line in pixels; the outline residual per channel is in the
-    metadata.
+    A table with a row per frame and channel: the correlation, and the
+    median shift against the anchor at each aligned line in pixels; the
+    outline residual per channel is in the metadata.
     """
     instrument = _base(instrument)
     num_channel = instrument.camera.channel.shape["channel"]
@@ -2567,10 +2642,8 @@ def acceptance(
                         seed_pupil=seed,
                     )
                 )
-        scores = (
-            [(m.correlation(p), m.score(p)) for m, p in merits]
-            if scored
-            else [(np.nan, np.nan)] * num_channel
+        correlations = (
+            [m.correlation(p) for m, p in merits] if scored else [np.nan] * num_channel
         )
         frames_data = _frames_by_axis(observation, num_channel)
         sky = _alignment.sky_grid(scene.inputs.position, num_sky)
@@ -2641,23 +2714,21 @@ def acceptance(
                 (
                     t,
                     c,
-                    scores[c][0],
-                    scores[c][1],
+                    correlations[c],
                     *[shifts[c][name] for name in lines],
                     *[scatter[c][name] for name in lines],
                     *[along[c][name] for name in lines],
                 )
             )
             log(
-                f"frame {t} channel {c}: correlation {scores[c][0]:.4f}, "
-                f"score {scores[c][1]:.4f}, shift "
+                f"frame {t} channel {c}: correlation {correlations[c]:.4f}, shift "
                 + ", ".join(f"{name} {shifts[c][name]:.2f} px" for name in lines)
                 + ", scatter "
                 + ", ".join(f"{name} {scatter[c][name]:.2f} px" for name in lines)
             )
     table = astropy.table.QTable(
         rows=rows,
-        names=("frame", "channel", "correlation", "score")
+        names=("frame", "channel", "correlation")
         + tuple(f"shift_{name.replace(' ', '_')}" for name in lines)
         + tuple(f"scatter_{name.replace(' ', '_')}" for name in lines)
         + tuple(f"along_{name.replace(' ', '_')}" for name in lines),
@@ -2799,8 +2870,9 @@ def acceptance(
     table.meta.update(
         dict(
             description=(
-                "The reference fit scored on frames of the flight: the merit "
-                "with each frame's pointing applied, the median tile shift of "
+                "The reference fit scored on frames of the flight: the "
+                "correlation with each frame's pointing applied, the median "
+                "tile shift of "
                 f"every channel against channel {anchor} on the sky at each "
                 "aligned line, and the residual of the window outlines against "
                 "the measured edges."

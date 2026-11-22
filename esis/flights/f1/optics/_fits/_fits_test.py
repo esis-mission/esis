@@ -188,9 +188,36 @@ def test_drift_smooth():
     # outside the measured frames the nearest measured value is held
     assert np.allclose(shift(0, 25), shift(0, 19))
     assert np.allclose(shift(0, -5), shift(0, 0))
-    # the raw reading of a frame nobody measured is zero, which is the
-    # jump the smoothing exists to remove
-    assert np.allclose(_fits._drift_shift(drift, 0, 25), 0)
+    # the raw reading of a frame nobody measured is missing, not zero
+    assert np.all(np.isnan(_fits._drift_shift(drift, 0, 25)))
+
+
+def test_drift_smooth_axis_missing():
+    """
+    A frame that lost one axis's sides leaves that axis out of its fit.
+
+    Were the missing axis read as zero, the cubic through a steady motion
+    would bend toward it.
+    """
+    rows = []
+    for t in range(20):
+        sides = (0, 1, 2, 3) if t != 10 else (0, 1)
+        for side in sides:
+            truth = 0.1 * t if side < 2 else 1.0 + 0.05 * t
+            rows.append((0, t, side, truth, 10))
+    drift = astropy.table.QTable(
+        rows=rows,
+        names=("channel", "frame", "side", "shift", "num"),
+    )
+    drift["shift"] = drift["shift"] * u.pix
+    x, y = _fits._drift_shift(drift, 0, 10)
+    assert np.isclose(x, 1.0) and np.isnan(y)
+    shift = _fits._drift_smooth(drift, num_channel=1, degree=3)
+    assert np.allclose(shift(0, 10), [1.0, 1.5])
+    # an axis measured in too few frames cannot be fit
+    few = drift[(np.asarray(drift["side"]) < 2) | (np.asarray(drift["frame"]) < 3)]
+    with pytest.raises(ValueError, match="measured in y"):
+        _fits._drift_smooth(few, num_channel=1, degree=3)
 
 
 def _pointing_table() -> astropy.table.QTable:
@@ -387,6 +414,19 @@ def test_refer_to_frame():
         assert np.allclose(mine["position"][~horizontal].value, 10 + y)
     # the inputs are untouched
     assert np.all(edges["position"] == 10 * u.pix)
+
+
+def test_drift_consistent():
+    """A stage that smooths the drift another way than it was referred raises."""
+    drift = _drift_table(8)
+    drift.meta.update(drift_degree=3, frame_reference=15)
+    _fits._drift_consistent(drift, degree=3, frame_reference=15)
+    with pytest.raises(ValueError, match="drift_degree=3"):
+        _fits._drift_consistent(drift, degree=2, frame_reference=15)
+    with pytest.raises(ValueError, match="frame_reference=15"):
+        _fits._drift_consistent(drift, degree=3, frame_reference=10)
+    # a table that names neither is taken as it is
+    _fits._drift_consistent(_drift_table(8), degree=2, frame_reference=10)
 
 
 def test_drift_smooth_too_few_frames():

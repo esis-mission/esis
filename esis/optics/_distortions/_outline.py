@@ -535,8 +535,9 @@ def measure_polygon_edges(
             frame, [y - 1 / 2, x - 1 / 2], order=1, mode="constant", cval=np.nan
         )
         image[~inside] = np.nan
-        whole = np.all(np.isfinite(image), axis=1)
-        image, along = image[whole], along[whole]
+        # every row keeps its place along the side, so that a gap does not
+        # close up and bend a tilted side; the fit leaves out the profiles
+        # that are not whole
         # the resampled side runs down the rows with the outside toward
         # larger columns, as the right side of a window does in a frame
         fit = _fit_side(

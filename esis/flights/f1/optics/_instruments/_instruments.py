@@ -880,7 +880,6 @@ def as_built(
 
 def field_stop_vertices(
     path: None | str | pathlib.Path = None,
-    axis: str = "vertex",
 ) -> na.Cartesian2dVectorArray:
     """
     Load the measured vertices of the ESIS-I field stop.
@@ -901,15 +900,18 @@ def field_stop_vertices(
         The table of vertices, in the local frame of the field stop.
         If :obj:`None`, ``_data/field_stop.ecsv``, the measurement that the
         committed distortion fit was made with.
-    axis
-        The name of the logical axis along the vertices.
+
+    Returns
+    -------
+    The vertices along the ``vertex`` axis, the axis
+    :class:`optika.apertures.PolygonalAperture` reads.
     """
     if path is None:
         path = _directory_data / "field_stop.ecsv"
     table = astropy.table.QTable.read(path, format="ascii.ecsv")
     return na.Cartesian2dVectorArray(
-        x=na.ScalarArray(np.asarray(table["x"], dtype=float) * u.mm, axes=axis),
-        y=na.ScalarArray(np.asarray(table["y"], dtype=float) * u.mm, axes=axis),
+        x=na.ScalarArray(u.Quantity(table["x"]).to(u.mm), axes="vertex"),
+        y=na.ScalarArray(u.Quantity(table["y"]).to(u.mm), axes="vertex"),
     )
 
 

@@ -41,6 +41,9 @@ import esis
 from esis.flights.f1.optics._fits import _fits
 from esis.optics._distortions import _alignment
 
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import reproduce  # noqa: E402
+
 logging.getLogger("numba").setLevel(logging.WARNING)
 
 BLOCK = int(os.environ.get("ESIS_BLOCK", "3"))
@@ -111,6 +114,8 @@ def render(directory: pathlib.Path, frames: tuple[int, ...]) -> None:
         if path_pointing.exists()
         else None
     )
+    # the field stop the tables were fit with, not the regular octagon
+    reproduce._field_stop(directory)
     instrument = _fits._base(None)
     num_channel = instrument.camera.channel.shape["channel"]
     wavelengths = _fits._wavelengths_alignment()
