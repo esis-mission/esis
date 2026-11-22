@@ -159,6 +159,7 @@ intersphinx_mapping = {
     'optika': ('https://optika.readthedocs.io/en/stable/', None),
     'msfc_ccd': ('https://msfc-ccd.readthedocs.io/en/stable/', None),
     'sdo': ('https://sdo.readthedocs.io/en/stable/', None),
+    'soho': ('https://soho-mission.readthedocs.io/en/latest/', None),
     'utu': ('https://utu.readthedocs.io/en/stable/', None),
     'fiasco': ('https://fiasco.readthedocs.io/en/stable/', None),
 }

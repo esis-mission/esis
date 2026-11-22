@@ -117,6 +117,35 @@ def test_timedelta_exposure(design: Callable[..., esis.optics.Instrument]):
 @pytest.mark.parametrize(
     "design",
     [
+        esis.flights.f2.optics.design_guess,
+        esis.flights.f2.optics.design_single,
+        esis.flights.f2.optics.design,
+        esis.flights.f2.optics.design_visible,
+    ],
+)
+def test_primary_specifications(design: Callable[..., esis.optics.Instrument]):
+    """
+    Check the specifications of the primary mirror of every design of ESIS-II.
+
+    They are those of the figure and the finish on revision A of the drawing
+    of the mirror.
+    """
+    primary = design(num_distribution=0).primary_mirror
+    sag = primary.sag
+    assert sag.parameters_slope_error.step_size == 10 * u.mm
+    assert sag.parameters_slope_error.kernel_size == 5 * u.mm
+    assert sag.parameters_roughness.period_min == 0.01 * u.mm
+    assert sag.parameters_roughness.period_max == 10 * u.mm
+    assert sag.parameters_microroughness.period_min == 1.6 * u.um
+    assert sag.parameters_microroughness.period_max == 70 * u.um
+    assert primary.slope_error == 0.5 * u.urad
+    assert primary.roughness == 1.6 * u.nm
+    assert primary.microroughness == 1 * u.nm
+
+
+@pytest.mark.parametrize(
+    "design",
+    [
         esis.flights.f2.optics.design_proposed,
         esis.flights.f2.optics.design_guess,
         esis.flights.f2.optics.design_single,

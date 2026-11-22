@@ -1,0 +1,129 @@
+import pytest
+import numpy as np
+import astropy.units as u
+import astropy.time
+import astropy.table
+import named_arrays as na
+import soho
+import esis
+from esis.flights.f1.data._sumer import _sumer
+from esis.flights.f1.data.synth._scene_sumer import _scene_sumer
+from esis.flights.f1.spectrum import O_V
+
+_time_test = "2005-04-15T15:43"
+"""The start of the pass of the smallest file of the release, 4 MB."""
+
+_unit = u.erg / (u.cm**2 * u.sr * u.nm * u.s)
+"""The unit of the radiance of the scenes."""
+
+
+def test_passes_sumer() -> None:
+    result = esis.flights.f1.data.synth.passes_sumer()
+    assert isinstance(result, astropy.table.QTable)
+    assert len(result) == 161
+    start = result["time_start"]
+    assert np.all(start[1:] > start[:-1])
+    assert np.all(result["time_start"] < result["time_stop"])
+    assert set(result["file"]) <= {row["file"] for row in _sumer._manifest()}
+    assert np.all(result["exposure"] > 0 * u.s)
+    assert np.all(result["num_exposure"] >= 10)
+    assert set(result["kind"]) == {"qs", "ar"}
+    assert set(result["split"]) == {"train", "validation", "test"}
+    assert result["polar"].dtype == bool
+
+
+class TestPass:
+
+    @pytest.mark.parametrize("offset", [-50, 0, 50] * u.s)
+    def test_start(self, offset: u.Quantity) -> None:
+        """A pass is named by its start, given to the minute."""
+        (row,) = [
+            r
+            for r in esis.flights.f1.data.synth.passes_sumer()
+            if r["time_start"].isot.startswith(_time_test)
+        ]
+        result = _scene_sumer._pass(row["time_start"] + offset)
+        assert result["time_start"] == row["time_start"]
+
+    def test_during(self) -> None:
+        """A time during a pass names it."""
+        table = esis.flights.f1.data.synth.passes_sumer()
+        row = table[len(table) // 2]
+        middle = row["time_start"] + (row["time_stop"] - row["time_start"]) / 2
+        result = _scene_sumer._pass(middle)
+        assert result["time_start"] == row["time_start"]
+
+    def test_none(self) -> None:
+        with pytest.raises(ValueError, match="No pass"):
+            _scene_sumer._pass(astropy.time.Time("2019-09-30T18:00"))
+
+
+@pytest.mark.parametrize("remove_stripes", [None, True])
+@pytest.mark.parametrize(
+    argnames="velocity_max",
+    argvalues=[
+        125 * u.km / u.s,
+        None,
+    ],
+)
+def test_scene_sumer(
+    velocity_max: None | u.Quantity,
+    remove_stripes: None | bool,
+) -> None:
+    # Names other than the defaults, so an argument that isn't passed through
+    # changes the result.
+    axis_x = "x"
+    axis_y = "y"
+    axis_velocity = "v"
+
+    result = esis.flights.f1.data.synth.scene_sumer(
+        time_start=_time_test,
+        velocity_max=velocity_max,
+        fill=0 * _unit,
+        remove_stripes=remove_stripes,
+        axis_detector_x=axis_x,
+        axis_detector_y=axis_y,
+        axis_velocity=axis_velocity,
+    )
+
+    assert isinstance(result, soho.sumer.SpectrographObservation)
+    assert result.outputs.unit.is_equivalent(_unit)
+    assert set(result.outputs.shape) == {axis_x, axis_y, axis_velocity}
+    # the 76 exposures of the pass
+    assert result.outputs.shape[axis_x] == 76
+    assert np.all(np.isfinite(result.outputs))
+
+    assert np.all(result.inputs.wavelength_rest == O_V.wavelength)
+
+    radiance = result.outputs.sum(axis_velocity)
+    assert np.median(radiance.ndarray) > 0
+
+    velocity = result.inputs.velocity.cell_centers(axis_velocity)
+    if velocity_max is not None:
+        assert np.all(np.abs(velocity) <= velocity_max)
+    else:
+        assert np.any(np.abs(velocity) > 125 * u.km / u.s)
+
+
+def test_scene_sumer_trim_slit() -> None:
+    """The rows beyond the ends of the slit are left out unless asked not to."""
+    axis_y = "detector_y"
+    trimmed = esis.flights.f1.data.synth.scene_sumer(_time_test)
+    whole = esis.flights.f1.data.synth.scene_sumer(_time_test, trim_slit=False)
+    assert 0 < trimmed.outputs.shape[axis_y] < whole.outputs.shape[axis_y]
+
+
+def test_scene_sumer_time_stop() -> None:
+    """The start and end of a pass give the same scene as its start alone."""
+    (row,) = [
+        r
+        for r in esis.flights.f1.data.synth.passes_sumer()
+        if r["time_start"].isot.startswith(_time_test)
+    ]
+    result = esis.flights.f1.data.synth.scene_sumer(
+        time_start=row["time_start"],
+        time_stop=row["time_stop"],
+    )
+    expected = esis.flights.f1.data.synth.scene_sumer(_time_test)
+    assert result.outputs.shape == expected.outputs.shape
+    assert np.all(na.nominal(result.outputs) == na.nominal(expected.outputs))

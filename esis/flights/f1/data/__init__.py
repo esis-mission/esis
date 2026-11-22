@@ -2,6 +2,7 @@
 
 from ._fits import doi, path_directory, path_fits
 from ._aia import path_aia
+from ._sumer import path_sumer
 from ._level_0 import level_0
 from ._level_1 import level_1
 from . import synth
@@ -11,6 +12,7 @@ __all__ = [
     "path_directory",
     "path_fits",
     "path_aia",
+    "path_sumer",
     "level_0",
     "level_1",
     "synth",

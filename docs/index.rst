@@ -126,9 +126,10 @@ Features
   on each sensor (:class:`esis.data.Level_1`), with bias and dark subtraction
   and cosmic-ray removal.
 - Synthetic solar scenes assembled from SDO/AIA
-  (:func:`esis.data.synth.scene_aia`) and IRIS
-  (:func:`esis.data.synth.scene_iris`) observations, for validating the forward
-  model against a known truth.
+  (:func:`esis.data.synth.scene_aia`), IRIS
+  (:func:`esis.data.synth.scene_iris`), and SOHO/SUMER
+  (:func:`esis.flights.f1.data.synth.scene_sumer`) observations, for validating
+  the forward model against a known truth and training inversions.
 - Flight-specific configurations for both the 2019 flight
   (:mod:`esis.flights.f1`) and the planned 2027 flight
   (:mod:`esis.flights.f2`), including the :mod:`esis.nsroc` timelines.
@@ -187,6 +188,7 @@ Flight 2 (Planned 2027)
     :maxdepth: 2
 
     reports/f2/design
+    reports/f2/primary
     reports/f2/grating
     reports/f2/synthetic-image
 

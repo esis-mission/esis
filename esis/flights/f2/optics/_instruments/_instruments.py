@@ -195,6 +195,8 @@ def design_guess(
     The changes from ESIS-I are as follows:
      - The target wavelengths have changed to Ne VII 46.5 nm and Si XII 49.9 nm.
      - The primary mirror is moved back by 6 holes on the optical bench.
+     - The specifications of the figure and finish of the primary mirror are
+       those on revision A of its drawing, from May 2025.
      - The gratings are moved forward by 2 holes on the optical bench.
      - The filter position and orientation has been adjusted to account
        for the shallower beam.
@@ -374,6 +376,25 @@ def design_guess(
 
     # Extend the focal length of the primary mirror
     primary.sag.focal_length = primary.sag.focal_length - 6 * lots_hole_spacing
+
+    # The specifications of the figure and finish of the primary mirror on
+    # revision A of its drawing. The drawing calls the roughness at the
+    # longer periods the ripple, and the microroughness the roughness.
+    primary.sag.parameters_slope_error = optika.metrology.SlopeErrorParameters(
+        step_size=10 * u.mm,
+        kernel_size=5 * u.mm,
+    )
+    primary.sag.parameters_roughness = optika.metrology.RoughnessParameters(
+        period_min=0.01 * u.mm,
+        period_max=10 * u.mm,
+    )
+    primary.sag.parameters_microroughness = optika.metrology.RoughnessParameters(
+        period_min=1.6 * u.um,
+        period_max=70 * u.um,
+    )
+    primary.slope_error = 0.5 * u.urad
+    primary.roughness = 1.6 * u.nm
+    primary.microroughness = 1 * u.nm
 
     # Save the old distance between the field stop and the grating
     dz_grating_old = grating.translation.z - fs.translation.z
