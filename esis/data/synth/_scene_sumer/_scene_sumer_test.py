@@ -151,6 +151,37 @@ def test_unprocessed() -> None:
     assert np.allclose(_radiance(result), expected, equal_nan=True)
 
 
+@pytest.mark.parametrize("num_dim", [0, 1, 2, 3])
+def test_partly_lit(num_dim: int) -> None:
+    """
+    The columns at the red end of the window which are partly lit are left out.
+
+    Each is dimmed to 0.3 of the column inside it,
+    and the scene reaches the outermost column which is not.
+    """
+    observation, _ = _synthetic(
+        fraction=0,
+        velocities=[] * u.km / u.s,
+        slope=0,
+    )
+    axis = observation.axis_wavelength
+    velocity = _velocity(observation).ndarray_aligned((axis,))
+    red = np.argsort(velocity)[::-1]
+    factor = np.ones(velocity.shape)
+    for i in range(num_dim):
+        factor[red[i]] = 0.3 ** (num_dim - i)
+    outputs = observation.outputs * na.ScalarArray(factor, axes=(axis,))
+    observation = dataclasses.replace(observation, outputs=outputs)
+
+    result = esis.data.synth.scene_sumer_observation(
+        observation=observation,
+        num_continuum=None,
+        velocities_neighbour=None,
+    )
+    _, reach = _reach(result)
+    assert np.isclose(reach, velocity[red[num_dim]])
+
+
 def test_continuum() -> None:
     """The continuum is one level for each pixel, the same in every column."""
     observation = _observation()

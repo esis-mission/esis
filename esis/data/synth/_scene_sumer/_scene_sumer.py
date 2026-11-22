@@ -40,16 +40,19 @@ _sigma_neighbour_max = 50 * u.km / u.s
 _num_column_min = 6
 """The fewest observed columns a neighbouring line is fitted to."""
 
-_num_column_edge = 2
+_ratio_edge = 0.5
 """
-The number of columns at the end of the window which are only partly lit.
+The fraction of the column inside it below which a column at the end of the
+window, in the mean profile, is taken to be only partly lit.
 
-In the mean profiles of the passes of
-:func:`~esis.flights.f1.data.synth.passes_sumer`,
-the outermost column is about a tenth as bright as the next,
-and the next about half as bright as the one after,
-while the columns further in differ by only about a tenth.
+The edge of the window does not line up with the columns of the level-1
+files: it slides across them along the slit and from one exposure to the next,
+so the mean profile falls toward each end over one to three columns,
+each dimmer than half the column inside it.
 """
+
+_num_column_edge_max = 3
+"""The most columns at each end of the window which are taken to be only partly lit."""
 
 _num_sigma_covered = 2
 """
@@ -324,8 +327,9 @@ def scene_sumer_observation(
     in which case the scene is cut at the lowest point before the peak.
     Otherwise, the scene is cut short of the neighbouring line,
     where the mean profile is lowest between the two lines.
-    The two outermost columns at each end of the window are only partly lit,
-    and are left out.
+    The columns at each end of the window which are only partly lit,
+    each dimmer than half the column inside it in the mean profile,
+    up to three, are left out.
 
     The scene reaches as far toward the blue as toward the red,
     as far as the shorter side allows,
@@ -413,22 +417,30 @@ def scene_sumer_observation(
         profile = np.nanmean(value, axis=(0, 1))
     observed = np.isfinite(profile)
 
-    # the outermost columns at each end of the window are only partly lit,
-    # and are left out of the fits, the continuum, and the scene
+    # the columns at each end of the window which are only partly lit
+    # are left out of the fits, the continuum, and the scene
     lit = observed.copy()
     for sign in (-1, +1):
         side = np.flatnonzero(observed & (sign * middle > 0))
         side = side[np.argsort(sign * middle[side])]
-        lit[side[-_num_column_edge:]] = False
+        for k in range(min(_num_column_edge_max, side.size - 1)):
+            end = side[side.size - 1 - k]
+            inside = side[side.size - 2 - k]
+            if not profile[end] < _ratio_edge * profile[inside]:
+                break
+            lit[end] = False
     profile_lit = np.where(lit, profile, np.nan)
 
-    # how far each side of the scene reaches: no further than the window
+    # the speed of the outermost lit column on each side, if any,
+    # and how far each side of the scene reaches: no further than the window
+    outermost: dict[int, float] = dict()
     limit: dict[int, float] = dict()
     for sign in (-1, +1):
         reach = lit & (sign * middle > 0)
         limit[sign] = 0.0
         if np.any(reach):
-            limit[sign] = float((sign * middle[reach]).max() + width_column / 2)
+            outermost[sign] = float((sign * middle[reach]).max())
+            limit[sign] = outermost[sign] + width_column / 2
     subtracted: set[int] = set()
 
     if velocities_neighbour is not None:
@@ -451,22 +463,20 @@ def scene_sumer_observation(
         for velocity_expected in expected:
             sign = int(np.sign(velocity_expected))
             s = sign * middle
-            reach = lit & (s > 0)
-            if not np.any(reach):
+            if sign not in outermost:
                 continue
-            outermost = s[reach].max()
-            edge = outermost + width_column / 2
+            outer = outermost[sign]
 
             # a neighbouring line is looked for only if the window reaches
             # where it is expected, so that the drop of the window at its end
             # is not taken for the line
             found = None
-            if outermost >= abs(velocity_expected):
+            if outer >= abs(velocity_expected):
                 found = _neighbour(profile_lit, middle, velocity_expected)
             if found is not None:
                 center, sigma, height = found
                 reach_min = sign * center + _num_sigma_covered * sigma
-                covered = outermost >= reach_min
+                covered = outer >= reach_min
                 if covered and height < height_neighbour_max * peak:
                     amplitude = _amplitude(
                         value=np.where(lit, value, np.nan),
@@ -476,13 +486,13 @@ def scene_sumer_observation(
                     )
                     gaussian = _gaussian(middle, center, sigma)
                     value = value - amplitude[..., np.newaxis] * gaussian
-                    limit[sign] = float(edge)
+                    limit[sign] = outer + width_column / 2
                     subtracted.add(sign)
                     continue
                 stop = sign * center - 2 * sigma
             else:
                 trough_max = _velocity_trough_max.to_value(_unit_velocity)
-                stop = min(outermost, trough_max)
+                stop = min(outer, trough_max)
 
             between = np.isfinite(smooth) & (s >= trough_min) & (s <= stop)
             if np.any(between):
@@ -490,7 +500,7 @@ def scene_sumer_observation(
             else:
                 # the window ends, or the neighbouring line begins,
                 # before the least speed at which the scene is cut
-                trough = min(outermost, trough_min)
+                trough = min(outer, trough_min)
             limit[sign] = float(trough)
 
         # a peak in a wing of the mean profile, once the neighbouring line is
