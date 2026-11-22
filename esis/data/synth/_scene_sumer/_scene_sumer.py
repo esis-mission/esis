@@ -40,18 +40,32 @@ _sigma_neighbour_max = 50 * u.km / u.s
 _num_column_min = 6
 """The fewest observed columns a neighbouring line is fitted to."""
 
-_ratio_edge = 0.5
+_num_band = 8
+"""
+The number of bands of exposures, and of rows along the slit,
+in each of whose mean profiles the columns at the ends of the window are
+compared.
+"""
+
+_ratio_edge = 0.45
 """
 The fraction of the column inside it below which a column at the end of the
-window, in the mean profile, is taken to be only partly lit.
+window is taken to be only partly lit,
+if it falls below it in the mean profile of any band.
 
 The edge of the window does not line up with the columns of the level-1
 files: it slides across them along the slit and from one exposure to the next,
-so the mean profile falls toward each end over one to three columns,
-each dimmer than half the column inside it.
+by up to four columns,
+so that the mean profile of a whole raster fades out over several columns,
+some no dimmer than three quarters of the column inside them.
+Within a band, the edge is sharper, and a column it slides across is dark.
+In the passes of :func:`~esis.flights.f1.data.synth.passes_sumer`,
+the least ratio over the bands of a column to the one inside it
+is spread evenly between 0.45 and 1 in the columns well inside the ends,
+while below 0.45 it is found almost only in the four columns at each end.
 """
 
-_num_column_edge_max = 3
+_num_column_edge_max = 4
 """The most columns at each end of the window which are taken to be only partly lit."""
 
 _num_sigma_covered = 2
@@ -261,6 +275,56 @@ def _amplitude(
     return np.where(enough, amplitude, 0)
 
 
+def _lit(
+    value: np.ndarray,
+    observed: np.ndarray,
+    velocity: np.ndarray,
+) -> np.ndarray:
+    """
+    Return which columns of the window are fully lit.
+
+    Walking in from each end of the window, a column is taken to be only
+    partly lit while, in the mean profile of any of :data:`_num_band` bands of
+    exposures, or of rows along the slit, it is dimmer than
+    :data:`_ratio_edge` of the column inside it,
+    up to :data:`_num_column_edge_max` columns.
+
+    Parameters
+    ----------
+    value
+        The radiance of each pixel, with the exposures, the rows along the
+        slit, and the columns along its three axes.
+    observed
+        Which columns some exposure observed.
+    velocity
+        The velocity of the middle of each column.
+    """
+    bands = []
+    with warnings.catch_warnings():
+        # the columns which no exposure of a band observed
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for axis in (0, 1):
+            mean = np.nanmean(value, axis=1 - axis)
+            num = min(_num_band, mean.shape[0])
+            for band in np.array_split(np.arange(mean.shape[0]), num):
+                bands.append(np.nanmean(mean[band], axis=0))
+    profiles = np.stack(bands)
+
+    lit = observed.copy()
+    for sign in (-1, +1):
+        side = np.flatnonzero(observed & (sign * velocity > 0))
+        side = side[np.argsort(sign * velocity[side])]
+        for k in range(min(_num_column_edge_max, side.size - 1)):
+            end = side[side.size - 1 - k]
+            inside = side[side.size - 2 - k]
+            valid = np.isfinite(profiles[:, end]) & (profiles[:, inside] > 0)
+            ratio = profiles[valid, end] / profiles[valid, inside]
+            if not np.any(ratio < _ratio_edge):
+                break
+            lit[end] = False
+    return lit
+
+
 def _smooth(profile: np.ndarray) -> np.ndarray:
     """
     Return the mean of the observed columns of a profile near each column.
@@ -352,9 +416,10 @@ def scene_sumer_observation(
     and before the cut, such as what is left of a subtracted line,
     or a line which is not expected,
     the scene is cut at the lowest point before the peak.
-    The columns at each end of the window which are only partly lit,
-    each dimmer than half the column inside it in the mean profile,
-    up to three, are left out.
+    The columns at each end of the window which are only partly lit are
+    left out: walking in from each end, those which, in the mean profile of
+    some band of exposures or of rows along the slit, are dimmer than 0.45 of
+    the column inside them, up to four.
 
     The scene reaches as far toward the blue as toward the red,
     as far as the shorter side allows,
@@ -446,16 +511,7 @@ def scene_sumer_observation(
 
     # the columns at each end of the window which are only partly lit
     # are left out of the fits, the continuum, and the scene
-    lit = observed.copy()
-    for sign in (-1, +1):
-        side = np.flatnonzero(observed & (sign * middle > 0))
-        side = side[np.argsort(sign * middle[side])]
-        for k in range(min(_num_column_edge_max, side.size - 1)):
-            end = side[side.size - 1 - k]
-            inside = side[side.size - 2 - k]
-            if not profile[end] < _ratio_edge * profile[inside]:
-                break
-            lit[end] = False
+    lit = _lit(value, observed, middle)
     if not np.any(lit):
         raise ValueError("No column of the observation is kept, since none is lit.")
     profile_lit = np.where(lit, profile, np.nan)

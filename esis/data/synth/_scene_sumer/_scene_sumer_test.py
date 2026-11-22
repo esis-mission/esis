@@ -182,6 +182,40 @@ def test_partly_lit(num_dim: int) -> None:
     assert np.isclose(reach, velocity[red[num_dim]])
 
 
+def test_partly_lit_sliding() -> None:
+    """
+    A column which the edge of the window slides across is left out.
+
+    The outermost column at the red end is dark in every exposure,
+    and the one inside it in the first 40% of the exposures,
+    so that in the mean profile it is 0.6 of the column inside it,
+    but in the bands of the first exposures it is dark.
+    """
+    observation, _ = _synthetic(
+        fraction=0,
+        velocities=[] * u.km / u.s,
+        slope=0,
+    )
+    axis = observation.axis_wavelength
+    axis_x = observation.axis_detector_x
+    velocity = _velocity(observation).ndarray_aligned((axis,))
+    red = np.argsort(velocity)[::-1]
+    num_x = observation.outputs.shape[axis_x]
+    factor = np.ones((num_x, velocity.size))
+    factor[:, red[0]] = 0
+    factor[: int(0.4 * num_x), red[1]] = 0
+    outputs = observation.outputs * na.ScalarArray(factor, axes=(axis_x, axis))
+    observation = dataclasses.replace(observation, outputs=outputs)
+
+    result = esis.data.synth.scene_sumer_observation(
+        observation=observation,
+        num_continuum=None,
+        velocities_neighbour=None,
+    )
+    _, reach = _reach(result)
+    assert np.isclose(reach, velocity[red[2]])
+
+
 def test_continuum() -> None:
     """The continuum is one level for each pixel, the same in every column."""
     observation = _observation()
