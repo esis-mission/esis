@@ -915,6 +915,10 @@ class AbstractInstrument(
 
                 position_x = position_i.x[where_i].ndarray
                 position_y = position_i.y[where_i].ndarray
+                # a vignetted ray may carry no position at all
+                finite = np.isfinite(position_x) & np.isfinite(position_y)
+                position_x = position_x[finite]
+                position_y = position_y[finite]
 
                 position = np.stack(
                     arrays=[
@@ -1033,3 +1037,29 @@ class Instrument(
 
     kwargs_plot: None | dict = None
     """Extra keyword arguments used to plot the optical system."""
+
+    placement_design: None | dict[str, u.Quantity | na.AbstractScalar] = None
+    """
+    The placements the instrument was built with, before any fitted term.
+
+    :meth:`esis.optics.DistortionParameters.to_instrument` records here the
+    sensor and grating positions and the nominal focal length of the primary
+    its terms are measured from, so that they can be read back and applied
+    again from the same origin, even after indexing by channel.
+    """
+
+    kappa_focus: None | float = None
+    """
+    The sensor travel per unit of grating travel along the beam that keeps
+    the image in focus.
+
+    For a grating of lateral magnification :math:`m` the longitudinal
+    magnification is of order :math:`m^2`, but the exact ratio depends on
+    the folded geometry of the instrument, so it is best measured on the
+    model, for example from the change of the spot size per unit of grating
+    travel and per unit of sensor travel.
+    :attr:`esis.optics.DistortionParameters.z_sensor` moves the grating by
+    the sensor move divided by this ratio, so that it changes the
+    magnification of a channel without defocusing it.
+    :meth:`esis.optics.DistortionParameters.to_instrument` requires it.
+    """

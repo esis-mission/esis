@@ -12,6 +12,30 @@ from ._sensors import Sensor
 from ._cameras import Camera
 from ._requirements import Requirements
 from ._instruments import Instrument
+from ._distortions import (
+    DistortionParameters,
+    LinearMerit,
+    correlation,
+    correlation_raytraced,
+    fit_distortion,
+    polish,
+    align_channels,
+    sky_grid,
+    sample_on_sky,
+    measure_shifts,
+    window_mask,
+    measure_channel_shifts,
+    median_shifts,
+    shift_modes,
+    SIDES,
+    measure_edges,
+    measure_edge_steps,
+    measure_polygon_edges,
+    predict_edges,
+    outline_residual,
+    width_residual,
+    fit_distortion_outline,
+)
 
 num_interpolation = 32
 """
@@ -46,4 +70,26 @@ __all__ = [
     "Camera",
     "Requirements",
     "Instrument",
+    "DistortionParameters",
+    "LinearMerit",
+    "correlation",
+    "correlation_raytraced",
+    "fit_distortion",
+    "polish",
+    "align_channels",
+    "SIDES",
+    "measure_edges",
+    "measure_edge_steps",
+    "measure_polygon_edges",
+    "predict_edges",
+    "outline_residual",
+    "width_residual",
+    "fit_distortion_outline",
+    "sky_grid",
+    "sample_on_sky",
+    "measure_shifts",
+    "window_mask",
+    "measure_channel_shifts",
+    "median_shifts",
+    "shift_modes",
 ]

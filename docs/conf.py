@@ -14,10 +14,38 @@ import os
 import sys
 import inspect
 import joblib
+import pooch
 
 package_path = os.path.abspath('../')
 sys.path.insert(0, package_path)
 os.environ['PYTHONPATH'] = ';'.join((package_path, os.environ.get('PYTHONPATH', '')))
+
+# -- The pages of the distortion fit -----------------------------------------
+
+# Too large for this repository and made from the flight data rather than by
+# this build, so they are kept in a release of the data and copied in with the
+# static files.  A new release of the pages is named here.
+_url_pages = (
+    "https://github.com/esis-mission/esis-data-2019/releases/download"
+    "/distortion-pages-v1.2"
+)
+_pages = {
+    "blink.html": (
+        "sha256:"
+        "3feacd73b57ab6235f5eb29653e6fe0f3c16a4bf56f3d8ad52ec5e2d029d6a1f"
+    ),
+    "coalign.html": (
+        "sha256:"
+        "745429392ff283d019330cc36520edeb79ddefe890279df15b518c6b333b8225"
+    ),
+}
+for _name, _hash in _pages.items():
+    pooch.retrieve(
+        url=f"{_url_pages}/{_name}",
+        known_hash=_hash,
+        fname=_name,
+        path=os.path.abspath('_static/distortion_fit'),
+    )
 
 # -- Project information -----------------------------------------------------
 

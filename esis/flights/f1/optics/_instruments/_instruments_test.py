@@ -1,9 +1,11 @@
 import collections.abc
 import copy
 import dataclasses
+import pathlib
 import pytest
 import numpy as np
 import astropy.units as u
+import astropy.table
 import named_arrays as na
 import optika
 import esis
@@ -624,9 +626,141 @@ def test_as_built_figure_grating_rays() -> None:
     assert np.all(rays.intensity == rays_without.intensity)
 
 
-@pytest.mark.parametrize("num_distribution", [0, 11])
-def test_distortion_fit(num_distribution: int):
-    result = esis.flights.f1.optics.distortion_fit(
-        num_distribution=num_distribution,
+def test_field_stop_vertices() -> None:
+    result = esis.flights.f1.optics.field_stop_vertices()
+    assert na.shape(result) == dict(vertex=8)
+    design = esis.flights.f1.optics.as_built().field_stop.aperture.vertices
+    radius_design = np.sqrt(na.nominal(design.x) ** 2 + na.nominal(design.y) ** 2)
+    radius = np.sqrt(result.x**2 + result.y**2)
+    # an octagon of the design's size, moved by microns rather than millimeters
+    assert np.all(np.abs(radius - radius_design.mean()) < 20 * u.um)
+
+
+def test_field_stop_vertices_units(tmp_path: pathlib.Path) -> None:
+    """A table in another unit is converted, not relabelled as millimeters."""
+    table = astropy.table.QTable(
+        dict(x=[1000.0, -1000.0, 0.0] * u.um, y=[0.0, 0.0, 1500.0] * u.um)
     )
+    path = tmp_path / "stop.ecsv"
+    table.write(path, format="ascii.ecsv")
+    result = esis.flights.f1.optics.field_stop_vertices(path)
+    assert na.shape(result) == dict(vertex=3)
+    assert np.allclose(result.x.ndarray, [1, -1, 0] * u.mm)
+    assert np.allclose(result.y.ndarray, [0, 0, 1.5] * u.mm)
+
+
+def test_distortion_fit() -> None:
+    result = esis.flights.f1.optics.distortion_fit()
     assert isinstance(result, esis.optics.abc.AbstractInstrument)
+    assert result.field_stop.vertices is not None
+    # the fitted model is exact: no Monte Carlo sample of the as-built
+    # tolerances survives into where the light lands
+    position = result.system.rayfunction_default.outputs.position
+    assert not isinstance(position.x, na.AbstractUncertainScalarArray)
+    assert not isinstance(position.y, na.AbstractUncertainScalarArray)
+
+
+def test_distortion_fit_axis_time():
+    result = esis.flights.f1.optics.distortion_fit(axis_time="time")
+    assert na.shape(result.pitch) == dict(channel=4, time=30)
+    reference = esis.flights.f1.optics.distortion_fit()
+    delta = result.yaw - reference.yaw
+    # the yaw drifted monotonically through the flight, changing sign at the
+    # reference frame
+    assert np.all(delta[dict(time=0, channel=0)] > 0 * u.arcsec)
+    assert np.all(delta[dict(time=~0, channel=0)] < 0 * u.arcsec)
+    assert np.all(np.abs(delta[dict(time=15)]) < 0.01 * u.arcsec)
+    # the pointing is the payload's, common to the channels
+    assert np.all(np.abs(delta - delta.mean("channel")) < 1e-6 * u.arcsec)
+    # each channel views the Sun through its own sector of the primary, and
+    # the focus of each sector has its own history: zero at the reference
+    # frame, tens of microns apart at the first frame, and channel 1's
+    # sector moves by more than 30 um over the flight
+    z = (
+        result.primary_mirror.translation.z - reference.primary_mirror.translation.z
+    ).to(u.um)
+    assert na.shape(z) == dict(time=30, channel=4)
+    assert np.all(np.abs(z[dict(time=15)]) < 1e-6 * u.um)
+    first = z[dict(time=0)]
+    assert first.max() - first.min() > 15 * u.um
+    assert np.abs(z[dict(time=~0, channel=1)] - z[dict(time=0, channel=1)]) > 30 * u.um
+
+
+def test_distortion_fit_tables_record_environment():
+    # every committed table names the environment and the seed that
+    # produced it, so that the run can be repeated
+    directory = pathlib.Path(esis.flights.f1.optics._instruments._instruments.__file__)
+    paths = sorted((directory.parent / "_data").glob("*.ecsv"))
+    assert paths
+    for path in paths:
+        table = astropy.table.QTable.read(path, format="ascii.ecsv")
+        environment = table.meta.get("environment")
+        assert environment is not None, path.name
+        assert "optika" in environment["checkouts"], path.name
+        assert "optika" in environment["packages"], path.name
+        assert isinstance(table.meta.get("seed"), int), path.name
+
+
+def test_distortion_fit_sensor_terms():
+    # the loaded reference carries the sensor placement (zero for a file
+    # written before it existed) and the primary displacement is measured
+    # from the nominal focal length
+    result = esis.flights.f1.optics.distortion_fit()
+    parameters = esis.optics.DistortionParameters.from_instrument(result)
+    assert na.shape(parameters) == dict(channel=4)
+    z = na.value(parameters.z_sensor)
+    assert np.all(np.isfinite(np.asarray(getattr(z, "ndarray", z))))
+
+
+def test_distortion_fit_bounds():
+    instrument = esis.flights.f1.optics.design(num_distribution=0)
+    parameters = esis.optics.DistortionParameters.from_instrument(instrument)
+    lower, upper = esis.flights.f1.optics.distortion_fit_bounds(parameters)
+    lb, ub = na.pack(lower).ndarray, na.pack(upper).ndarray
+    x = na.pack(parameters).ndarray
+    assert lb.shape == ub.shape == x.shape
+    # every parameter starts within its box, and no box is degenerate
+    assert np.all(lb <= x)
+    assert np.all(x <= ub)
+    assert np.all(ub > lb)
+    # the sensor terms are bounded about wherever the sensor is
+    assert np.all(upper.yaw_sensor - parameters.yaw_sensor == 3 * u.deg)
+    assert np.all(parameters.yaw_sensor - lower.yaw_sensor == 3 * u.deg)
+    assert np.all(upper.z_sensor == parameters.z_sensor + 10 * u.mm)
+
+
+def test_distortion_fit_windows():
+    """
+    Check that the committed reference puts the windows where it says.
+
+    The reference table records the centre of every window as the fit
+    left it; a change in the optics library that moves the image, such as
+    the roll bug of optika 2.7, shows up here as a shift of every window.
+    """
+    import astropy.table
+    from esis.flights.f1.optics._instruments import _instruments
+
+    table = astropy.table.QTable.read(
+        _instruments._directory_data / "distortion_reference.ecsv",
+        format="ascii.ecsv",
+    )
+    from esis.flights.f1.optics._fits import _fits
+
+    # the fit traces the idealized as-built model, whose uncertain ruling
+    # coefficients are stripped, with the field stop it measured; the
+    # committed parameters go back onto it
+    base = _fits._base(None)
+    base.field_stop.vertices = esis.flights.f1.optics.field_stop_vertices()
+    model = esis.optics.DistortionParameters.from_file(
+        _instruments._directory_data / "distortion_reference.ecsv"
+    ).to_instrument(base)
+    for c, centers in enumerate(table.meta["windows"]):
+        channel = model[dict(channel=c)]
+        linear = channel.system.linearize(
+            wavelength=channel.wavelength, degree=2, field_stop=True
+        )
+        for i, (x, y) in enumerate(centers):
+            footprint = linear.footprint(channel.wavelength[dict(wavelength=i)])
+            cx, cy = _fits._center(footprint)
+            assert abs(cx - x) < 1
+            assert abs(cy - y) < 1

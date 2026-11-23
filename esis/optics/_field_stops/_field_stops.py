@@ -45,14 +45,39 @@ class AbstractFieldStop(
         """The radius of the exterior edge of the field stop."""
 
     @property
+    @abc.abstractmethod
+    def vertices(self) -> None | na.AbstractCartesian2dVectorArray:
+        """
+        The measured vertices of the clear aperture, in local coordinates.
+
+        If :obj:`None`, the clear aperture is the regular polygon with
+        :attr:`num_sides` sides and a vertex at :attr:`radius_clear` on the
+        :math:`x` axis.
+        """
+
+    @property
+    def aperture(self) -> optika.apertures.AbstractPolygonalAperture:
+        """The clear aperture, regular or as measured."""
+        vertices = self.vertices
+        if vertices is None:
+            return optika.apertures.RegularPolygonalAperture(
+                radius=self.radius_clear,
+                num_vertices=self.num_sides,
+            )
+        return optika.apertures.PolygonalAperture(
+            vertices=na.Cartesian3dVectorArray(
+                x=vertices.x,
+                y=vertices.y,
+                z=0 * na.unit(vertices.x),
+            ),
+        )
+
+    @property
     def surface(self) -> optika.surfaces.Surface:
         """Represent this object as an :mod:`optika` surface."""
         return optika.surfaces.Surface(
             name="field stop",
-            aperture=optika.apertures.RegularPolygonalAperture(
-                radius=self.radius_clear,
-                num_vertices=self.num_sides,
-            ),
+            aperture=self.aperture,
             aperture_mechanical=optika.apertures.CircularAperture(
                 radius=self.radius_mechanical,
             ),
@@ -80,6 +105,16 @@ class FieldStop(
 
     radius_mechanical: u.Quantity | na.AbstractScalar = 0 * u.mm
     """The radius of the exterior edge of the field stop."""
+
+    vertices: None | na.AbstractCartesian2dVectorArray = None
+    """
+    The measured vertices of the clear aperture, in local coordinates, along
+    the ``vertex`` axis.
+
+    If :obj:`None`, the clear aperture is the regular polygon with
+    :attr:`num_sides` sides and a vertex at :attr:`radius_clear` on the
+    :math:`x` axis.
+    """
 
     translation: u.Quantity | na.AbstractCartesian3dVectorArray = 0 * u.mm
     """A transformation which can arbitrarily translate this object."""

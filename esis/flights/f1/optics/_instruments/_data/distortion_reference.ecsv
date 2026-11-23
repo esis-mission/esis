@@ -1,0 +1,166 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: yaw_grating, unit: arcmin, datatype: float64}
+# - {name: pitch_grating, unit: arcmin, datatype: float64}
+# - {name: roll_grating, unit: deg, datatype: float64}
+# - {name: roll_field_stop, unit: deg, datatype: float64}
+# - {name: spacing_rulings, unit: um, datatype: float64}
+# - {name: displacement_primary, unit: mm, datatype: float64}
+# - {name: pitch, unit: arcsec, datatype: float64}
+# - {name: yaw, unit: arcsec, datatype: float64}
+# - {name: roll, unit: deg, datatype: float64}
+# - {name: z_primary, unit: mm, datatype: float64}
+# - {name: z_sensor, unit: mm, datatype: float64}
+# - {name: roll_sensor, unit: deg, datatype: float64}
+# - {name: pitch_sensor, unit: deg, datatype: float64}
+# - {name: yaw_sensor, unit: deg, datatype: float64}
+# - {name: x_sensor, unit: mm, datatype: float64}
+# - {name: y_sensor, unit: mm, datatype: float64}
+# - {name: degradation, datatype: float64}
+# meta: !!omap
+# - {axis: channel}
+# - {description: 'Best-fit ESIS-I distortion parameters, optimized against the time=15 frame of esis.flights.f1.data.level_1().'}
+# - {provenance: 'esis.flights.f1.optics.fit_distortion_reference(time=15, num_scene=401): a seeded capture and polish of every channel
+#     against the AIA proxy scene, its windows placed on the measured edges, the shared optics set to their mean, and the channels aligned
+#     to one another on the sky at He I, O V (median shift vs channel 1: 0.02, 0.00, 0.03, 0.02 px)'}
+# - stages:
+#     absolute:
+#       free: [yaw_grating, pitch_grating, spacing_rulings, pitch, yaw, z_sensor, roll_sensor, pitch_sensor, yaw_sensor]
+#     alignment:
+#       anchor: 1
+#       free: [yaw_grating, pitch_grating, roll_grating, spacing_rulings, z_sensor, roll_sensor, pitch_sensor, yaw_sensor, x_sensor, y_sensor]
+#       lines: [He I, O V]
+#     outline:
+#       edges: &id001 [1.123458772954148, 1.1077230579913884, 0.5226497976275708, 0.9786963169036039]
+#       sky: [spacing_rulings, pitch, yaw, z_sensor, yaw_sensor, pitch_sensor]
+#       window: [yaw_grating, pitch_grating, roll_field_stop]
+#     shared:
+#       fixed: [displacement_primary, z_primary, roll_field_stop, pitch, yaw]
+#       free: [yaw_grating, pitch_grating, roll_grating, spacing_rulings, z_sensor, roll_sensor, pitch_sensor, yaw_sensor, x_sensor, y_sensor]
+# - scores:
+#     absolute: [0.8125884312460653, 0.8475476063067329, 0.8034669798056223, 0.8290826773742795]
+#     alignment: [0.016282116823072117, 0.0, 0.027424215323812565, 0.015919699866232345]
+#     outline:
+#       edges: *id001
+#       merit: [0.8133941817098588, 0.8481924011126462, 0.8042728023716869, 0.8305115456172529]
+#     shared: [0.8174388496786759, 0.8497612288433949, 0.8052587509233081, 0.8310859077322306]
+# - windows:
+#   - - [246.43802586022167, 575.6148919982485]
+#     - [938.8455162438936, 588.2102351014044]
+#     - [1483.383546037951, 598.1146804185962]
+#   - - [306.0924963530892, 493.951550305801]
+#     - [997.2498155145106, 497.2380909903117]
+#     - [1540.8208169286863, 499.8220072423669]
+#   - - [287.42971710978105, 539.067573105089]
+#     - [979.5161480562513, 544.7837721947423]
+#     - [1523.8445024175603, 549.278216858168]
+#   - - [294.1163459929205, 458.0846346758189]
+#     - [984.690251253938, 469.8512048728086]
+#     - [1527.795792065439, 479.1029677940642]
+# - {date: '2026-11-21T21:06:08'}
+# - environment:
+#     checkouts: {euv-snapshot-imaging-spectrograph: 1.15.1.dev19+g37587408c @ 3758740, named-arrays: 2.20.0, optika: 3.10.0, regridding: 3.7.0}
+#     packages: {ImageIO: 2.38.2, Jinja2: 3.1.6, MarkupSafe: 3.0.3, PIMS: '0.7', PyAVM: 0.9.10, PyJWT: 2.15.1, PyYAML: 6.0.3, Pygments: 2.21.0,
+#       adjustText: 1.4.0, aiapy: 0.12.1, aioftp: 0.28.3, aiohappyeyeballs: 2.7.1, aiohttp: 3.14.5, aiosignal: 1.4.0, asdf: 6.0.0, asdf-astropy: 0.11.0,
+#       asdf_coordinates_schemas: 0.5.1, asdf_standard: 1.5.0, asdf_transform_schemas: 0.6.0, asdf_wcs_schemas: 0.5.0, asteval: 1.0.10,
+#       astropy: 7.2.4, astropy-iers-data: 0.2026.11.16.0.37.44, astropy_healpix: 2.0.1, astroscrappy: 1.3.0, asttokens: 3.0.2, attrs: 26.1.0,
+#       beautifulsoup4: 4.15.0, certifi: 2026.10.23, cffi: 2.1.1, charset-normalizer: 3.5.2, click: 8.5.1, cloudpickle: 3.1.3, colorsynth: 1.1.2,
+#       contourpy: 1.4.0, cryptography: 50.0.2, cuda-bindings: 12.9.4, cuda-pathfinder: 1.6.0, cuda-toolkit: 12.6.3, cycler: 0.12.1, dask: 2026.8.0,
+#       dask-image: 2026.5.0, dill: 0.4.1, dkist: 1.19.0, donfig: 0.8.1.post1, drms: 0.9.1, euv-snapshot-imaging-spectrograph: 1.15.1.dev19+g37587408c,
+#       executing: 2.3.0, ezdxf: 1.4.5, fiasco: 0.9.0, filelock: 4.2.4, flatbuffers: 25.12.19, fonttools: 4.68.0, fortranformat: 2.0.3,
+#       frozenlist: 1.8.0, fsspec: 2026.9.0, globus-sdk: 4.10.0, google-crc32c: 1.9.0, gwcs: 1.0.3, h5py: 3.16.0, idna: '3.20', iniconfig: 2.3.1,
+#       interface-region-imaging-spectrograph: 1.2.0, ipython: 9.18.1, ipython_pygments_lexers: 1.1.1, irispy-lmsal: 0.9.0, isodate: 0.7.2,
+#       jedi: 0.20.1, jmespath: 1.1.0, joblib: 1.6.0, kiwisolver: 1.5.1, llvmlite: 0.48.0, lmfit: 1.3.4, locket: 1.0.0, lxml: 6.1.3, matplotlib: 3.11.2,
+#       matplotlib-inline: 0.2.2, mpl_animators: 1.2.4, mpmath: 1.3.0, msfc-ccd: 1.2.0, msgspec: 0.22.0, multidict: 7.2.1, named-arrays: 2.20.0,
+#       ndcube: 2.4.3, ndfilters: 1.1.1, ndoptimize: 0.2.0, networkx: '3.7', numba: 0.66.0, numcodecs: 0.17.1, numexpr: 2.14.2, numpy: 2.4.6,
+#       nvidia-cublas-cu12: 12.6.4.1, nvidia-cuda-cupti-cu12: 12.6.80, nvidia-cuda-nvrtc-cu12: 12.6.85, nvidia-cuda-runtime-cu12: 12.6.77,
+#       nvidia-cudnn-cu12: 9.10.2.21, nvidia-cufft-cu12: 11.3.0.4, nvidia-cufile-cu12: 1.11.1.6, nvidia-curand-cu12: 10.3.7.77, nvidia-cusolver-cu12: 11.7.1.2,
+#       nvidia-cusparse-cu12: 12.5.4.2, nvidia-cusparselt-cu12: 0.7.1, nvidia-nccl-cu12: 2.29.3, nvidia-nvjitlink-cu12: 12.9.86, nvidia-nvshmem-cu12: 3.4.5,
+#       nvidia-nvtx-cu12: 12.6.77, onnxruntime: 1.32.0, optika: 3.10.0, packaging: '26.3', pandas: 3.1.1, parfive: 2.3.1, parso: 0.8.7,
+#       partd: 1.4.2, pexpect: 4.9.0, pillow: 13.0.0, pip: '26.3', plasmapy: 2026.2.0, platformdirs: 4.14.8, pluggy: 1.7.0, pooch: 1.9.0,
+#       prompt_toolkit: 3.0.53, propcache: 0.5.4, protobuf: 7.36.2, psutil: 7.2.2, ptyprocess: 0.7.0, pure_eval: 0.2.4, pycparser: '3.12',
+#       pyerfa: 2.0.1.5, pymupdf: '2.1', pymupdf4llm: '2.1', pymupdf_layout: '2.1', pyparsing: 3.3.3, pytest: 9.2.0, python-dateutil: 4.0.0,
+#       regridding: 3.7.0, reproject: 0.21.0, requests: 2.34.2, requests-file: 3.0.1, requests-toolbelt: 1.0.0, scipy: 1.18.1, semantic-version: 2.10.0,
+#       setuptools: 78.1.0, slicerator: 1.1.0, solar-dynamics-observatory: 1.4.0, soupsieve: 4.1.3, stack-data: 0.6.3, sunpy: 8.0.1, sunraster: 0.7.0,
+#       sympy: 1.14.0, tabulate: 0.10.0, tifffile: 2026.11.16, toolz: 1.2.0, torch: 2.14.0+cu126, tqdm: 4.70.1, traitlets: 5.16.1, triton: 3.8.0,
+#       typing_extensions: 4.16.0, tzdata: '2026.6', uncertainties: 3.2.3, urllib3: 2.8.0, utu: 0.7.0, wcwidth: 0.9.4, wrapt: 2.5.2, xarray: 2026.9.0,
+#       yarl: 1.25.1, zarr: 3.4.2, zeep: 4.3.3}
+#     platform: Linux-6.12.0-211.53.1.el10_2.x86_64-x86_64-with-glibc2.39
+#     python: 3.12.14
+# - {seed: 0}
+# - __serialized_columns__:
+#     degradation:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: ''}
+#       value: !astropy.table.SerializedColumn {name: degradation}
+#     displacement_primary:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id003 !astropy.units.Unit {unit: mm}
+#       value: !astropy.table.SerializedColumn {name: displacement_primary}
+#     pitch:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id004 !astropy.units.Unit {unit: arcsec}
+#       value: !astropy.table.SerializedColumn {name: pitch}
+#     pitch_grating:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id005 !astropy.units.Unit {unit: arcmin}
+#       value: !astropy.table.SerializedColumn {name: pitch_grating}
+#     pitch_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id002 !astropy.units.Unit {unit: deg}
+#       value: !astropy.table.SerializedColumn {name: pitch_sensor}
+#     roll:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: roll}
+#     roll_field_stop:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: roll_field_stop}
+#     roll_grating:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: roll_grating}
+#     roll_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: roll_sensor}
+#     spacing_rulings:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: um}
+#       value: !astropy.table.SerializedColumn {name: spacing_rulings}
+#     x_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id003
+#       value: !astropy.table.SerializedColumn {name: x_sensor}
+#     y_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id003
+#       value: !astropy.table.SerializedColumn {name: y_sensor}
+#     yaw:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id004
+#       value: !astropy.table.SerializedColumn {name: yaw}
+#     yaw_grating:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id005
+#       value: !astropy.table.SerializedColumn {name: yaw_grating}
+#     yaw_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: yaw_sensor}
+#     z_primary:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id003
+#       value: !astropy.table.SerializedColumn {name: z_primary}
+#     z_sensor:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id003
+#       value: !astropy.table.SerializedColumn {name: z_sensor}
+# schema: astropy-2.0
+yaw_grating pitch_grating roll_grating roll_field_stop spacing_rulings displacement_primary pitch yaw roll z_primary z_sensor roll_sensor pitch_sensor yaw_sensor x_sensor y_sensor degradation
+-268.3312813054806 -0.18249181724441446 0.17465327000385392 -0.4076790364392933 0.38629053528655577 0.0 -21.13412105194732 -16.479308271166765 0.0 0.0 3.739156500282847 -0.9116401215040347 -0.21367326740147047 -12.429980203585744 0.7802770863779266 -0.1551205567227447 1.0
+-267.78580266403 0.9097775756085378 0.01050826549766814 -0.4076790364392933 0.38628587664758635 0.0 -21.13412105194732 -16.479308271166765 0.0 0.0 -1.1578460620440696 -0.37934824859767946 -0.5047360428749462 -12.589037784764667 0.07279550658345985 -0.42403717402953056 1.0
+-268.1791706658947 0.16256629248615637 0.16492868528667703 -0.4076790364392933 0.3863061673475147 0.0 -21.13412105194732 -16.479308271166765 0.0 0.0 -0.37923823058267714 -0.41268828193944296 -0.4613476559097359 -12.811011836505564 0.012980829649002068 0.15487742322155862 1.0
+-267.9362479557741 0.6848175338301478 -0.059554793377055826 -0.4076790364392933 0.3862949891724057 0.0 -21.13412105194732 -16.479308271166765 0.0 0.0 -1.6862898628281136 -1.0887523104910461 -0.2206464049939453 -12.51957401631422 0.08742046830302028 -0.09713143448974158 1.0
