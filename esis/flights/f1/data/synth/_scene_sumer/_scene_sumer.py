@@ -24,6 +24,16 @@ How far from the start of a pass a time may be to name it,
 so that it can be given to the minute.
 """
 
+_velocity_search = 200 * u.km / u.s
+"""
+How far from where the files put O V the line is looked for,
+since the wavelength scale of some of the passes is off by as much as
+17 columns, about 170 km/s, such as those of 1996 August, 2005 May and
+October, and 2007 November.
+
+It finds the same line in every pass as a search within 190 or 210 km/s.
+"""
+
 
 @functools.cache
 def _rows() -> tuple[dict[str, str], ...]:
@@ -44,8 +54,14 @@ def passes_sumer() -> astropy.table.QTable:
     A pass is one sweep of the slit of SUMER across its field.
     A sequence of SUMER which sweeps its field more than once is split into
     passes where the slit turns back or jumps,
-    and only some of the passes of a sequence which repeats are used,
+    and only some of the passes of a sequence which repeats are listed,
     since they are much alike.
+    Every pass the training set was made from is listed,
+    and the column ``used`` marks those which are still used:
+    not a pass whose scene, from :func:`scene_sumer`, reaches less than
+    60 kilometers per second on either side of O V,
+    nor a sequence which holds the slit still for most of its exposures,
+    which is a series in time rather than a map.
 
     The columns are:
 
@@ -75,6 +91,19 @@ def passes_sumer() -> astropy.table.QTable:
         so a pass held out has no near twin among those trained on.
     ``num_exposure``
         The number of exposures of the pass.
+    ``used``
+        Whether the pass is used,
+        by the rule above, as :func:`scene_sumer` makes the scenes now:
+        147 of the 161 passes.
+        Those not used are 1996-05-07T16:39, 1996-05-07T17:44,
+        1996-05-09T11:07, 1996-07-22T07:29, 1996-07-23T07:24,
+        1996-07-23T08:04, 1996-07-24T10:26, 1996-07-24T11:05,
+        1996-07-25T09:02, 1996-07-25T09:41, 1996-07-26T09:29,
+        2005-10-16T18:38, and 2007-11-09T03:56,
+        whose windows are too narrow,
+        and 1997-04-23T13:44, which holds the slit still.
+        If :func:`scene_sumer` changes how far a scene reaches,
+        this column is to be found again.
     """
     rows = _rows()
     return astropy.table.QTable(
@@ -90,6 +119,7 @@ def passes_sumer() -> astropy.table.QTable:
             "polar": [row["polar"] == "true" for row in rows],
             "split": [row["split"] for row in rows],
             "num_exposure": [int(row["num_exposure"]) for row in rows],
+            "used": [row["used"] == "true" for row in rows],
         }
     )
 
@@ -127,8 +157,10 @@ def _pass(time: astropy.time.Time) -> astropy.table.Row:
 def scene_sumer(
     time_start: str | astropy.time.Time,
     time_stop: None | str | astropy.time.Time = None,
-    velocity_max: None | u.Quantity = 125 * u.km / u.s,
-    velocity_continuum: None | u.Quantity = 100 * u.km / u.s,
+    velocity_max: None | u.Quantity = None,
+    num_continuum: None | int = 3,
+    velocities_neighbour: None | u.Quantity = [-175, +215] * u.km / u.s,
+    height_neighbour_max: float = 0.15,
     fill: None | u.Quantity = None,
     remove_bad_steps: bool = True,
     trim_slit: bool = True,
@@ -147,11 +179,15 @@ def scene_sumer(
     The level-1 files are those of :func:`~esis.flights.f1.data.path_sumer`,
     loaded with :meth:`~soho.sumer.SpectrographObservation.from_level1`,
     which puts the zero of the velocities at the mean position of the line,
-    since SUMER has no absolute wavelength scale.
+    since SUMER has no absolute wavelength scale,
+    looking for it within 200 kilometers per second of where the files put it,
+    since the scale of some of the files is off by as much as 17 columns.
     Bad raster steps are replaced, the rows beyond the ends of the slit are
     left out, and the stripes of the scans of the polar coronal holes are
     removed, before :func:`~esis.data.synth.scene_sumer_observation` makes
-    the scene.
+    the scene, which subtracts the neighbouring lines of O V where they are
+    weak, so that its wings are kept as far as the window reaches,
+    the same distance on both sides.
 
     Parameters
     ----------
@@ -168,8 +204,14 @@ def scene_sumer(
     velocity_max
         The largest speed of the scene,
         as in :func:`~esis.data.synth.scene_sumer_observation`.
-    velocity_continuum
-        The least speed of the columns the continuum is measured from,
+    num_continuum
+        The number of the darkest columns the continuum is measured from,
+        as in :func:`~esis.data.synth.scene_sumer_observation`.
+    velocities_neighbour
+        Where the neighbouring lines of O V are expected,
+        as in :func:`~esis.data.synth.scene_sumer_observation`.
+    height_neighbour_max
+        The height above which a neighbouring line is not subtracted,
         as in :func:`~esis.data.synth.scene_sumer_observation`.
     fill
         The radiance of the voxels which SUMER did not observe,
@@ -227,6 +269,7 @@ def scene_sumer(
         time_stop=stop,
         timedelta=timedelta,
         slit=slit,
+        velocity_search=_velocity_search,
         axis_wavelength=axis_velocity,
         axis_detector_x=axis_detector_x,
         axis_detector_y=axis_detector_y,
@@ -243,6 +286,8 @@ def scene_sumer(
     return esis.data.synth.scene_sumer_observation(
         observation=observation,
         velocity_max=velocity_max,
-        velocity_continuum=velocity_continuum,
+        num_continuum=num_continuum,
+        velocities_neighbour=velocities_neighbour,
+        height_neighbour_max=height_neighbour_max,
         fill=fill,
     )

@@ -1,3 +1,4 @@
+import typing
 import pytest
 import numpy as np
 import astropy.units as u
@@ -21,6 +22,12 @@ def test_passes_sumer() -> None:
     result = esis.flights.f1.data.synth.passes_sumer()
     assert isinstance(result, astropy.table.QTable)
     assert len(result) == 161
+    assert result["used"].dtype == bool
+    assert np.count_nonzero(result["used"]) == 147
+    # the sequence which holds the slit still
+    start = result["time_start"].isot
+    (still,) = result[np.char.startswith(start.astype(str), "1997-04-23T13:44")]
+    assert not still["used"]
     start = result["time_start"]
     assert np.all(start[1:] > start[:-1])
     assert np.all(result["time_start"] < result["time_stop"])
@@ -102,7 +109,9 @@ def test_scene_sumer(
     if velocity_max is not None:
         assert np.all(np.abs(velocity) <= velocity_max)
     else:
-        assert np.any(np.abs(velocity) > 125 * u.km / u.s)
+        # as far on both sides, to within a column
+        width = np.abs(np.diff(velocity.ndarray)).max()
+        assert np.abs(velocity.max() + velocity.min()) <= width
 
 
 def test_scene_sumer_trim_slit() -> None:
@@ -127,3 +136,34 @@ def test_scene_sumer_time_stop() -> None:
     expected = esis.flights.f1.data.synth.scene_sumer(_time_test)
     assert result.outputs.shape == expected.outputs.shape
     assert np.all(na.nominal(result.outputs) == na.nominal(expected.outputs))
+
+
+class _Loaded(Exception):
+    """Raised in place of loading the files of a pass."""
+
+
+def test_scene_sumer_velocity_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O V is looked for as far from where the files put it as the passes need."""
+    arguments = dict()
+
+    def from_level1(cls: type, **kwargs: object) -> typing.NoReturn:
+        """
+        Keep the arguments instead of loading the files.
+
+        Raises
+        ------
+        _Loaded
+            Always, once the arguments are kept.
+        """
+        arguments.update(kwargs)
+        raise _Loaded
+
+    monkeypatch.setattr(
+        soho.sumer.SpectrographObservation,
+        "from_level1",
+        classmethod(from_level1),
+    )
+    with pytest.raises(_Loaded):
+        esis.flights.f1.data.synth.scene_sumer(_time_test)
+    assert arguments["velocity_search"] == _scene_sumer._velocity_search
+    assert _scene_sumer._velocity_search >= 200 * u.km / u.s
