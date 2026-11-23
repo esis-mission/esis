@@ -237,7 +237,11 @@ Level-1 frames peaks at.  On one machine, from
     python reproduce.py run <dir>
 
 runs the whole iteration and writes the tables to commit into
-``<dir>/committed``.  It runs on the CPU by default; ``--device cuda`` runs
+``<dir>/committed``.  The package holds all of them but the three only the
+figures read, ``window_edges``, ``acceptance_tiles`` and
+``acceptance_modes``, which are published as a release of
+``esis-mission/esis-data-2019`` and downloaded, by hash, when they are
+read.  It runs on the CPU by default; ``--device cuda`` runs
 the regridding on a GPU, which needs the ``gpu`` extra (``pip install -e
 ".[gpu]"``, which adds ``torch``) and a CUDA toolkit numba can find, and
 ``--workers`` spreads the capture over processes.  Every stage writes its
@@ -302,7 +306,7 @@ mechanism stands behind them, so the fit does not apply them.
 the straight edges instead of the steps of every row and column.  On the
 committed fit the two sides of one window move apart by 0.14 to 0.39 px rms
 with the straight edges and by 0.06 to 0.20 px with the steps, and the
-steps leave the channels registered better, at 0.106 against 0.117 px rms
+steps leave the channels registered better, at 0.105 against 0.117 px rms
 at He I and 0.074 against 0.108 px at O V.
 
 The focus of each sector of the primary

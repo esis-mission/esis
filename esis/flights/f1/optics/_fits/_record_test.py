@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import astropy.table
 import esis
-from esis.flights.f1.optics._fits import _record
+from esis.flights.f1.optics._fits import _plots, _record
 
 _data = pathlib.Path(esis.__file__).parent / "flights/f1/optics/_instruments/_data"
 
@@ -55,8 +55,11 @@ def test_registration_rms():
 
 def _pass(directory: pathlib.Path, tilt: float, stop: bool) -> pathlib.Path:
     directory.mkdir()
-    for name in _record.TABLES:
-        shutil.copyfile(_data / name, directory / name)
+    # the committed tables, those of the data release among them
+    names = {fname: name for name, fname in _plots._tables.items()}
+    for fname in _record.TABLES:
+        table = esis.flights.f1.optics.distortion_fit_table(names[fname])
+        table.write(directory / fname, format="ascii.ecsv")
     measured = _measurement(tilt, 0.1, 0.0)
     measured.write(directory / "field_stop.ecsv", format="ascii.ecsv")
     if stop:

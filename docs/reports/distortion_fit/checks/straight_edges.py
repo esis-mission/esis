@@ -10,7 +10,7 @@ instead, refers it to the reference frame the same way, and refits the
 sector focus and the pointing of every frame with it, from the pass's
 reference; the registration of the channels the acceptance measures is then
 compared.  On the committed fit the straight edges leave the channels
-registered worse than the steps, at 0.117 against 0.106 px rms at He I and
+registered worse than the steps, at 0.117 against 0.105 px rms at He I and
 0.108 against 0.074 px at O V, and the two sides of one window move apart
 by 0.14--0.39 px rms with them against 0.06--0.20 px with the steps.
 From this directory::

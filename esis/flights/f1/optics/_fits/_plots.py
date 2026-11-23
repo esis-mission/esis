@@ -6,6 +6,7 @@ import numpy as np
 import astropy.units as u
 import astropy.table
 import matplotlib.pyplot as plt
+from esis.flights.f1.data._fits._fits import _path_cache, _retrieve
 
 __all__ = [
     "distortion_fit_table",
@@ -28,6 +29,25 @@ _tables = dict(
     field_stop="field_stop.ecsv",
 )
 """The tables the distortion fit committed, by the name this module reads them under."""
+
+_release = "distortion-tables-v1.0"
+"""The release of esis-data-2019 that holds the tables too large for the package."""
+
+_url_release = (
+    "https://github.com/esis-mission/esis-data-2019/releases/download/" + _release
+)
+
+_released = dict(
+    acceptance_modes="sha256:215e1f4fe36c87cb64a145264ea72460fbb0d69cc5f0bc61f36a7f098c3a610f",
+    acceptance_tiles="sha256:024ec0809954a5a0e1eae1de618b165b742a4b11892f9e5a9c30c1598cc4b753",
+    window_edges="sha256:48a76381086191abdc8de01dfe7d1a40df0fadab93eb7902e7c61a364eee5436",
+)
+"""
+The hashes of the tables kept in :data:`_release` rather than the package.
+
+Only the figures and the record read them, so they are downloaded the first
+time they are needed, into :func:`esis.flights.f1.data._fits._fits._path_cache`.
+"""
 
 CHANNEL_COLORS = ("#b8541f", "#2f5fa8", "#3c8d5a", "#7b4fa3")
 """One colour per channel, the same in every figure."""
@@ -57,7 +77,12 @@ def distortion_fit_table(
         the field stop, with the history of the measurement, the outline
         residuals of the regular octagon and the clocking on the sky).
     directory
-        The directory to read from.  If :obj:`None`, the committed tables.
+        The directory to read from.  If :obj:`None`, the committed tables:
+        those in the package, or, for ``acceptance_modes``,
+        ``acceptance_tiles`` and ``window_edges``, those of the
+        ``distortion-tables-v1.0`` release of
+        `esis-data-2019 <https://github.com/esis-mission/esis-data-2019/releases/tag/distortion-tables-v1.0>`_,
+        downloaded the first time they are read.
 
     Raises
     ------
@@ -66,8 +91,20 @@ def distortion_fit_table(
     """
     if name not in _tables:
         raise ValueError(f"no table named {name!r}; one of {sorted(_tables)}")
-    directory = _directory_data if directory is None else pathlib.Path(directory)
-    return astropy.table.QTable.read(directory / _tables[name], format="ascii.ecsv")
+    fname = _tables[name]
+    if directory is not None:
+        path = pathlib.Path(directory) / fname
+    elif name in _released:
+        path = _retrieve(
+            url=f"{_url_release}/{fname}",
+            known_hash=_released[name],
+            fname=fname,
+            path=_path_cache() / _release,
+            extract_dir=None,
+        )
+    else:
+        path = _directory_data / fname
+    return astropy.table.QTable.read(path, format="ascii.ecsv")
 
 
 def _minutes(

@@ -39,7 +39,15 @@ TABLES = (
     "acceptance_modes.ecsv",
     "acceptance_tiles.ecsv",
 )
-"""The tables of a pass that the package commits, besides the field stop."""
+"""
+The tables of a pass that :func:`record_distortion_fit` writes, besides the
+field stop.
+
+The package commits them all but ``window_edges``, ``acceptance_modes`` and
+``acceptance_tiles``, which only the figures and this record read; those
+are published in a release of esis-data-2019 instead, which
+:func:`esis.flights.f1.optics.distortion_fit_table` downloads.
+"""
 
 TOLERANCE = 0.05 * u.deg
 """
