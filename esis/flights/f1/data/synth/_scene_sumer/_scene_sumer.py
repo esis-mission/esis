@@ -165,6 +165,7 @@ def scene_sumer(
     remove_bad_steps: bool = True,
     trim_slit: bool = True,
     remove_stripes: None | bool = None,
+    remove_tilt: None | bool = None,
     axis_detector_x: str = "detector_x",
     axis_detector_y: str = "detector_y",
     axis_velocity: str = "velocity",
@@ -183,8 +184,10 @@ def scene_sumer(
     looking for it within 200 kilometers per second of where the files put it,
     since the scale of some of the files is off by as much as 17 columns.
     Bad raster steps are replaced, the rows beyond the ends of the slit are
-    left out, and the stripes of the scans of the polar coronal holes are
-    removed, before :func:`~esis.data.synth.scene_sumer_observation` makes
+    left out, the stripes of the scans of the polar coronal holes are
+    removed, and so is the tilt of the line along the slit in the passes of
+    the quiet Sun on the disk,
+    before :func:`~esis.data.synth.scene_sumer_observation` makes
     the scene, which subtracts the neighbouring lines of O V where they are
     weak, so that its wings are kept as far as the window reaches,
     the same distance on both sides.
@@ -227,6 +230,18 @@ def scene_sumer(
         with :meth:`~soho.sumer.SpectrographObservation.remove_stripes`.
         If :obj:`None`, they are removed from the scans of the polar coronal
         holes, as the table of the passes marks them.
+    remove_tilt
+        Whether to remove the tilt of the line along the slit,
+        an instrumental shift which changes from one end of the slit to the
+        other by as much as 20 kilometers per second in some passes,
+        with :meth:`~soho.sumer.SpectrographObservation.remove_tilt`,
+        which assumes that the Sun itself has no such gradient.
+        If :obj:`None`, it is removed from the passes of the quiet Sun,
+        as the table of the passes marks them,
+        but not from those of active regions, whose flows it would remove,
+        nor from the scans of the polar coronal holes,
+        where the shift of O V changes toward the limb,
+        nor if `time_stop` is given, which names no pass.
     axis_detector_x
         The logical axis corresponding to the steps of the raster.
     axis_detector_y
@@ -251,6 +266,7 @@ def scene_sumer(
     timedelta = None
     slit = None
     polar = False
+    quiet = False
     if time_stop is None:
         row = _pass(start)
         start = row["time_start"]
@@ -258,6 +274,7 @@ def scene_sumer(
         timedelta = row["exposure"]
         slit = row["slit"]
         polar = bool(row["polar"])
+        quiet = row["kind"] == "qs" and not polar
     else:
         stop = astropy.time.Time(time_stop)
 
@@ -282,6 +299,10 @@ def scene_sumer(
         remove_stripes = polar
     if remove_stripes:
         observation = observation.remove_stripes()
+    if remove_tilt is None:
+        remove_tilt = quiet
+    if remove_tilt:
+        observation = observation.remove_tilt()
 
     return esis.data.synth.scene_sumer_observation(
         observation=observation,

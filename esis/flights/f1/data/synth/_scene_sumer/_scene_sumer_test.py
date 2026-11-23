@@ -129,9 +129,12 @@ def test_scene_sumer_time_stop() -> None:
         for r in esis.flights.f1.data.synth.passes_sumer()
         if r["time_start"].isot.startswith(_time_test)
     ]
+    # with no pass named, the tilt is removed only if asked,
+    # as it is by default from this pass of the quiet Sun
     result = esis.flights.f1.data.synth.scene_sumer(
         time_start=row["time_start"],
         time_stop=row["time_stop"],
+        remove_tilt=True,
     )
     expected = esis.flights.f1.data.synth.scene_sumer(_time_test)
     assert result.outputs.shape == expected.outputs.shape
@@ -167,3 +170,75 @@ def test_scene_sumer_velocity_search(monkeypatch: pytest.MonkeyPatch) -> None:
         esis.flights.f1.data.synth.scene_sumer(_time_test)
     assert arguments["velocity_search"] == _scene_sumer._velocity_search
     assert _scene_sumer._velocity_search >= 200 * u.km / u.s
+
+
+@pytest.mark.parametrize(
+    argnames="kind,polar,stop,remove_tilt,expected",
+    argvalues=[
+        ("qs", "false", False, None, True),
+        ("qs", "false", False, False, False),
+        ("ar", "false", False, None, False),
+        ("ar", "false", False, True, True),
+        ("qs", "true", False, None, False),
+        ("qs", "false", True, None, False),
+        ("qs", "false", True, True, True),
+    ],
+)
+def test_scene_sumer_remove_tilt(
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+    polar: str,
+    stop: bool,
+    remove_tilt: None | bool,
+    expected: bool,
+) -> None:
+    """
+    The tilt along the slit is removed only from passes of the quiet Sun.
+
+    It is not removed from those of active regions or the polar coronal
+    holes, nor if no pass is named, unless asked otherwise.
+    """
+    rows = []
+    for row in _scene_sumer._rows():
+        if row["time_start"].startswith(_time_test):
+            row = dict(row, kind=kind, polar=polar)
+        rows.append(row)
+    monkeypatch.setattr(_scene_sumer, "_rows", lambda: tuple(rows))
+
+    calls = []
+    original = soho.sumer.SpectrographObservation.remove_tilt
+
+    def spy(
+        self: soho.sumer.SpectrographObservation,
+        **kwargs: object,
+    ) -> soho.sumer.SpectrographObservation:
+        """Count the calls, then remove the tilt."""
+        calls.append(kwargs)
+        return original(self, **kwargs)
+
+    def observation_only(
+        observation: soho.sumer.SpectrographObservation,
+        **kwargs: object,
+    ) -> soho.sumer.SpectrographObservation:
+        """Return the observation instead of making a scene of it."""
+        return observation
+
+    monkeypatch.setattr(soho.sumer.SpectrographObservation, "remove_tilt", spy)
+    monkeypatch.setattr(esis.data.synth, "scene_sumer_observation", observation_only)
+
+    time_start = _time_test
+    time_stop = None
+    if stop:
+        (row,) = [
+            r
+            for r in esis.flights.f1.data.synth.passes_sumer()
+            if r["time_start"].isot.startswith(_time_test)
+        ]
+        time_start = row["time_start"]
+        time_stop = row["time_stop"]
+    esis.flights.f1.data.synth.scene_sumer(
+        time_start=time_start,
+        time_stop=time_stop,
+        remove_tilt=remove_tilt,
+    )
+    assert len(calls) == int(expected)
