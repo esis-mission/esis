@@ -21,7 +21,13 @@ _unit = u.erg / (u.cm**2 * u.sr * u.nm * u.s)
 def test_passes_sumer() -> None:
     result = esis.flights.f1.data.synth.passes_sumer()
     assert isinstance(result, astropy.table.QTable)
-    assert len(result) == 149
+    assert len(result) == 161
+    assert result["used"].dtype == bool
+    assert np.count_nonzero(result["used"]) == 147
+    # the sequence which holds the slit still
+    start = result["time_start"].isot
+    (still,) = result[np.char.startswith(start.astype(str), "1997-04-23T13:44")]
+    assert not still["used"]
     start = result["time_start"]
     assert np.all(start[1:] > start[:-1])
     assert np.all(result["time_start"] < result["time_stop"])

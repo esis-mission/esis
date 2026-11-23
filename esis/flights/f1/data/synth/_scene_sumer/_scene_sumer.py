@@ -54,11 +54,13 @@ def passes_sumer() -> astropy.table.QTable:
     A pass is one sweep of the slit of SUMER across its field.
     A sequence of SUMER which sweeps its field more than once is split into
     passes where the slit turns back or jumps,
-    and only some of the passes of a sequence which repeats are used,
+    and only some of the passes of a sequence which repeats are listed,
     since they are much alike.
-    A pass whose scene, from :func:`scene_sumer`, reaches less than
-    60 kilometers per second on either side of O V is left out,
-    as is a sequence which holds the slit still for most of its exposures,
+    Every pass the training set was made from is listed,
+    and the column ``used`` marks those which are still used:
+    not a pass whose scene, from :func:`scene_sumer`, reaches less than
+    60 kilometers per second on either side of O V,
+    nor a sequence which holds the slit still for most of its exposures,
     which is a series in time rather than a map.
 
     The columns are:
@@ -89,6 +91,19 @@ def passes_sumer() -> astropy.table.QTable:
         so a pass held out has no near twin among those trained on.
     ``num_exposure``
         The number of exposures of the pass.
+    ``used``
+        Whether the pass is used,
+        by the rule above, as :func:`scene_sumer` makes the scenes now:
+        147 of the 161 passes.
+        Those not used are 1996-05-07T16:39, 1996-05-07T17:44,
+        1996-05-09T11:07, 1996-07-22T07:29, 1996-07-23T07:24,
+        1996-07-23T08:04, 1996-07-24T10:26, 1996-07-24T11:05,
+        1996-07-25T09:02, 1996-07-25T09:41, 1996-07-26T09:29,
+        2005-10-16T18:38, and 2007-11-09T03:56,
+        whose windows are too narrow,
+        and 1997-04-23T13:44, which holds the slit still.
+        If :func:`scene_sumer` changes how far a scene reaches,
+        this column is to be found again.
     """
     rows = _rows()
     return astropy.table.QTable(
@@ -104,6 +119,7 @@ def passes_sumer() -> astropy.table.QTable:
             "polar": [row["polar"] == "true" for row in rows],
             "split": [row["split"] for row in rows],
             "num_exposure": [int(row["num_exposure"]) for row in rows],
+            "used": [row["used"] == "true" for row in rows],
         }
     )
 
