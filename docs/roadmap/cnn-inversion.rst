@@ -1,7 +1,7 @@
 CNN Inversion Roadmap
 =====================
 
-*As of 2026-11-20.*
+*As of 2026-11-23.*
 
 A convolutional neural network can invert ESIS images into spectral cubes,
 and on synthetic images it already recovers the line profiles of O V 630 Å,
@@ -63,9 +63,15 @@ Where things stand
       - Fine spatial structure and many active regions,
         but profiles of another line
     * - Training set of SUMER O V rasters
-      - Experiment scripts
+      - esis, ``esis.flights.f1.data.synth.scene_sumer``;
+        the frames in experiment scripts
       - The survey of the SOHO archive is complete:
-        161 passes, cut into 1311 frames
+        161 passes, cut into 1311 frames.
+        The level-1 archives are in the release ``sumer-v1.0``,
+        the scenes in esis
+        (`#135 <https://github.com/esis-mission/esis/pull/135>`__, merged),
+        and the subtraction of the neighbouring lines is open as
+        `#137 <https://github.com/esis-mission/esis/pull/137>`__
       - Real profiles of the line ESIS observes
     * - The throughput of the model of ESIS-I
       - esis, `#132 <https://github.com/esis-mission/esis/pull/132>`_
@@ -359,8 +365,10 @@ N6 waits for M6 and M8 of the MART roadmap of ctis.
       -
       - Moment maps of every raster free of trends and stripes;
         widths flat along the slit to about 1 km/s
-      - Survey done;
-        the cleaning works in the experiment scripts
+      - Survey done and released;
+        scenes in esis, the neighbouring lines in #137;
+        the trend and the instrumental width not yet removed,
+        and the frames still made by the experiment scripts
     * - N4
       - The model, on the design model:
         SUMER alone, the masked loss,
@@ -432,6 +440,131 @@ so that it knows where their noise is.
 In training, the contamination of one channel can be faked with a patch of another scene,
 scaled by a random ratio and subtracted imperfectly.
 This waits until the inversion without contaminants is as good as it can be made.
+
+The API
+-------
+
+The milestones put public functions in three packages,
+each holding what belongs to it:
+soho reads and cleans the SUMER data,
+esis holds everything tied to ESIS-I,
+and ctis holds the network and its training.
+The paper repository holds the analysis, and no library API.
+The names are proposals, to be agreed before each pull request.
+
+.. list-table::
+    :header-rows: 1
+    :widths: 34 8 10 48
+
+    * - Function
+      - Where
+      - For
+      - What it does
+    * - ``passes_sumer()``
+      - esis
+      - N3
+      - Either every pass of the survey,
+        with columns saying whether each is used and, if not, why,
+        or only the passes used, as #137 does now;
+        to be decided in #137
+    * - ``SpectrographObservation.remove_trend()``,
+        and the instrumental width of each detector
+      - soho
+      - N3
+      - Remove the slow drift of the shift of the line across a raster, up to ±10 km/s,
+        and the width of SUMER,
+        1.95 pixels FWHM for detector A and not yet known for detector B.
+        ``scene_sumer()`` gains the flags ``remove_trend`` and ``remove_width_instrumental``,
+        like ``remove_stripes``.
+        Whether the width of SUMER is removed,
+        or kept as part of the truth,
+        is decided in the paper first
+    * - ``esis.data.synth.frames(scene, size, angle, mirror)``
+      - esis
+      - N3, N4
+      - Cut any scene into fields of the given size, rotated or mirrored,
+        along an axis of frames.
+        It does not depend on the flight,
+        so pretraining on IRIS and the scenes of MURaM for ESIS-II use it too
+    * - ``esis.flights.f1.data.synth.frames_sumer(split, size, num_polar_max, augment, seed)``
+      - esis
+      - N3
+      - The SUMER training set:
+        the passes used, split as the table says,
+        random rotations and mirrors for the training frames only,
+        and a cap on the frames of the polar scans,
+        all from one seed,
+        so that the frames can be made again from ``sumer-v1.0`` alone.
+        It yields one pass at a time, to bound the memory
+    * - ``esis.flights.f1.data.coordinates_level_4(velocity_max, field)``
+      - esis
+      - N3, N6
+      - The grid both MART and the network invert onto,
+        0.75″ and 24 velocity bins at production,
+        instead of a grid made by each script
+    * - ``esis.flights.f1.data.instrument_level_4(model)``
+      - esis
+      - N4 to N6
+      - The instrument as ctis sees it, from the ``"design"`` or the ``"as_built"`` model.
+        The network is trained on the first and tested on the second;
+        the as-built model is the tied one which M6 and M8 of ctis build
+    * - ``NeuralNetworkInverter.train()``
+      - ctis
+      - N2
+      - Train on the frames through the instrument:
+        it images them and regrids their truth onto the grid itself,
+        draws new noise in every epoch,
+        and masks the loss where the truth is missing.
+        Its interface is proposed before it is written
+    * - ``esis.flights.f1.data.inverter_cnn(version)``
+      - esis
+      - N7
+      - Fetch the weights from the release ``cnn-v1.0`` with ``_retrieve``, and load them
+    * - ``esis.flights.f1.data.level_4(method)``
+      - esis
+      - N7, N8
+      - Invert the frames of the flight, as ``level_1()`` gives them,
+        with ``"mart"`` or ``"cnn"``
+
+Some choices behind the table:
+
+- **The mask is the missing truth.**
+  The frames stay at the resolution of SUMER,
+  with NaN in the voxels SUMER did not observe,
+  which replaces the separate masks of the experiment scripts.
+  The frames are not published (see Data below).
+- **The uncertainty is an ensemble.**
+  Networks trained from different seeds give the distribution axis of
+  ``na.UncertainScalarArray``,
+  so the uncertainty carries through to the moments with no code of its own.
+- **One function for both inversions.**
+  With ``level_4()`` taking the method,
+  comparing MART and the network on the flight (N8) is a change of one argument.
+- **PyTorch stays optional.**
+  ctis and PyTorch are an optional dependency of esis, ``esis[cnn]``,
+  imported only when the network is used.
+- **The production training is a script in the data repository.**
+  The script which trains the weights of ``cnn-v1.0`` is kept in ``tools/`` of esis-data-2019,
+  beside ``build_sumer.py``,
+  as the record of how the release was made.
+- **Nothing new for the noise.**
+  The gain and the read noise are already in the model of the camera.
+- **The analysis stays in the paper repository:**
+  the moments, the profile distance and the scores in bins of signal,
+  the detectability of features and the search for profiles with two components,
+  the comparison with a tuned MART, the errors of the model put in for N5,
+  the training runs other than the production one,
+  and every figure.
+
+In order:
+#137 and esis 1.16.0;
+the trend and the instrumental width in soho;
+``frames()``, ``frames_sumer()`` and ``coordinates_level_4()`` in esis,
+checked against the truth of the experiment frames apart from the known changes of #137;
+N1 and N2 in ctis;
+N4 and N5 in the paper repository on the design model;
+then, once M6 and M8 give the as-built instrument,
+N6, ``inverter_cnn()``, ``level_4()`` and ``cnn-v1.0``.
 
 Data
 ----
@@ -514,9 +647,6 @@ Risks and open questions
   The 1.95 pixels is for detector A;
   the width of detector B, which some rasters used,
   and whether it depends on the slit, are not yet known.
-- **Where the SUMER builder lives (N3).**
-  In esis, beside ``scene_iris``, so that the production network can be trained again,
-  or in the paper repository, as an analysis of its own.
 - **The interface of the training (N2).**
   The changes to ``NeuralNetworkInverter.train`` are to be proposed before they are made.
 - **The paper (all).**
