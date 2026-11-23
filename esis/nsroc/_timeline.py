@@ -1,5 +1,6 @@
 import dataclasses
 import astropy.units as u
+import astropy.time
 import optika
 
 __all__ = [
@@ -15,8 +16,11 @@ class Timeline(
     """
     A Python representation of the NSROC timeline for the ESIS mission.
 
-    All times are relative to the start time of the mission.
+    The times of the events are relative to :attr:`time_mission_start`.
     """
+
+    time_mission_start: None | astropy.time.Time = None
+    """The :math:`T=0` time of the mission, which the times of the events count from."""
 
     timedelta_esis_start: None | u.Quantity = None
     """The mission time at the start of the ESIS exposure sequence."""

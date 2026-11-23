@@ -55,12 +55,23 @@ class Level_0(
 
     @property
     def time_mission_start(self) -> astropy.time.Time:
-        """The :math:`T=0` time of the mission."""
-        return self.inputs.time.ndarray.min() - self.timeline.timedelta_esis_start
-
-    def _index_after(self, timedelta: u.Quantity) -> dict[str, int]:
         """
-        Return the index of the image after the given mission time.
+        The :math:`T=0` time of the mission.
+
+        This is :attr:`esis.nsroc.Timeline.time_mission_start` of
+        :attr:`timeline`, rather than a time worked out from these images,
+        so that a subset of the images which does not start with the first
+        one still selects the same :attr:`lights` and :attr:`darks`.
+        """
+        return self.timeline.time_mission_start
+
+    def _index_after(self, timedelta: u.Quantity) -> int:
+        """
+        Return the index of the first image that starts after the given mission time.
+
+        This is the number of images that start at or before that time, so it
+        is the number of images if none start after it.
+        The images must be in order of time.
 
         Parameters
         ----------
@@ -70,18 +81,16 @@ class Level_0(
         time = self.inputs.time_start
         if self.axis_channel in time.shape:
             time = time.mean(self.axis_channel)
-        t0 = self.time_mission_start
-        t = t0 + timedelta
-        where = time > t
-        return np.argmax(where)
+        t = self.time_mission_start + timedelta
+        return int(np.sum(time <= t, axis=self.axis_time).ndarray)
 
     @property
-    def _index_lights_start(self) -> dict[str, int]:
+    def _index_lights_start(self) -> int:
         """The index representing the first good image."""
         return self._index_after(self.timeline.timedelta_sparcs_rlg_enable)
 
     @property
-    def _index_lights_stop(self) -> dict[str, int]:
+    def _index_lights_stop(self) -> int:
         """One greater than the index representing the last good image."""
         return self._index_after(self.timeline.timedelta_sparcs_rlg_disable)
 
@@ -93,10 +102,9 @@ class Level_0(
         This uses only the images where the ring-laser gyroscope was enabled,
         so this should represent the images with the best-possible pointing stability.
         """
-        axis_time = self.axis_time
-        index_start = self._index_lights_start[axis_time].ndarray
-        index_stop = self._index_lights_stop[axis_time].ndarray
-        index_lights = {axis_time: slice(index_start, index_stop)}
+        index_start = self._index_lights_start
+        index_stop = self._index_lights_stop
+        index_lights = {self.axis_time: slice(index_start, index_stop)}
         return self[index_lights]
 
     @property
@@ -118,9 +126,7 @@ class Level_0(
         dt = self.inputs.timedelta_requested.mean(self.axis_channel)
         where = np.abs(dt - dt.median()) < (0.1 * u.s)
         index_start = np.argmax(where)[axis_time].ndarray
-        index_stop = self._index_after(self.timeline.timedelta_shutter_open)[
-            axis_time
-        ].ndarray
+        index_stop = self._index_after(self.timeline.timedelta_shutter_open)
         index = {axis_time: slice(index_start, index_stop)}
         return self[index]
 
@@ -132,12 +138,9 @@ class Level_0(
         This considers all the images after the parachute deployment since there
         is a transient, anomalous signal that occurs during atmospheric re-entry.
         """
-        axis_time = self.axis_time
-        index_start = self._index_after(self.timeline.timedelta_parachute_deploy)[
-            axis_time
-        ].ndarray
+        index_start = self._index_after(self.timeline.timedelta_parachute_deploy)
         index_stop = None
-        index = {axis_time: slice(index_start, index_stop)}
+        index = {self.axis_time: slice(index_start, index_stop)}
         return self[index]
 
     @property

@@ -6,11 +6,13 @@ from msfc_ccd._images._tests.test_sensor_images import AbstractTestAbstractSenso
 import esis
 from ..abc._channel_data_test import AbstractTestAbstractChannelData
 
+_level_0 = esis.flights.f1.data.level_0()
+
 
 @pytest.mark.parametrize(
     argnames="a",
     argvalues=[
-        esis.flights.f1.data.level_0()[dict(time=slice(None, None, 8))],
+        _level_0[dict(time=slice(None, None, 8))],
     ],
 )
 class TestLevel_0(
@@ -59,3 +61,81 @@ class TestLevel_0(
         result = a[index].dark_subtracted
         assert isinstance(result, type(a))
         assert np.all(result.darks.outputs.mean() < 1 * u.DN)
+
+
+def _sequence_numbers(a: esis.data.Level_0) -> np.ndarray:
+    """
+    Return the sequence numbers of the images in `a`.
+
+    Parameters
+    ----------
+    a
+        The images.
+    """
+    return a.inputs.sequence_number[{a.axis_channel: 0}].ndarray
+
+
+@pytest.mark.parametrize(
+    argnames="selection,expected",
+    argvalues=[
+        ("darks_up", np.arange(98, 104)),
+        ("lights", np.arange(109, 139)),
+        ("darks_down", np.arange(153, 167)),
+    ],
+)
+def test_selection_whole_flight(selection: str, expected: np.ndarray) -> None:
+    """
+    Check which images of the whole flight are taken as the darks and the lights.
+
+    The frames of :func:`esis.flights.f1.data.level_1`, and the fits indexed
+    by them, depend on these.
+
+    Parameters
+    ----------
+    selection
+        The name of the property which selects the images.
+    expected
+        The sequence numbers of the images it should select.
+    """
+    result = _sequence_numbers(getattr(_level_0, selection))
+    assert np.array_equal(result, expected)
+
+
+@pytest.mark.parametrize(
+    argnames="index",
+    argvalues=[
+        slice(1, None),
+        slice(10, None),
+        slice(20, 60),
+        slice(None, 50),
+        slice(None, 30),
+        slice(None, None, 8),
+    ],
+)
+@pytest.mark.parametrize(
+    argnames="selection",
+    argvalues=[
+        "darks_up",
+        "lights",
+        "darks_down",
+    ],
+)
+def test_selection_subset(index: slice, selection: str) -> None:
+    """
+    Check that a subset of the images selects the same images as the whole flight.
+
+    Parameters
+    ----------
+    index
+        The images of the flight in the subset.
+    selection
+        The name of the property which selects the images.
+    """
+    a = _level_0
+    b = a[{a.axis_time: index}]
+    result = _sequence_numbers(getattr(b, selection))
+    expected = np.intersect1d(
+        _sequence_numbers(getattr(a, selection)),
+        _sequence_numbers(b),
+    )
+    assert np.array_equal(result, expected)
