@@ -463,10 +463,9 @@ The names are proposals, to be agreed before each pull request.
     * - ``passes_sumer()``
       - esis
       - N3
-      - Either every pass of the survey,
-        with columns saying whether each is used and, if not, why,
-        or only the passes used, as #137 does now;
-        to be decided in #137
+      - Every pass the training set was made from,
+        with a column ``used`` marking those used now (#137),
+        so that a pass left out can come back if the scenes change
     * - ``SpectrographObservation.remove_trend()``,
         and the instrumental width of each detector
       - soho
