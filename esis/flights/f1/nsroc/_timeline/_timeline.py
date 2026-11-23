@@ -1,4 +1,5 @@
 import astropy.units as u
+import astropy.time
 import esis
 
 __all__ = [
@@ -20,8 +21,15 @@ def timeline() -> esis.nsroc.Timeline:
 
         esis.flights.f1.nsroc.timeline()
     """
+    timedelta_esis_start = 0.1 * u.s
+
+    # The earliest time stamped on the first image of the four cameras,
+    # that of ESIS3_00096.
+    time_esis_start = astropy.time.Time("2019-09-30T18:04:00.411", scale="utc")
+
     return esis.nsroc.Timeline(
-        timedelta_esis_start=0.1 * u.s,
+        time_mission_start=time_esis_start - timedelta_esis_start,
+        timedelta_esis_start=timedelta_esis_start,
         timedelta_rail_release=0.6 * u.s,
         timedelta_terrier_burnout=6.2 * u.s,
         timedelta_blackbrant_ignition=16.0 * u.s,
