@@ -104,12 +104,13 @@ def test_selection_whole_flight(selection: str, expected: np.ndarray) -> None:
 @pytest.mark.parametrize(
     argnames="index",
     argvalues=[
-        slice(1, None),
-        slice(10, None),
-        slice(20, 60),
-        slice(None, 50),
-        slice(None, 30),
-        slice(None, None, 8),
+        dict(time=slice(1, None)),
+        dict(time=slice(10, None)),
+        dict(time=slice(20, 60)),
+        dict(time=slice(None, 50)),
+        dict(time=slice(None, 30)),
+        dict(time=slice(None, None, 8)),
+        dict(channel=1),
     ],
 )
 @pytest.mark.parametrize(
@@ -120,7 +121,7 @@ def test_selection_whole_flight(selection: str, expected: np.ndarray) -> None:
         "darks_down",
     ],
 )
-def test_selection_subset(index: slice, selection: str) -> None:
+def test_selection_subset(index: dict[str, int | slice], selection: str) -> None:
     """
     Check that a subset of the images selects the same images as the whole flight.
 
@@ -132,10 +133,17 @@ def test_selection_subset(index: slice, selection: str) -> None:
         The name of the property which selects the images.
     """
     a = _level_0
-    b = a[{a.axis_time: index}]
+    b = a[index]
     result = _sequence_numbers(getattr(b, selection))
     expected = np.intersect1d(
         _sequence_numbers(getattr(a, selection)),
         _sequence_numbers(b),
     )
     assert np.array_equal(result, expected)
+
+
+def test_darks_none() -> None:
+    """Check that a subset of only solar images has no darks to select."""
+    a = _level_0[dict(time=slice(20, 40))]
+    with pytest.raises(ValueError, match="None of these images are darks"):
+        a.darks

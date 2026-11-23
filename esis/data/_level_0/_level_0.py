@@ -60,8 +60,7 @@ class Level_0(
 
         This is :attr:`esis.nsroc.Timeline.time_mission_start` of
         :attr:`timeline`, rather than a time worked out from these images,
-        so that a subset of the images which does not start with the first
-        one still selects the same :attr:`lights` and :attr:`darks`.
+        which would move whenever the first image is not among them.
         """
         return self.timeline.time_mission_start
 
@@ -120,10 +119,14 @@ class Level_0(
         This is intended to remove the first 1 or 2 images from the
         beginning of each exposure sequence since these images often have
         a different exposure time than the rest of the sequence.
-
+        The median is that of these images, so a subset of only a few
+        images, such as the first two, can keep images with a different
+        exposure time.
         """
         axis_time = self.axis_time
-        dt = self.inputs.timedelta_requested.mean(self.axis_channel)
+        dt = self.inputs.timedelta_requested
+        if self.axis_channel in dt.shape:
+            dt = dt.mean(self.axis_channel)
         where = np.abs(dt - dt.median()) < (0.1 * u.s)
         index_start = np.argmax(where)[axis_time].ndarray
         index_stop = self._index_after(self.timeline.timedelta_shutter_open)
@@ -149,11 +152,25 @@ class Level_0(
         The dark images used to construct the master dark image.
 
         This is a concatenation of :attr:`darks_up` and :attr:`darks_down`.
+
+        Raises
+        ------
+        ValueError
+            If none of these images are darks.
         """
         result = np.concatenate(
             arrays=[self.darks_up, self.darks_down],
             axis=self.axis_time,
         )
+
+        if result.shape[self.axis_time] == 0:
+            timeline = self.timeline
+            raise ValueError(
+                "None of these images are darks. Darks are taken before the "
+                f"shutter opens, at T+{timeline.timedelta_shutter_open}, and "
+                "after the parachute deploys, at "
+                f"T+{timeline.timedelta_parachute_deploy}."
+            )
 
         serial_number = result.inputs.serial_number
         for axis in serial_number.shape:
