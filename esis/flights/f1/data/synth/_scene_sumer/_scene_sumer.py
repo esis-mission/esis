@@ -20,7 +20,7 @@ _path_passes = pathlib.Path(__file__).parent / "passes_sumer.csv"
 
 _tolerance_start = 60 * u.s
 """
-How far from the start of a pass a time may be to name it,
+How far from the start or stop of a pass a time may be to name it,
 so that it can be given to the minute.
 """
 
@@ -83,7 +83,7 @@ def passes_sumer() -> astropy.table.QTable:
         ``"ar"`` for active regions, sunspots, and loops.
     ``polar``
         Whether the pass is a scan of a polar coronal hole,
-        whose slit has stripes, which :func:`scene_sumer` removes.
+        whose slit has stripes, which :func:`scene_sumer` removes by default.
     ``split``
         ``"train"``, ``"validation"``, or ``"test"``:
         the part of the training set the frames of the pass went into.
@@ -104,6 +104,28 @@ def passes_sumer() -> astropy.table.QTable:
         and 1997-04-23T13:44, which holds the slit still.
         If :func:`scene_sumer` changes how far a scene reaches,
         this column is to be found again.
+    ``tilt``
+        Whether :func:`scene_sumer` removes the tilt of O V along the slit
+        from the pass by default,
+        where the tilt is taken to be instrumental: 47 of the 161 passes.
+        They are the passes of the quiet Sun, coronal holes, and filaments
+        whose field lies within 900 arcseconds of the center of the disk,
+        as the catalogue of SOHO gives it,
+        and the filament 2007-11-09T03:56 and the coronal hole
+        2007-11-10T16:41, whose fields reach 983 and 961 arcseconds
+        but whose images show no limb.
+        The tilt is kept in the passes of active regions,
+        the jet 1996-10-08T06:46,
+        and the active-region studies 2005-05-17T08:57 and 2005-05-19T08:39,
+        whose flows a straight line along the slit would remove,
+        and in the other passes near or beyond the limb
+        and the scans of the polar coronal holes,
+        where it would also remove the real change of the shift of O V
+        toward the limb.
+        A known instrumental tilt can't be taken out of them instead,
+        since it changes from one campaign of SUMER to the next,
+        from about 0 to 25 kilometers per second per 100 arcseconds
+        in the passes near the center of the disk.
     """
     rows = _rows()
     return astropy.table.QTable(
@@ -120,6 +142,7 @@ def passes_sumer() -> astropy.table.QTable:
             "split": [row["split"] for row in rows],
             "num_exposure": [int(row["num_exposure"]) for row in rows],
             "used": [row["used"] == "true" for row in rows],
+            "tilt": [row["tilt"] == "true" for row in rows],
         }
     )
 
@@ -154,6 +177,31 @@ def _pass(time: astropy.time.Time) -> astropy.table.Row:
     )
 
 
+def _pass_between(
+    time_start: astropy.time.Time,
+    time_stop: astropy.time.Time,
+) -> None | astropy.table.Row:
+    """
+    Return the pass which starts and stops at two times, if there is one.
+
+    Each may be off by up to :data:`_tolerance_start`.
+
+    Parameters
+    ----------
+    time_start
+        The start of the pass.
+    time_stop
+        The stop of the pass.
+    """
+    table = passes_sumer()
+    near_start = np.abs((table["time_start"] - time_start).to(u.s)) <= _tolerance_start
+    near_stop = np.abs((table["time_stop"] - time_stop).to(u.s)) <= _tolerance_start
+    match = np.flatnonzero(near_start & near_stop)
+    if match.size:
+        return table[int(match[0])]
+    return None
+
+
 def scene_sumer(
     time_start: str | astropy.time.Time,
     time_stop: None | str | astropy.time.Time = None,
@@ -186,7 +234,7 @@ def scene_sumer(
     Bad raster steps are replaced, the rows beyond the ends of the slit are
     left out, the stripes of the scans of the polar coronal holes are
     removed, and so is the tilt of the line along the slit in the passes of
-    the quiet Sun on the disk,
+    the quiet Sun, coronal holes, and filaments on the disk,
     before :func:`~esis.data.synth.scene_sumer_observation` makes
     the scene, which subtracts the neighbouring lines of O V where they are
     weak, so that its wings are kept as far as the window reaches,
@@ -229,19 +277,25 @@ def scene_sumer(
         Whether to remove the stripes along the slit,
         with :meth:`~soho.sumer.SpectrographObservation.remove_stripes`.
         If :obj:`None`, they are removed from the scans of the polar coronal
-        holes, as the table of the passes marks them.
+        holes, which the column ``polar`` of :func:`passes_sumer` marks,
+        and not if no pass of it is named.
     remove_tilt
         Whether to remove the tilt of the line along the slit,
         an instrumental shift which changes from one end of the slit to the
         other by as much as 20 kilometers per second in some passes,
         with :meth:`~soho.sumer.SpectrographObservation.remove_tilt`,
         which assumes that the Sun itself has no such gradient.
-        If :obj:`None`, it is removed from the passes of the quiet Sun,
-        as the table of the passes marks them,
+        It shares each column of a row between two neighbouring columns,
+        which widens the line by up to half a kilometer per second,
+        by an amount which changes along the slit.
+        If :obj:`None`, it is removed from the passes which the column
+        ``tilt`` of :func:`passes_sumer` marks,
+        those of the quiet Sun, coronal holes, and filaments on the disk,
         but not from those of active regions, whose flows it would remove,
-        nor from the scans of the polar coronal holes,
+        nor from those near the limb or the scans of the polar coronal holes,
         where the shift of O V changes toward the limb,
-        nor if `time_stop` is given, which names no pass.
+        nor if no pass is named.
+        A pass is named by `time_start` alone, or by its start and stop.
     axis_detector_x
         The logical axis corresponding to the steps of the raster.
     axis_detector_y
@@ -265,18 +319,17 @@ def scene_sumer(
     start = astropy.time.Time(time_start)
     timedelta = None
     slit = None
-    polar = False
-    quiet = False
     if time_stop is None:
         row = _pass(start)
         start = row["time_start"]
         stop = row["time_stop"]
         timedelta = row["exposure"]
         slit = row["slit"]
-        polar = bool(row["polar"])
-        quiet = row["kind"] == "qs" and not polar
     else:
         stop = astropy.time.Time(time_stop)
+        row = _pass_between(start, stop)
+    polar = row is not None and bool(row["polar"])
+    tilt = row is not None and bool(row["tilt"])
 
     observation = soho.sumer.SpectrographObservation.from_level1(
         path=path_sumer(start, stop),
@@ -300,7 +353,7 @@ def scene_sumer(
     if remove_stripes:
         observation = observation.remove_stripes()
     if remove_tilt is None:
-        remove_tilt = quiet
+        remove_tilt = tilt
     if remove_tilt:
         observation = observation.remove_tilt()
 

@@ -37,6 +37,10 @@ def test_passes_sumer() -> None:
     assert set(result["kind"]) == {"qs", "ar"}
     assert set(result["split"]) == {"train", "validation", "test"}
     assert result["polar"].dtype == bool
+    assert result["tilt"].dtype == bool
+    assert np.count_nonzero(result["tilt"]) == 47
+    # never the passes of active regions or the scans of polar coronal holes
+    assert not np.any(result["tilt"] & ((result["kind"] == "ar") | result["polar"]))
 
 
 class TestPass:
@@ -63,6 +67,26 @@ class TestPass:
     def test_none(self) -> None:
         with pytest.raises(ValueError, match="No pass"):
             _scene_sumer._pass(astropy.time.Time("2019-09-30T18:00"))
+
+
+class TestPassBetween:
+
+    @pytest.mark.parametrize("offset", [-50, 0, 50] * u.s)
+    def test_pass(self, offset: u.Quantity) -> None:
+        """A pass is named by its start and stop, given to the minute."""
+        row = _scene_sumer._pass(astropy.time.Time(_time_test))
+        result = _scene_sumer._pass_between(
+            row["time_start"] + offset,
+            row["time_stop"] - offset,
+        )
+        assert result is not None
+        assert result["time_start"] == row["time_start"]
+
+    def test_none(self) -> None:
+        """Times which are not the start and stop of a pass name none."""
+        row = _scene_sumer._pass(astropy.time.Time(_time_test))
+        stop = row["time_stop"] - 5 * u.min
+        assert _scene_sumer._pass_between(row["time_start"], stop) is None
 
 
 @pytest.mark.parametrize("remove_stripes", [None, True])
@@ -124,17 +148,10 @@ def test_scene_sumer_trim_slit() -> None:
 
 def test_scene_sumer_time_stop() -> None:
     """The start and end of a pass give the same scene as its start alone."""
-    (row,) = [
-        r
-        for r in esis.flights.f1.data.synth.passes_sumer()
-        if r["time_start"].isot.startswith(_time_test)
-    ]
-    # with no pass named, the tilt is removed only if asked,
-    # as it is by default from this pass of the quiet Sun
+    row = _scene_sumer._pass(astropy.time.Time(_time_test))
     result = esis.flights.f1.data.synth.scene_sumer(
         time_start=row["time_start"],
         time_stop=row["time_stop"],
-        remove_tilt=True,
     )
     expected = esis.flights.f1.data.synth.scene_sumer(_time_test)
     assert result.outputs.shape == expected.outputs.shape
@@ -172,49 +189,100 @@ def test_scene_sumer_velocity_search(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _scene_sumer._velocity_search >= 200 * u.km / u.s
 
 
+def _tilt(scene: soho.sumer.SpectrographObservation) -> u.Quantity:
+    """
+    Return the change of the centroid of the line along the slit.
+
+    The change is from one end of the slit to the other, of a straight line
+    fitted to the centroid of each row, weighted by its radiance over the
+    raster.
+    """
+    axis_x = scene.axis_detector_x
+    axis_y = scene.axis_detector_y
+    axis_velocity = scene.axis_wavelength
+    radiance = na.nominal(scene.outputs)
+    velocity = scene.inputs.velocity.cell_centers(axis_velocity)
+    total = radiance.sum((axis_x, axis_velocity))
+    centroid = (radiance * velocity).sum((axis_x, axis_velocity)) / total
+    num = scene.outputs.shape[axis_y]
+    index = na.arange(0, num, axis=axis_y)
+    index = index - index.mean()
+    slope = (index * (centroid - centroid.mean())).sum() / (index**2).sum()
+    return (slope * (num - 1)).ndarray
+
+
+def test_scene_sumer_tilt() -> None:
+    """The tilt is removed from the default scene of a pass the table marks."""
+    assert _scene_sumer._pass(astropy.time.Time(_time_test))["tilt"]
+    kwargs = dict(velocity_max=60 * u.km / u.s, fill=0 * _unit)
+    result = esis.flights.f1.data.synth.scene_sumer(_time_test, **kwargs)
+    kept = esis.flights.f1.data.synth.scene_sumer(
+        _time_test,
+        remove_tilt=False,
+        **kwargs,
+    )
+    assert np.abs(_tilt(kept)) > 3 * u.km / u.s
+    assert np.abs(_tilt(result)) < np.abs(_tilt(kept)) / 3
+
+
 @pytest.mark.parametrize(
-    argnames="kind,polar,stop,remove_tilt,expected",
+    argnames="column,method",
     argvalues=[
-        ("qs", "false", False, None, True),
-        ("qs", "false", False, False, False),
-        ("ar", "false", False, None, False),
-        ("ar", "false", False, True, True),
-        ("qs", "true", False, None, False),
-        ("qs", "false", True, None, False),
-        ("qs", "false", True, True, True),
+        ("polar", "remove_stripes"),
+        ("tilt", "remove_tilt"),
     ],
 )
-def test_scene_sumer_remove_tilt(
+@pytest.mark.parametrize(
+    argnames="marked,stop,value,expected",
+    argvalues=[
+        (True, None, None, True),
+        (True, None, False, False),
+        (False, None, None, False),
+        (False, None, True, True),
+        (True, "pass", None, True),
+        (False, "pass", None, False),
+        (True, "other", None, False),
+        (True, "other", True, True),
+    ],
+)
+def test_scene_sumer_defaults(
     monkeypatch: pytest.MonkeyPatch,
-    kind: str,
-    polar: str,
-    stop: bool,
-    remove_tilt: None | bool,
+    column: str,
+    method: str,
+    marked: bool,
+    stop: None | str,
+    value: None | bool,
     expected: bool,
 ) -> None:
     """
-    The tilt along the slit is removed only from passes of the quiet Sun.
+    The stripes and the tilt are removed by default where the table says.
 
-    It is not removed from those of active regions or the polar coronal
-    holes, nor if no pass is named, unless asked otherwise.
+    They are removed from the passes whose column of the table marks them,
+    named by their start alone or by their start and stop,
+    and not if no pass is named, unless asked otherwise.
     """
     rows = []
     for row in _scene_sumer._rows():
         if row["time_start"].startswith(_time_test):
-            row = dict(row, kind=kind, polar=polar)
+            row = dict(row, polar="false", tilt="false")
+            row[column] = "true" if marked else "false"
         rows.append(row)
     monkeypatch.setattr(_scene_sumer, "_rows", lambda: tuple(rows))
 
-    calls = []
-    original = soho.sumer.SpectrographObservation.remove_tilt
+    calls = {"remove_stripes": 0, "remove_tilt": 0}
 
-    def spy(
-        self: soho.sumer.SpectrographObservation,
-        **kwargs: object,
-    ) -> soho.sumer.SpectrographObservation:
-        """Count the calls, then remove the tilt."""
-        calls.append(kwargs)
-        return original(self, **kwargs)
+    def spy(name: str) -> typing.Callable[..., soho.sumer.SpectrographObservation]:
+        """Return a method which counts its calls and changes nothing."""
+
+        def counted(
+            self: soho.sumer.SpectrographObservation,
+            **kwargs: object,
+        ) -> soho.sumer.SpectrographObservation:
+            """Count the call and return the observation as it is."""
+            calls[name] += 1
+            return self
+
+        return counted
 
     def observation_only(
         observation: soho.sumer.SpectrographObservation,
@@ -223,22 +291,21 @@ def test_scene_sumer_remove_tilt(
         """Return the observation instead of making a scene of it."""
         return observation
 
-    monkeypatch.setattr(soho.sumer.SpectrographObservation, "remove_tilt", spy)
+    for name in calls:
+        monkeypatch.setattr(soho.sumer.SpectrographObservation, name, spy(name))
     monkeypatch.setattr(esis.data.synth, "scene_sumer_observation", observation_only)
 
     time_start = _time_test
     time_stop = None
-    if stop:
-        (row,) = [
-            r
-            for r in esis.flights.f1.data.synth.passes_sumer()
-            if r["time_start"].isot.startswith(_time_test)
-        ]
+    if stop is not None:
+        row = _scene_sumer._pass(astropy.time.Time(_time_test))
         time_start = row["time_start"]
         time_stop = row["time_stop"]
+        if stop == "other":
+            time_stop = time_stop - 5 * u.min
     esis.flights.f1.data.synth.scene_sumer(
         time_start=time_start,
         time_stop=time_stop,
-        remove_tilt=remove_tilt,
+        **{method: value},
     )
-    assert len(calls) == int(expected)
+    assert calls[method] == int(expected)
