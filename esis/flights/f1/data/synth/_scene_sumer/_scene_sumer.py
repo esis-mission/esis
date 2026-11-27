@@ -20,7 +20,7 @@ _path_passes = pathlib.Path(__file__).parent / "passes_sumer.csv"
 
 _tolerance_start = 60 * u.s
 """
-How far from the start or stop of a pass a time may be to name it,
+How far from the start of a pass a time may be to name it,
 so that it can be given to the minute.
 """
 
@@ -177,31 +177,6 @@ def _pass(time: astropy.time.Time) -> astropy.table.Row:
     )
 
 
-def _pass_between(
-    time_start: astropy.time.Time,
-    time_stop: astropy.time.Time,
-) -> None | astropy.table.Row:
-    """
-    Return the pass which starts and stops at two times, if there is one.
-
-    Each may be off by up to :data:`_tolerance_start`.
-
-    Parameters
-    ----------
-    time_start
-        The start of the pass.
-    time_stop
-        The stop of the pass.
-    """
-    table = passes_sumer()
-    near_start = np.abs((table["time_start"] - time_start).to(u.s)) <= _tolerance_start
-    near_stop = np.abs((table["time_stop"] - time_stop).to(u.s)) <= _tolerance_start
-    match = np.flatnonzero(near_start & near_stop)
-    if match.size:
-        return table[int(match[0])]
-    return None
-
-
 def scene_sumer(
     time_start: str | astropy.time.Time,
     time_stop: None | str | astropy.time.Time = None,
@@ -244,13 +219,14 @@ def scene_sumer(
     ----------
     time_start
         The start of a pass of :func:`passes_sumer`, to within a minute,
-        or a time during it, if `time_stop` is :obj:`None`;
-        otherwise the earliest start of the exposures.
+        or a time during it, which names the pass.
+        If `time_stop` is given, it is also the earliest start of the
+        exposures, and need not name a pass.
     time_stop
-        If :obj:`None`, the pass named by `time_start` is used,
-        with its exposure time and slit.
+        If :obj:`None`, the pass named by `time_start` is used.
         Otherwise, every exposure on O V which started before it is used,
-        whatever its exposure time and slit,
+        with the exposure time and slit of the pass named by `time_start`,
+        or whatever they are if it names none,
         which must then be the same for all of them.
     velocity_max
         The largest speed of the scene,
@@ -278,7 +254,7 @@ def scene_sumer(
         with :meth:`~soho.sumer.SpectrographObservation.remove_stripes`.
         If :obj:`None`, they are removed from the scans of the polar coronal
         holes, which the column ``polar`` of :func:`passes_sumer` marks,
-        and not if no pass of it is named.
+        and not if `time_start` names no pass of it.
     remove_tilt
         Whether to remove the tilt of the line along the slit,
         an instrumental shift which changes from one end of the slit to the
@@ -294,8 +270,7 @@ def scene_sumer(
         but not from those of active regions, whose flows it would remove,
         nor from those near the limb or the scans of the polar coronal holes,
         where the shift of O V changes toward the limb,
-        nor if no pass is named.
-        A pass is named by `time_start` alone, or by its start and stop.
+        nor if `time_start` names no pass.
     axis_detector_x
         The logical axis corresponding to the steps of the raster.
     axis_detector_y
@@ -317,17 +292,18 @@ def scene_sumer(
         scene.show();
     """
     start = astropy.time.Time(time_start)
-    timedelta = None
-    slit = None
     if time_stop is None:
         row = _pass(start)
         start = row["time_start"]
         stop = row["time_stop"]
-        timedelta = row["exposure"]
-        slit = row["slit"]
     else:
         stop = astropy.time.Time(time_stop)
-        row = _pass_between(start, stop)
+        try:
+            row = _pass(start)
+        except ValueError:
+            row = None
+    timedelta = None if row is None else row["exposure"]
+    slit = None if row is None else row["slit"]
     polar = row is not None and bool(row["polar"])
     tilt = row is not None and bool(row["tilt"])
 

@@ -41,6 +41,28 @@ def test_passes_sumer() -> None:
     assert np.count_nonzero(result["tilt"]) == 47
     # never the passes of active regions or the scans of polar coronal holes
     assert not np.any(result["tilt"] & ((result["kind"] == "ar") | result["polar"]))
+    tilt = {row["time_start"].isot[:16]: bool(row["tilt"]) for row in result}
+    # the coronal holes and filaments, two of which reach past 900 arcseconds
+    # but show no limb
+    marked = [
+        "2004-11-30T13:27",
+        "2007-11-04T10:41",
+        "2007-11-09T03:56",
+        "2007-11-10T16:41",
+    ]
+    assert all(tilt[time] for time in marked)
+    # the jet and the studies of active regions, whose flows it would remove,
+    # and passes near the limb
+    kept = [
+        "1996-10-08T06:46",
+        "2005-05-17T08:57",
+        "2005-05-19T08:39",
+        "1996-04-16T13:06",
+        "2005-10-10T15:51",
+        "2009-04-24T04:55",
+        "2009-04-24T06:58",
+    ]
+    assert not any(tilt[time] for time in kept)
 
 
 class TestPass:
@@ -67,26 +89,6 @@ class TestPass:
     def test_none(self) -> None:
         with pytest.raises(ValueError, match="No pass"):
             _scene_sumer._pass(astropy.time.Time("2019-09-30T18:00"))
-
-
-class TestPassBetween:
-
-    @pytest.mark.parametrize("offset", [-50, 0, 50] * u.s)
-    def test_pass(self, offset: u.Quantity) -> None:
-        """A pass is named by its start and stop, given to the minute."""
-        row = _scene_sumer._pass(astropy.time.Time(_time_test))
-        result = _scene_sumer._pass_between(
-            row["time_start"] + offset,
-            row["time_stop"] - offset,
-        )
-        assert result is not None
-        assert result["time_start"] == row["time_start"]
-
-    def test_none(self) -> None:
-        """Times which are not the start and stop of a pass name none."""
-        row = _scene_sumer._pass(astropy.time.Time(_time_test))
-        stop = row["time_stop"] - 5 * u.min
-        assert _scene_sumer._pass_between(row["time_start"], stop) is None
 
 
 @pytest.mark.parametrize("remove_stripes", [None, True])
@@ -225,6 +227,126 @@ def test_scene_sumer_tilt() -> None:
     assert np.abs(_tilt(result)) < np.abs(_tilt(kept)) / 3
 
 
+class _Observation:
+    """A stand-in for an observation, which counts the corrections made to it."""
+
+    def __init__(self) -> None:
+        """Start with no corrections made and no arguments kept."""
+        self.calls = {"remove_stripes": 0, "remove_tilt": 0}
+        self.arguments = dict()
+
+    def remove_bad_steps(self) -> "_Observation":
+        """Return the observation as it is."""
+        return self
+
+    def trim_slit(self) -> "_Observation":
+        """Return the observation as it is."""
+        return self
+
+    def remove_stripes(self) -> "_Observation":
+        """Count the call and return the observation as it is."""
+        self.calls["remove_stripes"] += 1
+        return self
+
+    def remove_tilt(self) -> "_Observation":
+        """Count the call and return the observation as it is."""
+        self.calls["remove_tilt"] += 1
+        return self
+
+
+@pytest.fixture
+def stand_in(monkeypatch: pytest.MonkeyPatch) -> _Observation:
+    """
+    Return the stand-in which :func:`scene_sumer` loads in place of the files.
+
+    The stand-in keeps the arguments it was loaded with,
+    and :func:`scene_sumer` returns it instead of making a scene of it.
+    """
+    observation = _Observation()
+
+    def path_sumer(
+        time_start: astropy.time.Time,
+        time_stop: astropy.time.Time,
+    ) -> None:
+        """Return nothing instead of the paths of the files."""
+
+    def from_level1(cls: type, **kwargs: object) -> _Observation:
+        """Keep the arguments and return the stand-in instead of loading the files."""
+        observation.arguments.update(kwargs)
+        return observation
+
+    def observation_only(observation: _Observation, **kwargs: object) -> _Observation:
+        """Return the observation instead of making a scene of it."""
+        return observation
+
+    monkeypatch.setattr(_scene_sumer, "path_sumer", path_sumer)
+    monkeypatch.setattr(
+        soho.sumer.SpectrographObservation,
+        "from_level1",
+        classmethod(from_level1),
+    )
+    monkeypatch.setattr(esis.data.synth, "scene_sumer_observation", observation_only)
+    return observation
+
+
+def _times(
+    name: None | str,
+) -> tuple[str | astropy.time.Time, None | astropy.time.Time]:
+    """
+    Return a start and a stop which name the test pass in one of several ways.
+
+    Parameters
+    ----------
+    name
+        :obj:`None` for its start alone, ``"pass"`` for its start and stop,
+        ``"shorter"`` for its start and a stop 5 minutes before its own,
+        ``"during"`` for a time during it and its stop,
+        and ``"none"`` for an hour of a day of no pass.
+    """
+    row = _scene_sumer._pass(astropy.time.Time(_time_test))
+    start = row["time_start"]
+    stop = row["time_stop"]
+    if name is None:
+        return _time_test, None
+    if name == "pass":
+        return start, stop
+    if name == "shorter":
+        return start, stop - 5 * u.min
+    if name == "during":
+        return start + (stop - start) / 2, stop
+    start = astropy.time.Time("2019-09-30T18:00")
+    return start, start + 1 * u.h
+
+
+@pytest.mark.parametrize("name", [None, "pass", "shorter", "during", "none"])
+def test_scene_sumer_named(stand_in: _Observation, name: None | str) -> None:
+    """
+    The pass named by the start gives its slit and exposure time.
+
+    It does whatever the stop is,
+    and only the start alone gives its start and stop.
+    """
+    row = _scene_sumer._pass(astropy.time.Time(_time_test))
+    time_start, time_stop = _times(name)
+    esis.flights.f1.data.synth.scene_sumer(
+        time_start=time_start,
+        time_stop=time_stop,
+    )
+    arguments = stand_in.arguments
+    if name == "none":
+        assert arguments["slit"] is None
+        assert arguments["timedelta"] is None
+    else:
+        assert arguments["slit"] == row["slit"]
+        assert arguments["timedelta"] == row["exposure"]
+    if name is None:
+        assert arguments["time_start"] == row["time_start"]
+        assert arguments["time_stop"] == row["time_stop"]
+    else:
+        assert arguments["time_start"] == time_start
+        assert arguments["time_stop"] == time_stop
+
+
 @pytest.mark.parametrize(
     argnames="column,method",
     argvalues=[
@@ -233,7 +355,7 @@ def test_scene_sumer_tilt() -> None:
     ],
 )
 @pytest.mark.parametrize(
-    argnames="marked,stop,value,expected",
+    argnames="marked,name,value,expected",
     argvalues=[
         (True, None, None, True),
         (True, None, False, False),
@@ -241,16 +363,19 @@ def test_scene_sumer_tilt() -> None:
         (False, None, True, True),
         (True, "pass", None, True),
         (False, "pass", None, False),
-        (True, "other", None, False),
-        (True, "other", True, True),
+        (True, "shorter", None, True),
+        (True, "during", None, True),
+        (True, "none", None, False),
+        (True, "none", True, True),
     ],
 )
 def test_scene_sumer_defaults(
     monkeypatch: pytest.MonkeyPatch,
+    stand_in: _Observation,
     column: str,
     method: str,
     marked: bool,
-    stop: None | str,
+    name: None | str,
     value: None | bool,
     expected: bool,
 ) -> None:
@@ -258,8 +383,8 @@ def test_scene_sumer_defaults(
     The stripes and the tilt are removed by default where the table says.
 
     They are removed from the passes whose column of the table marks them,
-    named by their start alone or by their start and stop,
-    and not if no pass is named, unless asked otherwise.
+    whatever the stop, and not if the start names no pass,
+    unless asked otherwise.
     """
     rows = []
     for row in _scene_sumer._rows():
@@ -269,43 +394,10 @@ def test_scene_sumer_defaults(
         rows.append(row)
     monkeypatch.setattr(_scene_sumer, "_rows", lambda: tuple(rows))
 
-    calls = {"remove_stripes": 0, "remove_tilt": 0}
-
-    def spy(name: str) -> typing.Callable[..., soho.sumer.SpectrographObservation]:
-        """Return a method which counts its calls and changes nothing."""
-
-        def counted(
-            self: soho.sumer.SpectrographObservation,
-            **kwargs: object,
-        ) -> soho.sumer.SpectrographObservation:
-            """Count the call and return the observation as it is."""
-            calls[name] += 1
-            return self
-
-        return counted
-
-    def observation_only(
-        observation: soho.sumer.SpectrographObservation,
-        **kwargs: object,
-    ) -> soho.sumer.SpectrographObservation:
-        """Return the observation instead of making a scene of it."""
-        return observation
-
-    for name in calls:
-        monkeypatch.setattr(soho.sumer.SpectrographObservation, name, spy(name))
-    monkeypatch.setattr(esis.data.synth, "scene_sumer_observation", observation_only)
-
-    time_start = _time_test
-    time_stop = None
-    if stop is not None:
-        row = _scene_sumer._pass(astropy.time.Time(_time_test))
-        time_start = row["time_start"]
-        time_stop = row["time_stop"]
-        if stop == "other":
-            time_stop = time_stop - 5 * u.min
+    time_start, time_stop = _times(name)
     esis.flights.f1.data.synth.scene_sumer(
         time_start=time_start,
         time_stop=time_stop,
         **{method: value},
     )
-    assert calls[method] == int(expected)
+    assert stand_in.calls[method] == int(expected)
